@@ -1,0 +1,5 @@
+curl -G "https://gis.malmo.se/arcgis/rest/services/FGK/vagvisning_spp/MapServer/0/query" \
+  --data-urlencode "where=1=1" \
+  --data-urlencode "outFields=*" \
+  --data-urlencode "f=geojson" \
+  -o malmo_delomraden.geojson
