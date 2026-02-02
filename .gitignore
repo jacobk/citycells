@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Opencode / Agent logs
+opencode.json
+conversation_log.txt
+*.log
