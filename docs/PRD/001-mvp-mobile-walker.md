@@ -22,6 +22,13 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want to tap an area to see full details including all my walks for that area.
 *   **As a user,** I want to mark obstacle detours as "exempt" so my score isn't penalized for unavoidable obstacles.
 
+### Metrics Documentation Stories (Updated: 2026-02-03)
+*   **As a user,** I want to click on any metric to see a detailed explanation of what it measures.
+*   **As a user,** I want to see visual illustrations of how each metric is calculated, so I understand the math intuitively.
+*   **As a user,** I want user-friendly metric names that summarize what I did (e.g., "Border Traced" instead of "Perimeter Coverage").
+*   **As a user,** I want to see examples of good vs. poor scores for each metric, so I know what to aim for.
+*   **As a user,** I want tips on how to improve each metric, so I can get better scores on future walks.
+
 ## 3. Functional Requirements
 
 ### 3.1 Map Interface
@@ -103,13 +110,16 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 *   "Not yet walked" indicator (if incomplete)
 
 #### Score Breakdown (if completed)
-| Metric | Value | Weight |
-|--------|-------|--------|
-| Perimeter Coverage | 78% | 40% |
-| Area Coverage | 65% | 25% |
-| Alignment (RMSE) | 12m | 20% |
-| Efficiency | 89% | 15% |
-| **Quality Score** | **0.76** | — |
+
+Each metric name is a clickable link to its documentation page (see Section 3.9).
+
+| Metric | User-Friendly Name | Value | Weight |
+|--------|-------------------|-------|--------|
+| Perimeter Coverage | Border Traced | 78% | 40% |
+| Area Coverage | Area Enclosed | 65% | 25% |
+| Alignment (RMSE) | Path Precision | 12m | 20% |
+| Efficiency | Route Efficiency | 89% | 15% |
+| **Quality Score** | — | **0.76** | — |
 
 #### Area & Perimeter Info
 *   Total area: X m² (or km² for large areas)
@@ -167,6 +177,44 @@ List of all matched walks for this area:
 *   Exempting a deviation increases effective perimeter coverage.
 *   Exempted detour distance is excluded from efficiency calculation.
 *   Users can view all exemptions in the details panel.
+
+### 3.9 Metrics Documentation (Updated: 2026-02-03)
+
+*Reference: ADR 007 (Interactive Metrics Documentation)*
+
+Provide in-app documentation for each analysis metric accessible via clickable links.
+
+**User-Friendly Metric Names:**
+
+| Technical Name | Display Name | Slug |
+|----------------|--------------|------|
+| Perimeter Coverage | Border Traced | `border-traced` |
+| Area Coverage | Area Enclosed | `area-enclosed` |
+| Alignment Score | Path Precision | `path-precision` |
+| Efficiency | Route Efficiency | `route-efficiency` |
+
+**Documentation Pages:**
+
+*   **Location:** `/docs/metrics/` with subpages for each metric
+*   **Access:** Click metric name or info icon in Area Details Panel
+*   **Content per page:**
+    *   Plain English summary (1-2 sentences)
+    *   "Why It Matters" motivation section
+    *   Interactive D3 visualization demonstrating the calculation
+    *   Step-by-step calculation breakdown
+    *   Visual examples (good vs. poor scores)
+    *   Tips to improve
+
+**Interactive Visualizations (D3.js):**
+
+All visualizations are **mobile-first** (touch-optimized) and use **static example data** to clearly illustrate algorithms.
+
+| Metric | Visualization Type |
+|--------|-------------------|
+| Border Traced | Animated path tracing with 25m buffer zone |
+| Area Enclosed | Polygon intersection with toggle for open/closed paths |
+| Path Precision | Heat map of distance from border with RMSE animation |
+| Route Efficiency | Side-by-side efficient vs. inefficient path comparison |
 
 ### 3.8 Data Persistence
 

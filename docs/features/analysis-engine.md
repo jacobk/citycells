@@ -241,6 +241,7 @@ if (detour_ratio >= 2.0 && return_accuracy < 50m) {
 - [ADR 003: Multi-Metric Completion Scoring](../ADR/003-multi-metric-completion-scoring.md) - Full scoring system
 - [ADR 005: Strava Privacy Zones and Truncated Polylines](../ADR/005-strava-privacy-zones.md) - Data limitations and distance handling
 - [ADR 006: Strava Activity Streams](../ADR/006-strava-activity-streams.md) - High-fidelity GPS source
+- [ADR 007: Interactive Metrics Documentation](../ADR/007-interactive-metrics-documentation.md) - User-facing metric explanations
 
 ## Testing Infrastructure
 
@@ -271,14 +272,25 @@ Use these to debug analysis issues and understand metric behavior.
 
 The AreaDetailsPanel shows these metrics for each completed area:
 
-| Metric | Description |
-|--------|-------------|
-| Sub-area Circumference | Total perimeter length of the sub-area |
-| Total Walk Length | Distance of the complete walk |
-| Perimeter Walked | Length of walk within the 25m buffer |
-| Walk vs Circumference | Difference (positive = detours, negative = efficient) |
-| Enclosed Area | Area covered by the walk polygon |
-| Loop Status | Whether start/end are within 100m |
+| Metric | User-Friendly Name | Description |
+|--------|-------------------|-------------|
+| Sub-area Circumference | — | Total perimeter length of the sub-area |
+| Total Walk Length | — | Distance of the complete walk |
+| Perimeter Walked | — | Length of walk within the 25m buffer |
+| Walk vs Circumference | — | Difference (positive = detours, negative = efficient) |
+| Enclosed Area | — | Area covered by the walk polygon |
+| Loop Status | — | Whether start/end are within 100m |
+
+### Score Breakdown Metrics
+
+These metrics are clickable links to in-app documentation (see [Metrics Documentation](./metrics-documentation.md)):
+
+| Internal Name | User-Friendly Name | Weight |
+|---------------|-------------------|--------|
+| Perimeter Coverage | **Border Traced** | 40% |
+| Area Coverage | **Area Enclosed** | 25% |
+| Alignment Score | **Path Precision** | 20% |
+| Efficiency | **Route Efficiency** | 15% |
 
 ## Current Limitations
 
@@ -292,4 +304,8 @@ The AreaDetailsPanel shows these metrics for each completed area:
 1. **Exemption-adjusted scores** - Recalculate metrics excluding exempt deviations
 2. **Caching** - Store intermediate results for faster recalculation
 3. **Spatial indexing** - Use R-tree for faster point-to-line distance queries
-4. **Debug visualization in app** - Show metric calculations visually for each walk
+4. ~~**Debug visualization in app**~~ - See [Metrics Documentation](./metrics-documentation.md) for in-app D3 visualizations
+
+## Related Features
+
+- [Metrics Documentation](./metrics-documentation.md) - In-app help system with interactive D3 visualizations explaining each metric

@@ -132,6 +132,19 @@
 - [x] Save analysis results to database after computation
 - [x] Update `docs/features/data-persistence.md` with analysis persistence flow
 
+## Phase 6.5: Metrics Documentation (ADR 007)
+- [x] ADR 007: Interactive Metrics Documentation
+- [x] Feature doc: metrics-documentation.md
+- [x] Update PRD with user stories and Section 3.9
+- [x] Define user-friendly metric names (Border Traced, Area Enclosed, etc.)
+- [ ] Install D3.js dependency
+- [ ] Create `/docs/metrics/` route structure
+- [ ] Implement Border Traced visualization
+- [ ] Implement Area Enclosed visualization
+- [ ] Implement Path Precision visualization
+- [ ] Implement Route Efficiency visualization
+- [ ] Add clickable metric links to AreaDetailsPanel
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing
