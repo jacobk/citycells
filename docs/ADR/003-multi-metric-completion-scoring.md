@@ -196,6 +196,34 @@ quality_score = (
 - `exemption_reason`: Required text (e.g., "Private property", "Highway", "Construction")
 - `exempted_at`: Timestamp
 
+## UI Display of Metrics
+
+The calculated metrics are displayed in the Area Details Panel (see PRD 001, section 3.6) to provide users with transparent feedback on their walk performance:
+
+### Displayed Metrics
+
+1. **Sub-area Circumference**: Total perimeter length of the selected sub-area
+   - Helps users understand the scale of the challenge
+   - Displayed in meters/kilometers with appropriate formatting
+
+2. **Total Walk Length**: Complete distance of the walk
+   - Shows the actual distance traveled
+   - Useful for comparing against the circumference
+
+3. **Perimeter Walked**: Length of walk path that falls within the 25m perimeter buffer
+   - Represents the "covered distance" metric used in perimeter coverage calculation
+   - Shows how much of the border was actually walked
+
+4. **Walk vs Circumference**: Difference between walk length and circumference
+   - Positive values indicate detours beyond the perimeter (displayed as "+X.XX km (detours)")
+   - Negative values indicate efficient routes (displayed as "-X.XX km (efficient)")
+   - Helps users understand if their walk was longer or shorter than the ideal path
+
+**Rationale for Display:**
+- Transparency: Users can see exactly how their walk compares to the ideal path
+- Educational: Helps users understand what makes a "good" walk
+- Motivation: Seeing detours encourages users to plan better routes next time
+
 ## Consequences
 
 ### Positive

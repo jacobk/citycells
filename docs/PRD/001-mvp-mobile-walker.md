@@ -109,8 +109,12 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 #### Area & Perimeter Info
 *   Total area: X m² (or km² for large areas)
 *   Enclosed area: X m² (from your best walk)
-*   Total perimeter: X.XX km
-*   Your walked distance: X.XX km
+*   **Sub-area Circumference**: Total perimeter length of the sub-area (X.XX km)
+*   **Total Walk Length**: Complete distance of the walk (X.XX km)
+*   **Perimeter Walked**: Length of walk path that falls within the perimeter buffer (X.XX km)
+*   **Walk vs Circumference**: Difference between walk length and circumference
+    *   Positive values shown as "+X.XX km (detours)" - indicates detours beyond the perimeter
+    *   Negative values shown as "-X.XX km (efficient)" - indicates efficient route
 *   Loop status: ✓ Closed / ⚠ Open (Xm gap)
 
 #### Walk History
