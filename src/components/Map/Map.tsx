@@ -11,7 +11,6 @@ import { StravaActivity } from '@/hooks/useStrava';
 import { 
   analyzeWalk, 
   getTierColor, 
-  getTierDisplayName,
   type Tier,
   type AnalysisMetrics,
   type StravaMetadata,
@@ -24,6 +23,7 @@ import {
   saveWalkAnalysis, 
   getOrCreateUserId 
 } from '@/lib/analysis-persistence';
+import type { DeviationWithExemption } from '@/lib/exemption-types';
 
 // Fix for default marker icon in Next.js
 // @ts-expect-error - overriding private method
@@ -52,6 +52,7 @@ interface MapProps {
   activities?: StravaActivity[];
   athleteId?: number; // WHY: Strava athlete ID for database persistence
   onProgressChange: (progress: ProgressInfo) => void;
+  onAreaClick?: (areaDetails: AreaClickData) => void;
 }
 
 // WHY: Store full analysis results per area for display in popups/tooltips
@@ -61,6 +62,33 @@ interface AreaAnalysis {
   qualityScore: number;
   metrics: AnalysisMetrics;
   matchedActivities: Array<{ id: number; name: string }>;
+}
+
+interface AreaDetail {
+  feature: Feature<Polygon | MultiPolygon>;
+  perimeterMeters: number;
+  areaSqm: number;
+}
+
+export interface AreaWalkInfo {
+  id: number;
+  name: string;
+  date?: string;
+  distanceMeters?: number;
+  qualityScore?: number;
+  isBest?: boolean;
+}
+
+export interface AreaClickData {
+  areaId: number;
+  areaName: string;
+  tier: Tier;
+  qualityScore: number;
+  metrics: AnalysisMetrics | null;
+  totalAreaSqm: number;
+  totalPerimeterMeters: number;
+  walks: AreaWalkInfo[];
+  deviations: DeviationWithExemption[];
 }
 
 function LocationMarker() {
@@ -82,9 +110,10 @@ function LocationMarker() {
   );
 }
 
-export default function CityMap({ activities = [], athleteId, onProgressChange }: MapProps) {
+export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick }: MapProps) {
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
+  const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   // WHY: Database hook for persistence - loads cached results and saves new analyses
@@ -108,10 +137,69 @@ export default function CityMap({ activities = [], athleteId, onProgressChange }
       .catch(err => console.error("Failed to load GeoJSON", err));
   }, []);
 
+  const buildAreaDetailMap = useCallback((data: FeatureCollection): Map<number, AreaDetail> => {
+    const areaDetails = new Map<number, AreaDetail>();
+
+    data.features.forEach(feature => {
+      if (!feature.geometry || (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) return;
+
+      const areaId = feature.properties?.FID || feature.id;
+      if (areaId === undefined || areaId === null) return;
+
+      try {
+        const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
+        const perimeterLine = turf.polygonToLine(featurePolygon);
+
+        let perimeterMeters: number;
+        if (perimeterLine.type === 'FeatureCollection') {
+          perimeterMeters = perimeterLine.features.reduce((sum, f) => 
+            sum + turf.length(f, { units: 'meters' }), 0);
+        } else {
+          perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
+        }
+
+        const areaSqm = turf.area(featurePolygon);
+
+        areaDetails.set(areaId as number, { 
+          feature: featurePolygon, 
+          perimeterMeters,
+          areaSqm
+        });
+      } catch (e) {
+        console.warn("Error processing area for analysis:", areaId, e);
+      }
+    });
+
+    return areaDetails;
+  }, []);
+
+  const buildBaseAreaClickData = useCallback((details: Map<number, AreaDetail>): Map<number, AreaClickData> => {
+    const baseDetails = new Map<number, AreaClickData>();
+
+    details.forEach((detail, areaId) => {
+      const areaName = detail.feature.properties?.delomr || 'Unknown Area';
+      baseDetails.set(areaId, {
+        areaId,
+        areaName,
+        tier: null,
+        qualityScore: 0,
+        metrics: null,
+        totalAreaSqm: detail.areaSqm,
+        totalPerimeterMeters: detail.perimeterMeters,
+        walks: [],
+        deviations: [],
+      });
+    });
+
+    return baseDetails;
+  }, []);
+
   // Analysis Logic - runs analysis for all activities, optionally persists to database
   useEffect(() => {
     if (!geoData || !activities.length) {
       if (geoData) {
+        const areaDetails = buildAreaDetailMap(geoData);
+        setAreaDetailsData(buildBaseAreaClickData(areaDetails));
         onProgressChange({
           completedCount: 0,
           totalAreas: geoData.features.length,
@@ -139,42 +227,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange }
       const newAreaAnalyses = new Map<number, AreaAnalysis>();
       
       // Pre-process areas with their geometry and metrics
-      type AreaDetail = {
-        feature: Feature<Polygon | MultiPolygon>;
-        perimeterMeters: number;
-        areaSqm: number;
-      }
-      const allAreaDetails = new Map<number, AreaDetail>();
-
-      geoData.features.forEach(feature => {
-        if (!feature.geometry || (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) return;
-
-        const areaId = feature.properties?.FID || feature.id;
-        if (areaId === undefined || areaId === null) return;
-
-        try {
-          const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
-          const perimeterLine = turf.polygonToLine(featurePolygon);
-          
-          let perimeterMeters: number;
-          if (perimeterLine.type === 'FeatureCollection') {
-            perimeterMeters = perimeterLine.features.reduce((sum, f) => 
-              sum + turf.length(f, { units: 'meters' }), 0);
-          } else {
-            perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
-          }
-
-          const areaSqm = turf.area(featurePolygon);
-
-          allAreaDetails.set(areaId as number, { 
-            feature: featurePolygon, 
-            perimeterMeters,
-            areaSqm
-          });
-        } catch (e) {
-          console.warn("Error processing area for analysis:", areaId, e);
-        }
-      });
+      const allAreaDetails = buildAreaDetailMap(geoData);
 
       // Pre-process all activities to coordinates
       console.log(`[Map] All activities: ${activities.length}`, activities.map(a => a.id));
@@ -297,6 +350,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange }
         });
       }
 
+      const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
+
       // Create final analysis results using best score per area
       areaActivityScores.forEach((scores, areaId) => {
         // WHY: Use best score among all walks for this area
@@ -311,8 +366,26 @@ export default function CityMap({ activities = [], athleteId, onProgressChange }
           metrics: bestWalk.metrics,
           matchedActivities: scores.map(s => ({ id: s.activityId, name: s.name }))
         });
+
+        const areaDetails = newAreaDetailsData.get(areaId);
+        if (areaDetails) {
+          areaDetails.tier = bestWalk.metrics.tier;
+          areaDetails.qualityScore = bestWalk.metrics.rawQualityScore;
+          areaDetails.metrics = bestWalk.metrics;
+          areaDetails.walks = scores.map(score => ({
+            id: score.activityId,
+            name: score.name,
+            distanceMeters: score.metrics.totalWalkLengthMeters,
+            qualityScore: score.metrics.rawQualityScore,
+            isBest: score.activityId === bestWalk.activityId
+          }));
+          // WHY: Deviations require database IDs and exemption state.
+          // Populate from persistence when details are loaded from the database.
+          areaDetails.deviations = [];
+        }
       });
 
+      setAreaDetailsData(newAreaDetailsData);
       setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
 
@@ -331,7 +404,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange }
       });
     }, 100);
 
-  }, [geoData, activities, onProgressChange]);
+  }, [geoData, activities, onProgressChange, buildAreaDetailMap, buildBaseAreaClickData]);
 
   // WHY: Style function returns tier-based colors per PRD 001 section 3.4
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -359,62 +432,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange }
       fillColor: '#9ca3af',
       fillOpacity: 0.1
     };
-  }, [areaAnalyses]);
-
-  // Generate popup content with score breakdown
-  const getPopupContent = useCallback((feature: Feature): string => {
-    const areaId = feature.properties?.FID || feature.id;
-    const analysis = areaAnalyses.get(areaId as number);
-    const areaName = feature.properties?.delomr || 'N/A';
-
-    let content = `
-      <div class="font-bold text-lg mb-1">${areaName}</div>
-      <div class="text-xs text-gray-500 mb-2">ID: ${areaId}</div>
-    `;
-
-    if (analysis) {
-      const tierColor = getTierColor(analysis.tier);
-      const tierName = getTierDisplayName(analysis.tier);
-      
-      content += `
-        <div class="flex items-center gap-2 mb-2">
-          <span class="inline-block w-3 h-3 rounded-full" style="background-color: ${tierColor}"></span>
-          <span class="font-semibold">${tierName}</span>
-          <span class="text-sm text-gray-600">(${(analysis.qualityScore * 100).toFixed(1)}%)</span>
-        </div>
-        <div class="text-xs space-y-1 border-t pt-2">
-          <div>Perimeter: ${(analysis.metrics.perimeterCoveragePercent * 100).toFixed(0)}%</div>
-          <div>Area: ${(analysis.metrics.areaCoveragePercent * 100).toFixed(0)}%</div>
-          <div>Alignment: ${(analysis.metrics.alignmentScore * 100).toFixed(0)}%</div>
-          <div>Efficiency: ${(analysis.metrics.efficiency * 100).toFixed(0)}%</div>
-        </div>
-      `;
-
-      if (analysis.matchedActivities.length > 0) {
-        content += `
-          <div class="border-t pt-2 mt-2">
-            <div class="font-semibold text-xs text-gray-700 mb-1">Matched Walks (${analysis.matchedActivities.length}):</div>
-            <ul class="list-disc pl-4 space-y-1">
-        `;
-        analysis.matchedActivities.forEach(act => {
-          content += `
-            <li class="text-xs">
-              <a href="https://www.strava.com/activities/${act.id}" 
-                 target="_blank" 
-                 rel="noopener noreferrer" 
-                 class="text-blue-600 hover:text-blue-800 hover:underline">
-                 ${act.name}
-              </a>
-            </li>
-          `;
-        });
-        content += `</ul></div>`;
-      }
-    } else {
-      content += `<div class="text-xs text-gray-400 italic mt-2">No matched walks</div>`;
-    }
-
-    return content;
   }, [areaAnalyses]);
 
   // Create tooltip data from a feature
@@ -485,12 +502,18 @@ export default function CityMap({ activities = [], athleteId, onProgressChange }
             data={geoData} 
             style={getStyle}
             onEachFeature={(feature, layer) => {
-              // Popup for click (full details)
-              layer.bindPopup(getPopupContent(feature));
-              
               // WHY: Tooltip handlers for hover (desktop) and long-press (mobile)
               // Per PRD 001 section 3.5
               const tooltipData = getTooltipData(feature);
+              const areaId = feature.properties?.FID || feature.id;
+
+              // WHY: Click/tap opens the AreaDetailsPanel per PRD 001 section 3.6
+              if (onAreaClick) {
+                const areaDetails = areaDetailsData.get(areaId as number);
+                if (areaDetails) {
+                  layer.on('click', () => onAreaClick(areaDetails));
+                }
+              }
               
               // Desktop: hover
               layer.on('mouseover', (e: L.LeafletMouseEvent) => {

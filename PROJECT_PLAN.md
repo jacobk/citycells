@@ -118,6 +118,7 @@
 ### 5.6 Component Integration
 - [x] Wire up ProgressDashboard with "View Stats" button
 - [x] Add AreaDetailsPanel to page.tsx
+- [x] Open AreaDetailsPanel on area click/tap (PRD 001 §3.6)
 - [x] Add ExemptionModal with add/remove handlers
 - [x] Configure Turbopack for sql.js (resolve fs alias)
 - [x] Create exemption-types.ts for client-safe type exports

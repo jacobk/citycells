@@ -1,13 +1,31 @@
 'use client';
 
-import Map, { ProgressInfo } from '@/components/Map';
+import Map, { type AreaClickData, type ProgressInfo } from '@/components/Map';
 import { useStrava } from '@/hooks/useStrava';
 import { useState, useCallback } from 'react';
-import { getTierColor } from '@/lib/analysis';
+import { getTierColor, type AnalysisMetrics } from '@/lib/analysis';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AreaDetailsPanel, type AreaDetails } from '@/components/AreaDetailsPanel';
 import { ExemptionModal } from '@/components/ExemptionModal';
 import type { ExemptionReason } from '@/lib/exemption-types';
+
+const EMPTY_METRICS: AnalysisMetrics = {
+  perimeterCoveragePercent: 0,
+  coveredDistanceMeters: 0,
+  areaCoveragePercent: 0,
+  enclosedAreaSqm: 0,
+  isClosedLoop: false,
+  loopGapMeters: 0,
+  rmseMeters: 0,
+  maxDeviationMeters: 0,
+  p90DeviationMeters: 0,
+  alignmentScore: 0,
+  efficiency: 0,
+  borderAlignedLengthMeters: 0,
+  totalWalkLengthMeters: 0,
+  rawQualityScore: 0,
+  tier: null,
+};
 
 export default function Home() {
   const { athlete, activities, loading, login, logout } = useStrava();
@@ -34,6 +52,20 @@ export default function Home() {
   // WHY: Handler to close area details panel
   const handleCloseDetails = useCallback(() => {
     setSelectedAreaDetails(null);
+  }, []);
+
+  const handleAreaClick = useCallback((data: AreaClickData) => {
+    setSelectedAreaDetails({
+      areaId: data.areaId,
+      areaName: data.areaName,
+      tier: data.tier,
+      qualityScore: data.qualityScore,
+      metrics: data.metrics ?? EMPTY_METRICS,
+      totalAreaSqm: data.totalAreaSqm,
+      totalPerimeterMeters: data.totalPerimeterMeters,
+      walks: data.walks,
+      deviations: data.deviations,
+    });
   }, []);
 
   // WHY: Handler to open exemption modal from details panel
@@ -85,7 +117,12 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative overflow-hidden">
-      <Map activities={activities} athleteId={athlete?.id} onProgressChange={handleProgress} />
+      <Map
+        activities={activities}
+        athleteId={athlete?.id}
+        onProgressChange={handleProgress}
+        onAreaClick={handleAreaClick}
+      />
       
       {/* Overlay UI */}
       <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg w-72 border border-gray-100">

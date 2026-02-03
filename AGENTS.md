@@ -42,6 +42,13 @@ When implementing features, document the "why" in code:
 - Document magic numbers and thresholds with their source (e.g., `// 25m buffer - see ADR 002`)
 - Explain trade-offs made during implementation
 
+### 1.6 Changelog Maintenance
+Maintain `CHANGELOG.md` so future agents can compare implementation against PRD/ADR:
+- Update `CHANGELOG.md` for every feature/fix
+- Reference PRD sections and ADRs for traceability
+- List key files modified in each entry
+- Use entries to verify features are implemented, not just documented
+
 **Workflow Checklist:**
 1.  [ ] Analyze request.
 2.  [ ] Check `PROJECT_PLAN.md` and `docs/PRD/` for context.

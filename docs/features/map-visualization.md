@@ -134,9 +134,9 @@ Analysis runs in `setTimeout(..., 100)` to:
 
 ## Current Limitations
 
-1. **No persistence**: Analysis results recalculated on every page load (database integration pending).
+1. **Details panel deviations**: The AreaDetailsPanel does not yet load deviation + exemption rows from the database; it only shows deviations when wired to persisted data.
 
-2. **Components created but not fully integrated**: AreaTooltip, AreaDetailsPanel, ExemptionModal, and ProgressDashboard components exist but need integration with the main page for full functionality.
+2. **Cached details**: Clicked areas currently use the in-memory analysis results from the active session; loading full details from persistence is pending.
 
 ## New Components (Phase 5)
 
