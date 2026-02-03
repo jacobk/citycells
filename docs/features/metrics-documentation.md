@@ -26,17 +26,17 @@ User-friendly names that summarize what each metric measures:
 
 ## Implementation
 
-> **Note:** This section is completed by the implementation agent.
-
 ### Key Files
 
 | File | Purpose |
 |------|---------|
+| `src/app/docs/layout.tsx` | Docs layout with navigation back to the map |
 | `src/app/docs/metrics/page.tsx` | Metrics overview/index page |
 | `src/app/docs/metrics/[slug]/page.tsx` | Dynamic metric detail pages |
-| `src/components/Docs/MetricVisualizations/` | D3 visualization components |
 | `src/components/Docs/MetricCard.tsx` | Reusable metric summary card |
+| `src/components/Docs/MetricVisualizations/` | D3 visualization components |
 | `src/lib/metrics-content.ts` | Metric documentation content data |
+| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Clickable metric links to docs pages |
 
 ### Data Flow
 
@@ -72,7 +72,9 @@ User taps metric in AreaDetailsPanel
 
 ### Key Functions
 
-_To be documented during implementation._
+- `METRICS_CONTENT` in `src/lib/metrics-content.ts` defines summaries, explanations, and tips for each metric.
+- `MetricDetailPage` in `src/app/docs/metrics/[slug]/page.tsx` selects the metric content and visualization based on the slug.
+- Visualization components in `src/components/Docs/MetricVisualizations/` render interactive D3 diagrams with static example data.
 
 ## Documentation Content Specifications
 

@@ -19,9 +19,9 @@ Each entry should reference:
 ## Unreleased
 ### Added
 - Metrics Documentation feature: in-app help system with D3 visualizations for analysis metrics. (PRD 001 §3.9, ADR 007)
-  - Key files: `docs/ADR/007-interactive-metrics-documentation.md`, `docs/features/metrics-documentation.md`
+  - Key files: `src/app/docs/layout.tsx`, `src/app/docs/metrics/page.tsx`, `src/app/docs/metrics/[slug]/page.tsx`, `src/components/Docs/MetricCard.tsx`, `src/components/Docs/MetricVisualizations/`, `src/lib/metrics-content.ts`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`
   - User-friendly metric names: Border Traced, Area Enclosed, Path Precision, Route Efficiency
-  - Mobile-first interactive visualizations planned at `/docs/metrics/`
+  - Mobile-first interactive visualizations at `/docs/metrics/`
 - Strava activity streams fetching and caching for high-fidelity analysis. (ADR 006)
   - Key files: `src/app/api/activities/streams/route.ts`, `src/components/Map/Map.tsx`, `src/lib/db.ts`, `src/lib/types/strava-streams.ts`
 - Stream export helper routes and fixture script for raw stream data. (ADR 006)

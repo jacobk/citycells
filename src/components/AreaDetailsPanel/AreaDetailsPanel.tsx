@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useCallback } from 'react';
 import { getTierColor, getTierDisplayName, type Tier, type AnalysisMetrics, SCORE_WEIGHTS } from '@/lib/analysis';
 import type { DeviationWithExemption } from '@/lib/exemption-types';
@@ -186,7 +187,17 @@ export default function AreaDetailsPanel({
                   </thead>
                   <tbody>
                     <tr className="border-b border-gray-100">
-                      <td className="py-2 px-3 text-gray-800">Perimeter Coverage</td>
+                      <td className="py-2 px-3 text-gray-800">
+                        <Link
+                          href="/docs/metrics/border-traced"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                        >
+                          Border Traced
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                            i
+                          </span>
+                        </Link>
+                      </td>
                       <td className="text-right py-2 px-3 text-gray-900 font-medium">
                         {(details.metrics.perimeterCoveragePercent * 100).toFixed(0)}%
                       </td>
@@ -195,7 +206,17 @@ export default function AreaDetailsPanel({
                       </td>
                     </tr>
                     <tr className="border-b border-gray-100">
-                      <td className="py-2 px-3 text-gray-800">Area Coverage</td>
+                      <td className="py-2 px-3 text-gray-800">
+                        <Link
+                          href="/docs/metrics/area-enclosed"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                        >
+                          Area Enclosed
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                            i
+                          </span>
+                        </Link>
+                      </td>
                       <td className="text-right py-2 px-3 text-gray-900 font-medium">
                         {(details.metrics.areaCoveragePercent * 100).toFixed(0)}%
                       </td>
@@ -204,7 +225,17 @@ export default function AreaDetailsPanel({
                       </td>
                     </tr>
                     <tr className="border-b border-gray-100">
-                      <td className="py-2 px-3 text-gray-800">Alignment (RMSE)</td>
+                      <td className="py-2 px-3 text-gray-800">
+                        <Link
+                          href="/docs/metrics/path-precision"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                        >
+                          Path Precision
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                            i
+                          </span>
+                        </Link>
+                      </td>
                       <td className="text-right py-2 px-3 text-gray-900 font-medium">
                         {details.metrics.rmseMeters.toFixed(1)}m
                       </td>
@@ -213,7 +244,17 @@ export default function AreaDetailsPanel({
                       </td>
                     </tr>
                     <tr>
-                      <td className="py-2 px-3 text-gray-800">Efficiency</td>
+                      <td className="py-2 px-3 text-gray-800">
+                        <Link
+                          href="/docs/metrics/route-efficiency"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                        >
+                          Route Efficiency
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                            i
+                          </span>
+                        </Link>
+                      </td>
                       <td className="text-right py-2 px-3 text-gray-900 font-medium">
                         {(details.metrics.efficiency * 100).toFixed(0)}%
                       </td>
