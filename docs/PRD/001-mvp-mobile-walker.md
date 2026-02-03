@@ -36,12 +36,17 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   Filter activities by text search in title/description (Keyword: `#malmödelområde`).
 *   Store synced activities in local SQLite database (see ADR 004).
 
+**Strava Data Limitations:**
+*   `summary_polyline` may be truncated near the start/end due to privacy zones.
+*   Use Strava `distance` for total walk length and efficiency denominators (see ADR 005).
+*   Use `start_latlng` and `end_latlng` for loop detection when available (see ADR 005).
+
 ### 3.3 Analysis Logic (The "CityCells" Algorithm)
 
 *Reference: ADR 002 (Exclusive Matching), ADR 003 (Multi-Metric Scoring)*
 
 For each eligible activity:
-1.  Fetch the detailed GPS stream (lat/lng points) from Strava.
+1.  Decode Strava `summary_polyline` for GPS points and use Strava metadata for accuracy.
 2.  Create a buffer (validity zone) of **25 meters** around the perimeter of each sub-area.
 3.  **Exclusive Assignment**: Assign the walk to the *one* sub-area where it has the highest perimeter coverage (must be > 50%).
 4.  **Multi-Metric Analysis**: Calculate all metrics (see ADR 003):
@@ -110,7 +115,7 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 *   Total area: X m² (or km² for large areas)
 *   Enclosed area: X m² (from your best walk)
 *   **Sub-area Circumference**: Total perimeter length of the sub-area (X.XX km)
-*   **Total Walk Length**: Complete distance of the walk (X.XX km)
+*   **Total Walk Length**: Complete distance of the walk (X.XX km, from Strava distance when available)
 *   **Perimeter Walked**: Length of walk path that falls within the perimeter buffer (X.XX km)
 *   **Walk vs Circumference**: Difference between walk length and circumference
     *   Positive values shown as "+X.XX km (detours)" - indicates detours beyond the perimeter

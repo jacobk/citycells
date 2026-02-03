@@ -85,6 +85,8 @@ efficiency = border_aligned_length / total_walk_length
 
 - Penalizes unnecessary detours
 - Rewards walkers who stay focused on the border
+- Uses Strava's `distance` field for total walk length when available to avoid
+  summary polyline truncation from privacy zones (see ADR 005).
 
 ### 2. Composite Quality Score
 
