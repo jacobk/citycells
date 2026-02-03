@@ -1,6 +1,9 @@
 'use client';
 import dynamic from 'next/dynamic';
 
+// Re-export types for use in other components
+export type { ProgressInfo } from './Map';
+
 const Map = dynamic(() => import('./Map'), {
   ssr: false,
   loading: () => (

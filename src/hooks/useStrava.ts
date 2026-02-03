@@ -14,7 +14,10 @@ export interface StravaActivity {
   map: {
     summary_polyline: string;
   };
+  // WHY: Both start and end latlng needed for accurate loop detection
+  // The summary_polyline is often truncated and missing GPS points at start/end
   start_latlng: [number, number];
+  end_latlng?: [number, number]; // May not be present in older activities
 }
 
 export function useStrava() {

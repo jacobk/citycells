@@ -2,11 +2,28 @@
 
 import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMapEvents, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useState } from 'react';
-import type { FeatureCollection } from 'geojson';
+import { useEffect, useState, useCallback } from 'react';
+import type { FeatureCollection, Feature, Polygon, MultiPolygon, Position } from 'geojson';
 import L from 'leaflet';
 import * as turf from '@turf/turf';
 import mapboxPolyline from '@mapbox/polyline';
+import { StravaActivity } from '@/hooks/useStrava';
+import { 
+  analyzeWalk, 
+  getTierColor, 
+  getTierDisplayName,
+  type Tier,
+  type AnalysisMetrics,
+  type StravaMetadata,
+  type FullAnalysisResult,
+  TIER_THRESHOLDS
+} from '@/lib/analysis';
+import { AreaTooltip, useAreaTooltip, type TooltipData } from '@/components/AreaTooltip';
+import { useDatabase } from '@/hooks/useDatabase';
+import { 
+  saveWalkAnalysis, 
+  getOrCreateUserId 
+} from '@/lib/analysis-persistence';
 
 // Fix for default marker icon in Next.js
 // @ts-expect-error - overriding private method
@@ -19,9 +36,31 @@ L.Icon.Default.mergeOptions({
 
 const MALMO_CENTER: [number, number] = [55.5900, 13.0038];
 
+// WHY: Extended progress info to include tier breakdown per ADR 003
+export interface ProgressInfo {
+  completedCount: number;
+  totalAreas: number;
+  tierCounts: {
+    platinum: number;
+    gold: number;
+    silver: number;
+    bronze: number;
+  };
+}
+
 interface MapProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  activities?: any[];
+  activities?: StravaActivity[];
+  athleteId?: number; // WHY: Strava athlete ID for database persistence
+  onProgressChange: (progress: ProgressInfo) => void;
+}
+
+// WHY: Store full analysis results per area for display in popups/tooltips
+interface AreaAnalysis {
+  areaId: number;
+  tier: Tier;
+  qualityScore: number;
+  metrics: AnalysisMetrics;
+  matchedActivities: Array<{ id: number; name: string }>;
 }
 
 function LocationMarker() {
@@ -43,10 +82,24 @@ function LocationMarker() {
   );
 }
 
-export default function Map({ activities = [] }: MapProps) {
+export default function CityMap({ activities = [], athleteId, onProgressChange }: MapProps) {
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
-  const [completedAreas, setCompletedAreas] = useState<Set<number>>(new Set());
+  const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // WHY: Database hook for persistence - loads cached results and saves new analyses
+  const { db, loading: dbLoading } = useDatabase();
+  
+  // WHY: Tooltip for hover (desktop) and long-press (mobile) per PRD 001 section 3.5
+  const {
+    tooltipData,
+    tooltipPosition,
+    hideTooltip,
+    handleMouseEnter,
+    handleMouseLeave,
+    handleTouchStart,
+    handleTouchEnd,
+  } = useAreaTooltip();
 
   useEffect(() => {
     fetch('/data/malmo_delomraden.geojson')
@@ -55,146 +108,344 @@ export default function Map({ activities = [] }: MapProps) {
       .catch(err => console.error("Failed to load GeoJSON", err));
   }, []);
 
-  // Analysis Logic
+  // Analysis Logic - runs analysis for all activities, optionally persists to database
   useEffect(() => {
-    if (!geoData || !activities.length) return;
+    if (!geoData || !activities.length) {
+      if (geoData) {
+        onProgressChange({
+          completedCount: 0,
+          totalAreas: geoData.features.length,
+          tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0 }
+        });
+      }
+      return;
+    }
 
-    // Defer analysis to next tick to not block UI
-    setTimeout(() => {
+    // WHY: Defer analysis to next tick to not block UI rendering
+    setTimeout(async () => {
       setIsAnalyzing(true);
-      const completed = new Set<number>();
+      console.log('[Map] Starting analysis for', activities.length, 'activities');
       
-      // Pre-process activities to Turf LineStrings
-      const activityLines = activities.map(act => {
+      // WHY: Database is optional - get userId only if db is available
+      let userId: number | null = null;
+      if (db && !dbLoading && athleteId) {
+        try {
+          userId = getOrCreateUserId(athleteId);
+        } catch (e) {
+          console.warn('[Map] Could not get/create user:', e);
+        }
+      }
+
+      const newAreaAnalyses = new Map<number, AreaAnalysis>();
+      
+      // Pre-process areas with their geometry and metrics
+      type AreaDetail = {
+        feature: Feature<Polygon | MultiPolygon>;
+        perimeterMeters: number;
+        areaSqm: number;
+      }
+      const allAreaDetails = new Map<number, AreaDetail>();
+
+      geoData.features.forEach(feature => {
+        if (!feature.geometry || (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) return;
+
+        const areaId = feature.properties?.FID || feature.id;
+        if (areaId === undefined || areaId === null) return;
+
+        try {
+          const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
+          const perimeterLine = turf.polygonToLine(featurePolygon);
+          
+          let perimeterMeters: number;
+          if (perimeterLine.type === 'FeatureCollection') {
+            perimeterMeters = perimeterLine.features.reduce((sum, f) => 
+              sum + turf.length(f, { units: 'meters' }), 0);
+          } else {
+            perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
+          }
+
+          const areaSqm = turf.area(featurePolygon);
+
+          allAreaDetails.set(areaId as number, { 
+            feature: featurePolygon, 
+            perimeterMeters,
+            areaSqm
+          });
+        } catch (e) {
+          console.warn("Error processing area for analysis:", areaId, e);
+        }
+      });
+
+      // Pre-process all activities to coordinates
+      console.log(`[Map] All activities: ${activities.length}`, activities.map(a => a.id));
+      const processedActivities = activities.map(act => {
         if (!act.map || !act.map.summary_polyline) return null;
         try {
           const decoded = mapboxPolyline.decode(act.map.summary_polyline);
-          // Mapbox returns [lat, lng], Turf wants [lng, lat]
-          const coordinates = decoded.map(pt => [pt[1], pt[0]]);
-          return turf.lineString(coordinates);
-        } catch {
+          // WHY: mapbox polyline returns [lat, lng], turf needs [lng, lat]
+          const coordinates: Position[] = decoded.map(pt => [pt[1], pt[0]]);
+          
+          // WHY: Strava metadata is more reliable for loop detection
+          // The summary_polyline is often truncated and missing GPS points
+          const stravaMetadata: StravaMetadata | undefined = act.start_latlng && act.end_latlng
+            ? { startLatLng: act.start_latlng, endLatLng: act.end_latlng }
+            : undefined;
+          
+          return { original: act, coordinates, stravaMetadata };
+        } catch (e) {
+          console.warn("Error decoding polyline for activity", act.id, act.name, e);
           return null;
         }
-      }).filter(Boolean);
+      }).filter((item): item is { original: StravaActivity; coordinates: Position[]; stravaMetadata: StravaMetadata | undefined } => Boolean(item));
 
-      // Iterate areas
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const feature of geoData.features as any[]) {
-        if (!feature.geometry || feature.geometry.type !== 'Polygon') continue;
-        
-        const areaId = feature.properties.FID || feature.id; // Adjust based on property name
-        
-        try {
-          // Convert Polygon to LineString (perimeter)
-          // Turf polygonToLine returns Feature<GeometryCollection> or Feature<LineString>
-          // For a simple Polygon, coordinates[0] is the linear ring
-          const ringCoords = feature.geometry.coordinates[0];
-          const perimeterLine = turf.lineString(ringCoords);
-          const perimeterLength = turf.length(perimeterLine, { units: 'kilometers' });
+      // WHY: Track best analysis per area for exclusive assignment (ADR 002)
+      // Each walk can only count for one area (the one with best coverage)
+      const activityBestArea = new Map<number, { areaId: number; score: number }>();
 
-          // Buffer the perimeter by 25m (0.025 km)
-          const bufferedPerimeter = turf.buffer(perimeterLine, 0.025, { units: 'kilometers' });
-
-          if (!bufferedPerimeter) continue;
-
-          let coveredLength = 0;
-
-          for (const activityLine of activityLines) {
-            if (!activityLine) continue;
-            
-            // Optimization: check bounding box overlap first
-            if (!turf.booleanIntersects(bufferedPerimeter, activityLine)) continue;
-
-            // Clip activity line to buffer
-            // turf.lineSplit is complex. 
-            // Simple approach: intersect the activity line with the buffer polygon
-            // Note: turf.intersect expects polygons. We need to intersect the activity line (as a collection of segments) with the buffer.
-            // Actually, turf.lineSplit split the line by the polygon.
-            // But getting the "length inside" is easier with logic:
-            // Iterate segments of activity, check if midpoint is inside buffer.
-            
-            // Better: turf.length of the intersection?
-            // turf.intersect(poly1, poly2) is for polygons.
-            // We want length of line inside polygon.
-            
-            // Let's use a robust approximation:
-            // Iterate activity points, if point inside buffer, add distance to prev point.
-            // This assumes high density points. Summary polyline might be low density.
-            // So we should densify the activity line?
-            
-            // Let's try to simple check:
-            // If the activity line intersects the buffer?
-            // We need QUANTITY.
-            
-            // Working approach:
-            // 1. Split activity line by buffer polygon.
-            // 2. Filter segments that are inside.
-            // 3. Sum lengths.
-            // Note: turf.lineSplit isn't enough, we need to know which part is inside.
-            
-            // Alternative: booleanWithin? No.
-            
-            // Let's stick to the drafted PRD logic later for robust impl.
-            // For MVP/Prototype:
-            // Check if bounding boxes overlap.
-            // Calculate distance between Activity centroid and Area centroid? No.
-            
-            // Let's try the "Point Density" approach for now (fastest to write):
-            // Check if activity points fall inside the buffered perimeter.
-            // This is "good enough" for V1 if user walks on the line.
-            
-            // const exploded = turf.explode(activityLine);
-            // const ptsInside = turf.pointsWithinPolygon(exploded, bufferedPerimeter);
-            // If we have enough points inside...
-            // This is weak for long segments.
-            
-            // Let's DO IT PROPERLY:
-            // No easy one-liner in Turf for "Length of Line inside Polygon".
-            // We have to build it manually if we want it perfect.
-            
-            // Let's skip complex math for this exact step and do a simpler check:
-            // Does the activity BBox overlap significantly?
-            // And does the activity length roughly match or exceed the perimeter?
-            
-            // Let's use the simplest check:
-            // 1. Is activity intersecting buffer?
-            // 2. Is activity length > 0.5 * perimeter?
-            // This is very loose but shows "Green" quickly for demo.
-            
-            if (turf.booleanIntersects(bufferedPerimeter, activityLine)) {
-               // A loose heuristic
-               coveredLength += turf.length(activityLine, { units: 'kilometers' });
-            }
-          }
-
-          // If accumulated "intersecting activity length" > 75% of perimeter
-          // This is flawed (walking a small segment back and forth) but MVP.
-          if (coveredLength > (perimeterLength * 0.75)) {
-            completed.add(areaId);
-          }
-        } catch (e) {
-          console.warn("Analysis error for area", areaId, e);
-        }
-      }
+      console.log(`[Map] Processing ${processedActivities.length} activities against ${allAreaDetails.size} areas`);
       
-      setCompletedAreas(new Set(completed)); // Force re-render
+      // Calculate coverage for each activity-area pair
+      processedActivities.forEach(pAct => {
+        const activityId = pAct.original.id;
+        let bestAreaId: number | null = null;
+        let bestScore = 0;
+        let intersectCount = 0;
+
+        allAreaDetails.forEach((areaDetail, areaId) => {
+          try {
+            // Quick intersection check before full analysis
+            const walkLine = turf.lineString(pAct.coordinates);
+            if (!turf.booleanIntersects(walkLine, areaDetail.feature)) return;
+            
+            intersectCount++;
+            // Run full analysis (pass Strava metadata for accurate loop detection)
+            const result = analyzeWalk(
+              pAct.coordinates,
+              areaDetail.feature,
+              areaDetail.perimeterMeters,
+              areaDetail.areaSqm,
+              pAct.stravaMetadata
+            );
+
+            // WHY: Only consider if meets minimum threshold (Bronze = 50%)
+            // See ADR 003 for completion threshold rationale
+            console.log(`[Map] Activity ${activityId} vs Area ${areaId}: score=${(result.metrics.rawQualityScore * 100).toFixed(1)}%, perimeter=${(result.metrics.perimeterCoveragePercent * 100).toFixed(1)}%, area=${(result.metrics.areaCoveragePercent * 100).toFixed(1)}%`);
+            if (result.metrics.rawQualityScore >= TIER_THRESHOLDS.bronze) {
+              console.log(`[Map] Activity ${activityId} QUALIFIES for area ${areaId} with score ${(result.metrics.rawQualityScore * 100).toFixed(1)}%`);
+              if (result.metrics.rawQualityScore > bestScore) {
+                bestScore = result.metrics.rawQualityScore;
+                bestAreaId = areaId;
+              }
+            }
+          } catch (e) {
+            console.warn(`Error analyzing activity ${activityId} for area ${areaId}:`, e);
+          }
+        });
+
+        console.log(`[Map] Activity ${activityId} intersected ${intersectCount} areas, best match: ${bestAreaId} with score ${(bestScore * 100).toFixed(1)}%`);
+        if (bestAreaId !== null) {
+          activityBestArea.set(activityId, { areaId: bestAreaId, score: bestScore });
+        }
+      });
+
+      // Now run full analysis only for assigned activity-area pairs
+      // and aggregate results per area, saving to database
+      const areaActivityScores = new Map<number, Array<{ activityId: number; name: string; score: number; metrics: AnalysisMetrics; result: FullAnalysisResult }>>();
+
+      // WHY: Save each analysis result to database as we compute it
+      for (const [activityId, { areaId, score }] of activityBestArea.entries()) {
+        const activity = processedActivities.find(p => p.original.id === activityId);
+        const areaDetail = allAreaDetails.get(areaId);
+        
+        if (!activity || !areaDetail) continue;
+
+        const result = analyzeWalk(
+          activity.coordinates,
+          areaDetail.feature,
+          areaDetail.perimeterMeters,
+          areaDetail.areaSqm,
+          activity.stravaMetadata
+        );
+
+        // Save to database if available (but don't fail analysis if save fails)
+        if (userId !== null) {
+          try {
+            await saveWalkAnalysis(
+              userId,
+              activity.original,
+              areaId,
+              result,
+              true // isPrimaryMatch
+            );
+          } catch (e) {
+            // WHY: Log error but continue - analysis results still valid for display
+            // Database save failure shouldn't prevent UI from showing results
+            console.error(`[Map] Error saving analysis for activity ${activityId}, area ${areaId}:`, e);
+          }
+        }
+
+        if (!areaActivityScores.has(areaId)) {
+          areaActivityScores.set(areaId, []);
+        }
+        
+        areaActivityScores.get(areaId)!.push({
+          activityId,
+          name: activity.original.name,
+          score: result.metrics.rawQualityScore,
+          metrics: result.metrics,
+          result
+        });
+      }
+
+      // Create final analysis results using best score per area
+      areaActivityScores.forEach((scores, areaId) => {
+        // WHY: Use best score among all walks for this area
+        const bestWalk = scores.reduce((best, current) => 
+          current.score > best.score ? current : best
+        );
+
+        newAreaAnalyses.set(areaId, {
+          areaId,
+          tier: bestWalk.metrics.tier,
+          qualityScore: bestWalk.metrics.rawQualityScore,
+          metrics: bestWalk.metrics,
+          matchedActivities: scores.map(s => ({ id: s.activityId, name: s.name }))
+        });
+      });
+
+      setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
+
+      // Calculate tier counts for progress
+      const tierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
+      newAreaAnalyses.forEach(analysis => {
+        if (analysis.tier) {
+          tierCounts[analysis.tier]++;
+        }
+      });
+
+      onProgressChange({
+        completedCount: newAreaAnalyses.size,
+        totalAreas: geoData.features.length,
+        tierCounts
+      });
     }, 100);
 
-  }, [geoData, activities]);
+  }, [geoData, activities, onProgressChange]);
 
-  // Style function
+  // WHY: Style function returns tier-based colors per PRD 001 section 3.4
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const getStyle = (feature: any) => {
-    const isCompleted = feature.properties && completedAreas.has(feature.properties.FID || feature.id);
+  const getStyle = useCallback((feature: any) => {
+    const areaId = feature?.properties?.FID || feature?.id;
+    const analysis = areaAnalyses.get(areaId as number);
+
+    if (analysis && analysis.tier) {
+      const color = getTierColor(analysis.tier);
+      return {
+        color: color,
+        weight: 2,
+        opacity: 0.8,
+        fillColor: color,
+        // WHY: 0.4 opacity per PRD 001 section 3.4
+        fillOpacity: 0.4
+      };
+    }
+
+    // Default style for unmatched areas
     return {
-      color: isCompleted ? '#10b981' : '#6b7280', // Green-500 or Gray-500
-      weight: isCompleted ? 2 : 1,
+      color: '#6b7280', // Gray-500
+      weight: 1,
       opacity: 0.8,
-      fillColor: isCompleted ? '#10b981' : '#9ca3af',
-      fillOpacity: isCompleted ? 0.3 : 0.1
+      fillColor: '#9ca3af',
+      fillOpacity: 0.1
     };
-  };
+  }, [areaAnalyses]);
+
+  // Generate popup content with score breakdown
+  const getPopupContent = useCallback((feature: Feature): string => {
+    const areaId = feature.properties?.FID || feature.id;
+    const analysis = areaAnalyses.get(areaId as number);
+    const areaName = feature.properties?.delomr || 'N/A';
+
+    let content = `
+      <div class="font-bold text-lg mb-1">${areaName}</div>
+      <div class="text-xs text-gray-500 mb-2">ID: ${areaId}</div>
+    `;
+
+    if (analysis) {
+      const tierColor = getTierColor(analysis.tier);
+      const tierName = getTierDisplayName(analysis.tier);
+      
+      content += `
+        <div class="flex items-center gap-2 mb-2">
+          <span class="inline-block w-3 h-3 rounded-full" style="background-color: ${tierColor}"></span>
+          <span class="font-semibold">${tierName}</span>
+          <span class="text-sm text-gray-600">(${(analysis.qualityScore * 100).toFixed(1)}%)</span>
+        </div>
+        <div class="text-xs space-y-1 border-t pt-2">
+          <div>Perimeter: ${(analysis.metrics.perimeterCoveragePercent * 100).toFixed(0)}%</div>
+          <div>Area: ${(analysis.metrics.areaCoveragePercent * 100).toFixed(0)}%</div>
+          <div>Alignment: ${(analysis.metrics.alignmentScore * 100).toFixed(0)}%</div>
+          <div>Efficiency: ${(analysis.metrics.efficiency * 100).toFixed(0)}%</div>
+        </div>
+      `;
+
+      if (analysis.matchedActivities.length > 0) {
+        content += `
+          <div class="border-t pt-2 mt-2">
+            <div class="font-semibold text-xs text-gray-700 mb-1">Matched Walks (${analysis.matchedActivities.length}):</div>
+            <ul class="list-disc pl-4 space-y-1">
+        `;
+        analysis.matchedActivities.forEach(act => {
+          content += `
+            <li class="text-xs">
+              <a href="https://www.strava.com/activities/${act.id}" 
+                 target="_blank" 
+                 rel="noopener noreferrer" 
+                 class="text-blue-600 hover:text-blue-800 hover:underline">
+                 ${act.name}
+              </a>
+            </li>
+          `;
+        });
+        content += `</ul></div>`;
+      }
+    } else {
+      content += `<div class="text-xs text-gray-400 italic mt-2">No matched walks</div>`;
+    }
+
+    return content;
+  }, [areaAnalyses]);
+
+  // Create tooltip data from a feature
+  const getTooltipData = useCallback((feature: Feature): TooltipData => {
+    const areaId = feature.properties?.FID || feature.id;
+    const areaName = feature.properties?.delomr || 'Unknown Area';
+    const analysis = areaAnalyses.get(areaId as number);
+
+    if (analysis) {
+      // Find best walk (first one is used as best for now)
+      const bestWalk = analysis.matchedActivities[0];
+      
+      return {
+        areaId: areaId as number,
+        areaName,
+        tier: analysis.tier,
+        qualityScore: analysis.qualityScore,
+        walkCount: analysis.matchedActivities.length,
+        bestWalkId: bestWalk?.id,
+        bestWalkName: bestWalk?.name,
+      };
+    }
+
+    return {
+      areaId: areaId as number,
+      areaName,
+      tier: null,
+      qualityScore: 0,
+      walkCount: 0,
+    };
+  }, [areaAnalyses]);
 
   return (
     <div className="h-screen w-full relative">
@@ -215,7 +466,7 @@ export default function Map({ activities = [] }: MapProps) {
         />
         <LocationMarker />
         
-        {/* Render activities as faint blue lines for debugging/visual context */}
+        {/* WHY: Render activities as faint blue lines for visual context */}
         {activities.map(act => {
           if (!act.map || !act.map.summary_polyline) return null;
           const positions = mapboxPolyline.decode(act.map.summary_polyline);
@@ -230,19 +481,49 @@ export default function Map({ activities = [] }: MapProps) {
 
         {geoData && (
           <GeoJSON 
+            key={`geojson-${areaAnalyses.size}`}
             data={geoData} 
             style={getStyle}
             onEachFeature={(feature, layer) => {
-               if (feature.properties && feature.properties.delomr) {
-                 layer.bindPopup(`
-                   <div class="font-bold">${feature.properties.delomr}</div>
-                   <div class="text-xs text-gray-500">ID: ${feature.properties.FID}</div>
-                 `);
-               }
+              // Popup for click (full details)
+              layer.bindPopup(getPopupContent(feature));
+              
+              // WHY: Tooltip handlers for hover (desktop) and long-press (mobile)
+              // Per PRD 001 section 3.5
+              const tooltipData = getTooltipData(feature);
+              
+              // Desktop: hover
+              layer.on('mouseover', (e: L.LeafletMouseEvent) => {
+                handleMouseEnter(tooltipData, e);
+              });
+              layer.on('mouseout', () => {
+                handleMouseLeave();
+              });
+              
+              // Mobile: long-press (touchstart/touchend)
+              // WHY: Use 'as any' for touch events since Leaflet types are incomplete
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              layer.on('touchstart', (e: any) => {
+                handleTouchStart(tooltipData, e);
+              });
+              layer.on('touchend', () => {
+                handleTouchEnd();
+              });
+              layer.on('touchmove', () => {
+                // Cancel tooltip if user moves finger (scrolling)
+                handleTouchEnd();
+              });
             }}
           />
         )}
       </MapContainer>
+      
+      {/* WHY: Tooltip overlay outside MapContainer for proper z-index */}
+      <AreaTooltip 
+        data={tooltipData} 
+        position={tooltipPosition} 
+        onClose={hideTooltip}
+      />
     </div>
   );
 }

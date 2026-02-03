@@ -1,0 +1,271 @@
+# Analysis Engine
+
+## Overview
+
+The analysis engine calculates multi-metric scores for walks around Malmö's sub-areas. It evaluates how well a walk traces the border of an area and assigns quality tiers (Platinum/Gold/Silver/Bronze).
+
+## User Stories
+
+From [PRD 001](../PRD/001-mvp-mobile-walker.md):
+- "As a user, I want to clearly see which areas I have completed and their quality tier"
+- "As a user, I want to see a detailed score breakdown for each area"
+
+## Implementation
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/analysis.ts` | Core metric calculations and scoring |
+| `src/lib/db.ts` | Storage of analysis results (walk_analyses table) |
+
+### Metrics Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Walk Analysis                          │
+│                                                             │
+│  ┌──────────────────┐  ┌──────────────────┐                │
+│  │ GPS Coordinates  │  │  Area Polygon    │                │
+│  └────────┬─────────┘  └────────┬─────────┘                │
+│           │                     │                           │
+│           ▼                     ▼                           │
+│  ┌────────────────────────────────────────┐                │
+│  │         Metric Calculations            │                │
+│  │                                        │                │
+│  │  ┌─────────────────────────────────┐  │                │
+│  │  │ 1. Perimeter Coverage (40%)    │  │                │
+│  │  │ 2. Area Coverage (25%)         │  │                │
+│  │  │ 3. Alignment Score (20%)       │  │                │
+│  │  │ 4. Efficiency (15%)            │  │                │
+│  │  └─────────────────────────────────┘  │                │
+│  │                                        │                │
+│  │  ┌─────────────────────────────────┐  │                │
+│  │  │ Deviation Detection             │  │                │
+│  │  └─────────────────────────────────┘  │                │
+│  └────────────────────────────────────────┘                │
+│                        │                                    │
+│                        ▼                                    │
+│  ┌────────────────────────────────────────┐                │
+│  │    Quality Score (0.0 - 1.0)           │                │
+│  │    Tier Assignment                     │                │
+│  └────────────────────────────────────────┘                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Metric Details
+
+### 1. Perimeter Coverage (Weight: 40%)
+
+**Formula:** `covered_perimeter_length / total_perimeter_length`
+
+**How it works:**
+1. Create 25m buffer around area perimeter
+2. Find intersection of walk path with buffer
+3. Measure length of intersected segments
+4. Divide by total perimeter length
+
+**WHY 25m buffer:**
+- GPS accuracy is typically 5-15m in urban areas
+- Sidewalks may be offset from property boundaries
+- Referenced in ADR 002
+
+### 2. Area Coverage (Weight: 25%)
+
+**Formula:** `enclosed_area_intersection / sub_area_total_area`
+
+**Requirements:**
+- Walk must form a closed loop (start/end within 100m)
+- If open path: area_coverage = 0
+
+**How it works:**
+1. Check if walk is closed (start/end within 100m)
+2. Convert walk coordinates to polygon by connecting end to start
+3. Calculate intersection with sub-area polygon using `turf.intersect()`
+4. Compute ratio of enclosed area to total area
+
+**WHY 100m closure threshold:**
+- Allows for GPS imprecision at start/end
+- Still requires walker to return near starting point
+
+**Strava Metadata Fix:**
+The `summary_polyline` from Strava API is often truncated at the beginning and end (up to 200m missing). This caused false negatives in loop detection. The fix:
+- Use Strava's `start_latlng` and `end_latlng` metadata for loop detection when available
+- These values come from the full GPS stream and are more reliable
+- Fallback to polyline coordinates if metadata is unavailable
+
+### 3. Alignment Score (Weight: 20%)
+
+**Formula:** `1 - min(RMSE / 50m, 1)`
+
+**RMSE Calculation:**
+```
+RMSE = sqrt(sum(distance_to_border²) / n)
+```
+
+For each GPS point, compute perpendicular distance to nearest border segment.
+
+**Additional Metrics (informational):**
+- `max_deviation`: Worst-case deviation point
+- `p90_deviation`: 90th percentile (robust to GPS glitches)
+
+**WHY 50m normalization:**
+- A walk averaging 50m from border gets alignment_score = 0
+- Typical good walks are 5-15m from border (score 0.7-0.9)
+
+### 4. Efficiency (Weight: 15%)
+
+**Formula:** `border_aligned_length / total_walk_length`
+
+**How it works:**
+- Measure total walk distance
+- Measure distance spent within 25m buffer of perimeter
+- Compute ratio
+
+**Purpose:** Penalizes unnecessary detours and backtracking.
+
+## Quality Score Calculation
+
+```typescript
+quality_score = (
+  0.40 × perimeter_coverage +
+  0.25 × area_coverage +
+  0.20 × alignment_score +
+  0.15 × efficiency
+)
+```
+
+**Weight Rationale (from ADR 003):**
+- **Perimeter Coverage (40%)**: Primary goal—walk the border
+- **Area Coverage (25%)**: Rewards closing the loop
+- **Alignment (20%)**: Rewards staying close to border
+- **Efficiency (15%)**: Minor penalty for detours
+
+**Note:** Open paths (area_coverage = 0) can achieve max score of 0.75, sufficient for Silver tier.
+
+## Tier System
+
+| Tier | Score Range | Color | Hex |
+|------|-------------|-------|-----|
+| Platinum | ≥ 0.95 | Purple | `#a855f7` |
+| Gold | ≥ 0.85 | Gold | `#eab308` |
+| Silver | ≥ 0.70 | Silver | `#9ca3af` |
+| Bronze | ≥ 0.50 | Bronze | `#cd7f32` |
+
+**Completion Threshold:** Score ≥ 0.50 (Bronze) marks area as "completed".
+
+## Deviation Detection
+
+Detects "peninsula-shaped" detours where walker left the border.
+
+### Algorithm
+
+```
+DEVIATION_THRESHOLD = 30m
+
+for each point P in walk:
+    distance = min_distance(P, border)
+    
+    if not in_deviation AND distance > 30m:
+        in_deviation = true
+        record start point
+    
+    if in_deviation AND distance <= 30m:
+        in_deviation = false
+        record deviation with metrics
+```
+
+### Deviation Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `border_gap` | Distance along border bypassed |
+| `detour_distance` | Actual path length during deviation |
+| `max_deviation` | Furthest point from border |
+| `detour_ratio` | `detour_distance / border_gap` |
+| `return_accuracy` | How close end is to start on border |
+
+### Classification Heuristic
+
+```typescript
+if (detour_ratio >= 2.0 && return_accuracy < 50m) {
+  classification = "obstacle_avoidance";
+} else if (detour_ratio < 1.5) {
+  classification = "shortcut";
+} else {
+  classification = "drift";
+}
+```
+
+**WHY these thresholds:**
+- `detour_ratio >= 2.0`: Walker took 2x+ longer path, likely avoiding something
+- `return_accuracy < 50m`: Walker returned near where they left
+- `detour_ratio < 1.5`: Took shorter path, likely a shortcut
+
+## Magic Numbers Reference
+
+| Value | Meaning | Source |
+|-------|---------|--------|
+| 25m | Perimeter buffer | ADR 002, GPS accuracy |
+| 100m | Loop closure threshold | ADR 003 |
+| 50m | RMSE normalization | ADR 003 |
+| 30m | Deviation threshold | ADR 003 |
+| 0.40/0.25/0.20/0.15 | Score weights | ADR 003 |
+| 0.95/0.85/0.70/0.50 | Tier thresholds | ADR 003 |
+
+## ADR References
+
+- [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - 25m buffer, exclusive assignment
+- [ADR 003: Multi-Metric Completion Scoring](../ADR/003-multi-metric-completion-scoring.md) - Full scoring system
+
+## Testing Infrastructure
+
+A comprehensive test suite exists for the analysis engine in `src/__tests__/analysis/`:
+
+- `loop-detection.test.ts` - Tests for the 100m loop closure threshold
+- `area-coverage.test.ts` - Tests for area coverage calculation with various scenarios
+
+### Running Tests
+
+```bash
+npm run test           # Watch mode
+npm run test:run       # Single run
+npm run test:ui        # Interactive UI
+npm run test:coverage  # With coverage report
+```
+
+### Visualization Helpers
+
+Test runs generate SVG visualizations in `src/__tests__/output/` showing:
+- **Perimeter coverage**: 25m buffer zone highlighted, covered segments in green
+- **Area coverage**: Walk-enclosed polygon, intersection with sub-area
+- **Alignment**: Walk path color-coded by distance from border (green=close, red=far)
+
+Use these to debug analysis issues and understand metric behavior.
+
+## Displayed Metrics in UI
+
+The AreaDetailsPanel shows these metrics for each completed area:
+
+| Metric | Description |
+|--------|-------------|
+| Sub-area Circumference | Total perimeter length of the sub-area |
+| Total Walk Length | Distance of the complete walk |
+| Perimeter Walked | Length of walk within the 25m buffer |
+| Walk vs Circumference | Difference (positive = detours, negative = efficient) |
+| Enclosed Area | Area covered by the walk polygon |
+| Loop Status | Whether start/end are within 100m |
+
+## Current Limitations
+
+1. **No exemption adjustment yet**: Raw scores don't account for exempted deviations (Phase 4.4)
+2. **Performance with many points**: RMSE calculation is O(n × m) where n = walk points, m = perimeter segments
+3. **Self-intersecting walks**: May cause issues with area coverage calculation
+4. **No persistence**: Analysis results recalculated on every page load (Phase 7)
+
+## Planned Improvements
+
+1. **Exemption-adjusted scores** - Recalculate metrics excluding exempt deviations
+2. **Caching** - Store intermediate results for faster recalculation
+3. **Spatial indexing** - Use R-tree for faster point-to-line distance queries
+4. **Debug visualization in app** - Show metric calculations visually for each walk

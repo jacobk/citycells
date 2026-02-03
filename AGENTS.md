@@ -24,14 +24,35 @@ Never propose a change to the codebase without explicitly considering its impact
 - **When to update**: When a task is started, completed, or if timelines/dependencies change.
 - **Action**: Check off completed items or add new tasks as discovered.
 
+### 1.4 Feature Documentation
+- **Location**: `docs/features/`
+- **When to update**: When implementing or modifying any user-facing feature.
+- **Structure**: One file per feature domain (e.g., `analysis-engine.md`, `map-visualization.md`).
+- **Content requirements**:
+  - Feature overview (what it does, why it exists)
+  - Implementation details (key files, functions, data flow)
+  - ADR references (link to relevant decisions)
+  - Code rationale summary (non-obvious design choices)
+- **Purpose**: Enable future agents to reconstruct the full mental model and rationale for all features.
+
+### 1.5 Code Rationale Comments
+When implementing features, document the "why" in code:
+- Add `// WHY:` comments for non-obvious implementation choices
+- Link to ADRs in comments where relevant (e.g., `// See ADR 003 for scoring formula`)
+- Document magic numbers and thresholds with their source (e.g., `// 25m buffer - see ADR 002`)
+- Explain trade-offs made during implementation
+
 **Workflow Checklist:**
 1.  [ ] Analyze request.
 2.  [ ] Check `PROJECT_PLAN.md` and `docs/PRD/` for context.
 3.  [ ] Plan the code change.
 4.  [ ] **Check:** Does this require an ADR? Does this change the PRD?
 5.  [ ] Implement code.
-6.  [ ] Update `PROJECT_PLAN.md`, `docs/ADR/`, and `docs/PRD/` as necessary.
-7.  [ ] Verify build and lint.
+6.  [ ] Update `docs/features/` with implementation details.
+7.  [ ] Add `// WHY:` comments for non-obvious code decisions.
+8.  [ ] Update `PROJECT_PLAN.md`, `docs/ADR/`, and `docs/PRD/` as necessary.
+9.  [ ] Verify feature docs allow mental model reconstruction.
+10. [ ] Verify build and lint.
 
 ---
 
