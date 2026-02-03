@@ -22,6 +22,8 @@ Each entry should reference:
   - Key files: `src/components/Map/Map.tsx`, `src/components/Map/index.tsx`, `src/app/page.tsx`
 - Commit workflow skill and command for documentation-first commits. (AGENTS.md)
   - Key files: `.cursor/skills/commit-workflow/SKILL.md`, `.cursor/commands/commit.md`
+- Commit workflow enforces fast-forward merges to main. (AGENTS.md)
+  - Key files: `.cursor/skills/commit-workflow/SKILL.md`
 
 ## 2026-02-03
 ### Added
