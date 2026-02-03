@@ -8,6 +8,7 @@
  */
 
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+import type { CachedStreams } from '@/lib/types/strava-streams';
 
 // ============================================
 // Constants
@@ -19,7 +20,7 @@ const INDEXEDDB_NAME = 'citycells-db';
 const INDEXEDDB_STORE = 'database';
 
 // WHY: Schema version for migrations - increment when schema changes
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 // ============================================
 // Types
@@ -179,6 +180,9 @@ CREATE TABLE IF NOT EXISTS walks (
   name TEXT,
   total_distance_meters REAL,
   polyline TEXT NOT NULL,
+  streams_json TEXT,
+  streams_fetched_at TEXT,
+  stream_point_count INTEGER,
   started_at TEXT,
   synced_at TEXT DEFAULT (datetime('now'))
 );
@@ -336,7 +340,25 @@ export async function initDatabase(): Promise<Database> {
   const currentVersion = versionResult.length > 0 ? versionResult[0].values[0][0] as number : 0;
   
   if (currentVersion < SCHEMA_VERSION) {
-    // Run migrations here when needed
+    if (currentVersion < 2) {
+      const columnsResult = db.exec("PRAGMA table_info(walks)");
+      const columnNames = new Set(
+        columnsResult.length > 0
+          ? columnsResult[0].values.map(row => row[1] as string)
+          : []
+      );
+
+      if (!columnNames.has('streams_json')) {
+        db.run('ALTER TABLE walks ADD COLUMN streams_json TEXT');
+      }
+      if (!columnNames.has('streams_fetched_at')) {
+        db.run('ALTER TABLE walks ADD COLUMN streams_fetched_at TEXT');
+      }
+      if (!columnNames.has('stream_point_count')) {
+        db.run('ALTER TABLE walks ADD COLUMN stream_point_count INTEGER');
+      }
+    }
+
     db.run('INSERT OR REPLACE INTO schema_version (version) VALUES (?)', [SCHEMA_VERSION]);
     await persistDatabase();
   }
@@ -553,6 +575,82 @@ export function getAllAreas(): AreaRow[] {
     area_sqm: row[4] as number,
     geometry_json: row[5] as string,
   }));
+}
+
+/**
+ * Save stream data for a walk.
+ */
+export async function saveWalkStreams(walkId: number, streams: CachedStreams): Promise<void> {
+  await executeWrite(
+    `UPDATE walks
+     SET streams_json = ?, streams_fetched_at = ?, stream_point_count = ?
+     WHERE id = ?`,
+    [JSON.stringify(streams), streams.fetchedAt, streams.pointCount, walkId]
+  );
+}
+
+/**
+ * Get cached streams for a walk by Strava activity id.
+ */
+export function getWalkStreams(stravaActivityId: number): CachedStreams | null {
+  const database = getDatabase();
+  const result = database.exec(
+    'SELECT streams_json FROM walks WHERE strava_activity_id = ? LIMIT 1',
+    [stravaActivityId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return null;
+  }
+
+  const streamsJson = result[0].values[0][0] as string | null;
+  if (!streamsJson) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(streamsJson) as CachedStreams;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if streams should be fetched for an activity.
+ */
+export function needsStreamsFetch(stravaActivityId: number): boolean {
+  const database = getDatabase();
+  const result = database.exec(
+    'SELECT streams_fetched_at, stream_point_count FROM walks WHERE strava_activity_id = ? LIMIT 1',
+    [stravaActivityId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return true;
+  }
+
+  const row = result[0].values[0];
+  const fetchedAt = row[0] as string | null;
+  const pointCount = row[1] as number | null;
+
+  return !fetchedAt || !pointCount || pointCount <= 0;
+}
+
+/**
+ * Get walk database id for a Strava activity.
+ */
+export function getWalkIdByActivityId(stravaActivityId: number): number | null {
+  const database = getDatabase();
+  const result = database.exec(
+    'SELECT id FROM walks WHERE strava_activity_id = ? LIMIT 1',
+    [stravaActivityId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return null;
+  }
+
+  return result[0].values[0][0] as number;
 }
 
 /**

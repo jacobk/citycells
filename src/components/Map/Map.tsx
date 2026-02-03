@@ -23,7 +23,14 @@ import {
   saveWalkAnalysis, 
   getOrCreateUserId 
 } from '@/lib/analysis-persistence';
+import { 
+  getWalkIdByActivityId,
+  getWalkStreams,
+  needsStreamsFetch,
+  saveWalkStreams
+} from '@/lib/db';
 import type { DeviationWithExemption } from '@/lib/exemption-types';
+import type { CachedStreams } from '@/lib/types/strava-streams';
 
 // Fix for default marker icon in Next.js
 // @ts-expect-error - overriding private method
@@ -229,27 +236,120 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       // Pre-process areas with their geometry and metrics
       const allAreaDetails = buildAreaDetailMap(geoData);
 
+      // WHY: Stay below Strava rate limits during initial sync (ADR 006).
+      const STREAM_REQUEST_LIMIT = 80;
+      const STREAM_REQUEST_DELAY_MS = 250;
+      let streamRequests = 0;
+
+      // WHY: Prefer high-fidelity Strava streams; cache locally to reduce API usage.
+      async function loadStreamData(activity: StravaActivity): Promise<{
+        streamCoordinates: Position[] | null;
+        cachedStreams: CachedStreams | null;
+        shouldSaveStreams: boolean;
+        streamTime?: number[];
+        streamDistance?: number[];
+      }> {
+        const hasDb = Boolean(db && !dbLoading);
+        const cached = hasDb ? getWalkStreams(activity.id) : null;
+        if (cached && cached.latlng.length > 0) {
+          return {
+            streamCoordinates: cached.latlng.map(([lat, lng]) => [lng, lat]),
+            cachedStreams: cached,
+            shouldSaveStreams: false,
+            streamTime: cached.time,
+            streamDistance: cached.distance,
+          };
+        }
+
+        if (hasDb && !needsStreamsFetch(activity.id)) {
+          return { streamCoordinates: null, cachedStreams: null, shouldSaveStreams: false };
+        }
+
+        if (streamRequests >= STREAM_REQUEST_LIMIT) {
+          return { streamCoordinates: null, cachedStreams: null, shouldSaveStreams: false };
+        }
+
+        streamRequests += 1;
+        await new Promise(resolve => setTimeout(resolve, STREAM_REQUEST_DELAY_MS));
+
+        try {
+          const response = await fetch(`/api/activities/streams?id=${activity.id}`);
+          if (!response.ok) {
+            return { streamCoordinates: null, cachedStreams: null, shouldSaveStreams: false };
+          }
+
+          const data = await response.json();
+          const latlng: [number, number][] = data?.streams?.latlng?.data ?? [];
+          const time: number[] | undefined = data?.streams?.time?.data;
+          const distance: number[] | undefined = data?.streams?.distance?.data;
+
+          const cachedStreams: CachedStreams = {
+            latlng,
+            time,
+            distance,
+            fetchedAt: data?.fetchedAt ?? new Date().toISOString(),
+            pointCount: latlng.length,
+          };
+
+          return {
+            streamCoordinates: latlng.length > 0
+              ? latlng.map(([lat, lng]) => [lng, lat])
+              : null,
+            cachedStreams,
+            shouldSaveStreams: hasDb && latlng.length > 0,
+            streamTime: time,
+            streamDistance: distance,
+          };
+        } catch (e) {
+          console.warn('Failed to fetch streams for activity', activity.id, e);
+          return { streamCoordinates: null, cachedStreams: null, shouldSaveStreams: false };
+        }
+      }
+
       // Pre-process all activities to coordinates
       console.log(`[Map] All activities: ${activities.length}`, activities.map(a => a.id));
-      const processedActivities = activities.map(act => {
-        if (!act.map || !act.map.summary_polyline) return null;
+      const processedActivities: Array<{
+        original: StravaActivity;
+        coordinates: Position[];
+        stravaMetadata: StravaMetadata | undefined;
+        streamCoordinates: Position[] | null;
+        cachedStreams: CachedStreams | null;
+        shouldSaveStreams: boolean;
+      }> = [];
+
+      for (const act of activities) {
+        if (!act.map || !act.map.summary_polyline) continue;
         try {
           const decoded = mapboxPolyline.decode(act.map.summary_polyline);
           // WHY: mapbox polyline returns [lat, lng], turf needs [lng, lat]
           const coordinates: Position[] = decoded.map(pt => [pt[1], pt[0]]);
-          
+
+          const streamData = await loadStreamData(act);
+
           // WHY: Strava metadata is more reliable for loop detection
           // The summary_polyline is often truncated and missing GPS points
           const stravaMetadata: StravaMetadata | undefined = act.start_latlng && act.end_latlng
-            ? { startLatLng: act.start_latlng, endLatLng: act.end_latlng }
+            ? {
+              startLatLng: act.start_latlng,
+              endLatLng: act.end_latlng,
+              distance: act.distance,
+              streamTime: streamData.streamTime,
+              streamDistance: streamData.streamDistance
+            }
             : undefined;
           
-          return { original: act, coordinates, stravaMetadata };
+          processedActivities.push({ 
+            original: act,
+            coordinates,
+            stravaMetadata,
+            streamCoordinates: streamData.streamCoordinates,
+            cachedStreams: streamData.cachedStreams,
+            shouldSaveStreams: streamData.shouldSaveStreams
+          });
         } catch (e) {
           console.warn("Error decoding polyline for activity", act.id, act.name, e);
-          return null;
         }
-      }).filter((item): item is { original: StravaActivity; coordinates: Position[]; stravaMetadata: StravaMetadata | undefined } => Boolean(item));
+      }
 
       // WHY: Track best analysis per area for exclusive assignment (ADR 002)
       // Each walk can only count for one area (the one with best coverage)
@@ -267,6 +367,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         allAreaDetails.forEach((areaDetail, areaId) => {
           try {
             // Quick intersection check before full analysis
+            // WHY: Use summary polyline for intersection guard to avoid
+            // false negatives if streams are privacy-cropped.
             const walkLine = turf.lineString(pAct.coordinates);
             if (!turf.booleanIntersects(walkLine, areaDetail.feature)) return;
             
@@ -277,7 +379,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               areaDetail.feature,
               areaDetail.perimeterMeters,
               areaDetail.areaSqm,
-              pAct.stravaMetadata
+              pAct.stravaMetadata,
+              pAct.streamCoordinates ?? undefined
             );
 
             // WHY: Only consider if meets minimum threshold (Bronze = 50%)
@@ -317,7 +420,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           areaDetail.feature,
           areaDetail.perimeterMeters,
           areaDetail.areaSqm,
-          activity.stravaMetadata
+          activity.stravaMetadata,
+          activity.streamCoordinates ?? undefined
         );
 
         // Save to database if available (but don't fail analysis if save fails)
@@ -330,6 +434,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               result,
               true // isPrimaryMatch
             );
+
+            if (activity.cachedStreams && activity.shouldSaveStreams) {
+              const walkId = getWalkIdByActivityId(activityId);
+              if (walkId !== null) {
+                await saveWalkStreams(walkId, activity.cachedStreams);
+              }
+            }
           } catch (e) {
             // WHY: Log error but continue - analysis results still valid for display
             // Database save failure shouldn't prevent UI from showing results
@@ -404,7 +515,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       });
     }, 100);
 
-  }, [geoData, activities, onProgressChange, buildAreaDetailMap, buildBaseAreaClickData]);
+  }, [geoData, activities, onProgressChange, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId]);
 
   // WHY: Style function returns tier-based colors per PRD 001 section 3.4
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

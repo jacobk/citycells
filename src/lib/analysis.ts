@@ -220,6 +220,9 @@ export function calculatePerimeterCoverage(
 export interface StravaMetadata {
   startLatLng?: [number, number]; // [lat, lng] format from Strava API
   endLatLng?: [number, number];   // [lat, lng] format from Strava API
+  distance?: number; // Actual distance in meters from Strava API
+  streamTime?: number[]; // Optional stream time indices for future use
+  streamDistance?: number[]; // Optional stream distance indices for future use
 }
 
 /**
@@ -371,9 +374,13 @@ export function calculateAlignmentError(
  */
 export function calculateEfficiency(
   walkLine: Feature<LineString>,
-  areaPolygon: Feature<Polygon | MultiPolygon>
+  areaPolygon: Feature<Polygon | MultiPolygon>,
+  stravaDistance?: number
 ): { efficiency: number; borderAlignedMeters: number; totalWalkMeters: number } {
-  const totalWalkMeters = turf.length(walkLine, { units: 'meters' });
+  // WHY: Strava summary_polyline can be truncated by privacy zones; prefer full distance.
+  const totalWalkMeters = typeof stravaDistance === 'number'
+    ? stravaDistance
+    : turf.length(walkLine, { units: 'meters' });
   
   if (totalWalkMeters === 0) {
     return { efficiency: 0, borderAlignedMeters: 0, totalWalkMeters: 0 };
@@ -590,25 +597,30 @@ export function analyzeWalk(
   areaPolygon: Feature<Polygon | MultiPolygon>,
   perimeterLengthMeters: number,
   areaSqm: number,
-  stravaMetadata?: StravaMetadata
+  stravaMetadata?: StravaMetadata,
+  streamCoordinates?: Position[]
 ): FullAnalysisResult {
+  const analysisCoordinates = streamCoordinates && streamCoordinates.length > 0
+    ? streamCoordinates
+    : walkCoordinates;
+
   // Convert coordinates to LineString
-  const walkLine = turf.lineString(walkCoordinates);
+  const walkLine = turf.lineString(analysisCoordinates);
   
   // 1. Loop detection (uses Strava metadata if available for accuracy)
-  const loopResult = detectLoop(walkCoordinates, stravaMetadata);
+  const loopResult = detectLoop(analysisCoordinates, stravaMetadata);
   
   // 2. Perimeter coverage
   const perimeterResult = calculatePerimeterCoverage(walkLine, areaPolygon, perimeterLengthMeters);
   
   // 3. Area coverage
-  const areaResult = calculateAreaCoverage(walkCoordinates, areaPolygon, areaSqm, loopResult.isClosedLoop);
+  const areaResult = calculateAreaCoverage(analysisCoordinates, areaPolygon, areaSqm, loopResult.isClosedLoop);
   
   // 4. Alignment error
-  const alignmentResult = calculateAlignmentError(walkCoordinates, areaPolygon);
+  const alignmentResult = calculateAlignmentError(analysisCoordinates, areaPolygon);
   
   // 5. Efficiency
-  const efficiencyResult = calculateEfficiency(walkLine, areaPolygon);
+  const efficiencyResult = calculateEfficiency(walkLine, areaPolygon, stravaMetadata?.distance);
   
   // 6. Quality score and tier
   const scoreResult = calculateQualityScore(
@@ -619,7 +631,7 @@ export function analyzeWalk(
   );
   
   // 7. Deviation detection
-  const deviations = detectDeviations(walkCoordinates, areaPolygon);
+  const deviations = detectDeviations(analysisCoordinates, areaPolygon);
   
   return {
     metrics: {

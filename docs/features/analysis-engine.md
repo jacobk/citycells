@@ -18,6 +18,9 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 |------|---------|
 | `src/lib/analysis.ts` | Core metric calculations and scoring |
 | `src/lib/db.ts` | Storage of analysis results (walk_analyses table) |
+| `src/app/api/activities/streams/route.ts` | Fetch Strava streams for high-fidelity GPS |
+| `src/components/Map/Map.tsx` | Streams-aware analysis orchestration |
+| `src/lib/types/strava-streams.ts` | Stream type definitions |
 
 ### Metrics Overview
 
@@ -94,6 +97,22 @@ The `summary_polyline` from Strava API is often truncated at the beginning and e
 - These values come from the full GPS stream and are more reliable
 - Fallback to polyline coordinates if metadata is unavailable
 
+### Strava Streams Integration (ADR 006)
+
+**Primary GPS source:** Strava activity streams (`latlng`, `time`, `distance`) fetched per-activity and cached locally.
+
+**WHY:** Summary polylines are truncated and low-density; streams provide high-fidelity coordinates for more accurate perimeter coverage, alignment, and deviation detection.
+
+**Behavior:**
+1. Attempt to load cached stream data from the local database.
+2. If missing, fetch streams via `/api/activities/streams?id=ACTIVITY_ID`.
+3. Use stream `latlng` as canonical coordinates for analysis.
+4. Continue using Strava `distance` for total walk length to avoid undercounting.
+
+**Caching:**
+- Streams are stored in `walks.streams_json` with a `streams_fetched_at` marker.
+- Cached streams are reused across sessions to reduce API usage.
+
 ### 3. Alignment Score (Weight: 20%)
 
 **Formula:** `1 - min(RMSE / 50m, 1)`
@@ -123,6 +142,9 @@ For each GPS point, compute perpendicular distance to nearest border segment.
 - Compute ratio
 
 **Purpose:** Penalizes unnecessary detours and backtracking.
+
+**Strava privacy zones:**
+Strava's `summary_polyline` can be truncated near start/end due to privacy/anonymization zones, which under-reports walk length. The analysis engine uses Strava's `distance` field (full GPS stream) for total walk length when available to keep efficiency and UI distance accurate.
 
 ## Quality Score Calculation
 
@@ -217,6 +239,8 @@ if (detour_ratio >= 2.0 && return_accuracy < 50m) {
 
 - [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - 25m buffer, exclusive assignment
 - [ADR 003: Multi-Metric Completion Scoring](../ADR/003-multi-metric-completion-scoring.md) - Full scoring system
+- [ADR 005: Strava Privacy Zones and Truncated Polylines](../ADR/005-strava-privacy-zones.md) - Data limitations and distance handling
+- [ADR 006: Strava Activity Streams](../ADR/006-strava-activity-streams.md) - High-fidelity GPS source
 
 ## Testing Infrastructure
 

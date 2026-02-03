@@ -32,6 +32,7 @@
 - [x] Implement OAuth API Route (`/api/auth/login`, `/api/auth/callback`)
 - [x] Implement Session Management (Cookies)
 - [x] Implement Activities API (`/api/activities`) with filtering
+- [x] Add activity streams API + caching helpers (ADR 006)
 
 ## Phase 3.5: Database Setup (ADR 004)
 - [x] Install `sql.js` dependency
@@ -149,6 +150,7 @@
 - [x] Update analysis-engine.md documentation
 - [x] Add test fixtures from real activity data
 - [x] Fix 0% area coverage bug (use Strava metadata for loop detection)
+- [x] Use Strava distance for walk length to avoid polyline truncation
 - [ ] Add perimeter coverage tests
 - [ ] Add alignment tests
 - [ ] Add efficiency tests

@@ -62,7 +62,7 @@ See [ADR 004](../ADR/004-sqlite-storage.md) for complete schema. Key tables:
 |-------|---------|
 | `users` | Strava user info and tokens |
 | `areas` | Cached sub-area data from GeoJSON |
-| `walks` | Synced Strava activities |
+| `walks` | Synced Strava activities and cached stream data |
 | `walk_analyses` | Analysis results per walk-area pair |
 | `deviations` | Detected obstacle avoidances |
 | `area_completions` | Denormalized completion status |
@@ -116,6 +116,20 @@ Analysis results are automatically saved to the database after computation:
 - Persist across browser sessions
 - Support offline viewing of progress
 
+### Stream Data Caching (ADR 006)
+
+High-fidelity GPS streams are cached alongside walk records to avoid repeated Strava API calls.
+
+**Columns:**
+- `walks.streams_json` - Serialized stream payload (`latlng`, `time`, `distance`)
+- `walks.streams_fetched_at` - ISO timestamp when streams were fetched
+- `walks.stream_point_count` - Point count for diagnostics
+
+**Flow:**
+1. Fetch streams for a walk when needed for analysis.
+2. Store streams in `walks` after analysis is persisted.
+3. Reuse cached streams on subsequent sessions.
+
 ### Export/Import
 
 **Export**: Serialize entire SQLite database to a `.db` file for user download.
@@ -155,7 +169,7 @@ Every write immediately persists to IndexedDB rather than batching:
 | Value | Meaning | Source |
 |-------|---------|--------|
 | `citycells-db` | IndexedDB database name | Chosen for clarity |
-| `SCHEMA_VERSION = 1` | Schema migration version | Increment for migrations |
+| `SCHEMA_VERSION = 2` | Schema migration version | Increment for migrations |
 
 ## Current Limitations
 

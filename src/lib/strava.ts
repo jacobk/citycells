@@ -6,7 +6,8 @@ export const stravaConfig = {
   redirect_uri: process.env.STRAVA_REDIRECT_URI!,
 };
 
-export const STRAVA_SCOPES = 'read,activity:read_all';
+// WHY: read_all enables full activity streams without privacy cropping (ADR 006)
+export const STRAVA_SCOPES = 'read,activity:read_all,read_all';
 
 // Initialize the global config once (optional, but good for defaults)
 strava.config({

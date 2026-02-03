@@ -18,12 +18,19 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Strava activity streams fetching and caching for high-fidelity analysis. (ADR 006)
+  - Key files: `src/app/api/activities/streams/route.ts`, `src/components/Map/Map.tsx`, `src/lib/db.ts`, `src/lib/types/strava-streams.ts`
+- Stream export helper routes and fixture script for raw stream data. (ADR 006)
+  - Key files: `src/app/api/activities/streams/export/route.ts`, `src/app/streams-export/page.tsx`, `scripts/export-activity-streams.mjs`
 - Open AreaDetailsPanel on area click/tap, matching PRD 001 §3.6. (PRD 001 §3.6)
   - Key files: `src/components/Map/Map.tsx`, `src/components/Map/index.tsx`, `src/app/page.tsx`
 - Commit workflow skill and command for documentation-first commits. (AGENTS.md)
   - Key files: `.cursor/skills/commit-workflow/SKILL.md`, `.cursor/commands/commit.md`
 - Commit workflow enforces fast-forward merges to main. (AGENTS.md)
   - Key files: `.cursor/skills/commit-workflow/SKILL.md`
+### Fixed
+- Use Strava distance for total walk length to avoid polyline truncation. (PRD 001 §3.6, ADR 003, ADR 005)
+  - Key files: `src/lib/analysis.ts`, `src/components/Map/Map.tsx`, `src/hooks/useStrava.ts`, `docs/features/analysis-engine.md`, `src/__tests__/analysis/real-activity.test.ts`
 
 ## 2026-02-03
 ### Added
