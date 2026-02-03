@@ -12,6 +12,7 @@ import { visualizeAreaCoverage, saveSVG } from '../utils/visualization';
 import * as turf from '@turf/turf';
 import type { Feature, Polygon, Position } from 'geojson';
 import activityFixture from '../fixtures/activities/activity-17259240639.json';
+import truncatedFixture from '../fixtures/activities/activity-17270700773.json';
 
 describe('Real Activity: activity-17259240639 (Johanneslust)', () => {
   // Extract data from fixture
@@ -155,5 +156,42 @@ describe('Real Activity: activity-17259240639 (Johanneslust)', () => {
       expect(result.metrics.isClosedLoop).toBe(false);
       expect(result.metrics.areaCoveragePercent).toBe(0);
     });
+  });
+});
+
+describe('Real Activity: activity-17270700773 (Håkanstorp)', () => {
+  const coordinates = truncatedFixture.coordinates as Position[];
+  const stravaMetadata: StravaMetadata = {
+    startLatLng: truncatedFixture.start_latlng as [number, number],
+    endLatLng: truncatedFixture.end_latlng as [number, number],
+    distance: truncatedFixture.distance as number,
+  };
+
+  it('should use Strava distance for total walk length', () => {
+    const walkLine = turf.lineString(coordinates);
+    const [minX, minY, maxX, maxY] = turf.bbox(walkLine);
+    const padding = 0.002;
+    const areaPolygon = turf.bboxPolygon([
+      minX - padding,
+      minY - padding,
+      maxX + padding,
+      maxY + padding,
+    ]) as Feature<Polygon>;
+    const areaSqm = turf.area(areaPolygon);
+    const perimeterLine = turf.polygonToLine(areaPolygon);
+    const perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
+
+    const result = analyzeWalk(
+      coordinates,
+      areaPolygon,
+      perimeterMeters,
+      areaSqm,
+      stravaMetadata
+    );
+
+    const polylineLength = turf.length(walkLine, { units: 'meters' });
+
+    expect(result.metrics.totalWalkLengthMeters).toBeCloseTo(truncatedFixture.distance, 1);
+    expect(result.metrics.totalWalkLengthMeters).toBeGreaterThan(polylineLength);
   });
 });
