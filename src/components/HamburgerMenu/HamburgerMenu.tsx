@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 
 // ============================================
 // Types
 // ============================================
 
 interface HamburgerMenuProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
   onOpenAreas: () => void;
   onOpenStats: () => void;
 }
@@ -18,26 +20,26 @@ interface HamburgerMenuProps {
 /**
  * HamburgerMenu Component
  * 
- * A floating hamburger menu button in the top-right corner that provides
+ * A floating hamburger menu button in the top-left corner that provides
  * app-wide navigation to Areas list and Stats dashboard.
  * 
- * See ADR 008 and PRD 001 Section 3.10 for requirements.
+ * See ADR 009 and PRD 001 Section 3.10 for requirements.
  * 
  * Features:
  * - 44x44px circular button with hamburger icon
  * - Dropdown menu with "Areas" and "Stats" options
  * - Semi-transparent background matching app theme
+ * - Controlled component (state managed by parent for mutual exclusivity)
  * - Click outside to close
  */
-export default function HamburgerMenu({ onOpenAreas, onOpenStats }: HamburgerMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function HamburgerMenu({ isOpen, onOpenChange, onOpenAreas, onOpenStats }: HamburgerMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        onOpenChange(false);
       }
     };
 
@@ -48,37 +50,37 @@ export default function HamburgerMenu({ onOpenAreas, onOpenStats }: HamburgerMen
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, onOpenChange]);
 
   // Close on escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        setIsOpen(false);
+        onOpenChange(false);
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen]);
+  }, [isOpen, onOpenChange]);
 
   const handleAreasClick = () => {
-    setIsOpen(false);
+    onOpenChange(false);
     onOpenAreas();
   };
 
   const handleStatsClick = () => {
-    setIsOpen(false);
+    onOpenChange(false);
     onOpenStats();
   };
 
   return (
     <div 
       ref={menuRef}
-      className="fixed top-4 right-4 z-[400]"
+      className="fixed top-4 left-4 z-[400]"
     >
       {/* Hamburger Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => onOpenChange(!isOpen)}
         className="w-11 h-11 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer"
         aria-label={isOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={isOpen}
@@ -105,7 +107,7 @@ export default function HamburgerMenu({ onOpenAreas, onOpenStats }: HamburgerMen
 
       {/* Dropdown Menu */}
       <div 
-        className={`absolute top-14 right-0 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-100 overflow-hidden transition-all duration-200 ${
+        className={`absolute top-14 left-0 z-[450] bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-100 overflow-hidden transition-all duration-200 ${
           isOpen 
             ? 'opacity-100 translate-y-0 pointer-events-auto' 
             : 'opacity-0 -translate-y-2 pointer-events-none'

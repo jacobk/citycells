@@ -164,14 +164,14 @@
 - [x] Update PRD 001 §3.10 with new layout and profile card behavior
 - [x] Update sub-area-list.md feature doc
 - [x] Update map-visualization.md feature doc
-- [ ] Move HamburgerMenu to top-left position (CSS update)
-- [ ] Create/refactor ProfileCard component (`src/components/ProfileCard/`)
-  - [ ] Collapsed state: avatar only (48x48px circular button)
-  - [ ] Expanded state: full card with name, progress, logout
-  - [ ] Expand/collapse animation (200-300ms)
-- [ ] Add `UIOverlayState` to page.tsx state management
-- [ ] Implement mutual exclusivity logic (only one overlay open at a time)
-- [ ] Update z-index hierarchy per ADR 009
+- [x] Move HamburgerMenu to top-left position (CSS update)
+- [x] Create/refactor ProfileCard component (`src/components/ProfileCard/`)
+  - [x] Collapsed state: avatar only (48x48px circular button)
+  - [x] Expanded state: full card with name, progress, logout
+  - [x] Expand/collapse animation (200-300ms)
+- [x] Add `UIOverlayState` to page.tsx state management
+- [x] Implement mutual exclusivity logic (only one overlay open at a time)
+- [x] Update z-index hierarchy per ADR 009
 - [ ] Test on mobile for thumb-reachability
 
 ## Phase 7: Polish & Deployment

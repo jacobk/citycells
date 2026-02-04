@@ -3,13 +3,14 @@
 import CityMap, { type AreaClickData, type ProgressInfo } from '@/components/Map';
 import { useStrava } from '@/hooks/useStrava';
 import { useState, useCallback } from 'react';
-import { getTierColor, type AnalysisMetrics } from '@/lib/analysis';
+import { type AnalysisMetrics } from '@/lib/analysis';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AreaDetailsPanel, type AreaDetails } from '@/components/AreaDetailsPanel';
 import { ExemptionModal } from '@/components/ExemptionModal';
 import { HamburgerMenu } from '@/components/HamburgerMenu';
 import { SubAreaListPanel, type SortOption } from '@/components/SubAreaListPanel';
 import { PanelBreadcrumbs } from '@/components/PanelBreadcrumbs';
+import { ProfileCard } from '@/components/ProfileCard';
 import type { ExemptionReason } from '@/lib/exemption-types';
 
 // ============================================
@@ -20,6 +21,17 @@ type PanelView =
   | { type: 'closed' }
   | { type: 'area-list'; sortBy: SortOption }
   | { type: 'area-detail'; areaId: number; fromList: boolean };
+
+// ============================================
+// Types - UI Overlay State (ADR 009)
+// ============================================
+
+// WHY: Mutual exclusivity - only one overlay (hamburger menu OR profile card) 
+// can be open at a time. See ADR 009 for rationale.
+type UIOverlayState = 
+  | { type: 'none' }
+  | { type: 'hamburger-menu' }
+  | { type: 'profile-card' };
 
 const EMPTY_METRICS: AnalysisMetrics = {
   perimeterCoveragePercent: 0,
@@ -55,6 +67,10 @@ export default function Home() {
   
   // WHY: Separate state for ProgressDashboard since it's a right drawer, not bottom sheet
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  
+  // WHY: UI overlay state for mutual exclusivity (ADR 009)
+  // Only one of hamburger menu or profile card can be open at a time
+  const [overlayState, setOverlayState] = useState<UIOverlayState>({ type: 'none' });
   
   // WHY: State for exemption modal
   const [exemptionDeviationId, setExemptionDeviationId] = useState<number | null>(null);
@@ -99,6 +115,8 @@ export default function Home() {
   // WHY: Handler when clicking an area on the map (not from list)
   const handleAreaClick = useCallback((data: AreaClickData) => {
     setPanelView({ type: 'area-detail', areaId: data.areaId, fromList: false });
+    // Close any open overlay when opening a panel (ADR 009)
+    setOverlayState({ type: 'none' });
   }, []);
 
   // WHY: Handler when selecting an area from the list (ADR 008)
@@ -127,14 +145,41 @@ export default function Home() {
     });
   }, []);
 
-  // WHY: Hamburger menu handlers (ADR 008)
+  // ============================================
+  // Hamburger Menu Handlers (ADR 009)
+  // ============================================
+
+  // WHY: Controlled open/close for mutual exclusivity
+  const handleHamburgerOpenChange = useCallback((open: boolean) => {
+    setOverlayState(open ? { type: 'hamburger-menu' } : { type: 'none' });
+  }, []);
+
   const handleOpenAreas = useCallback(() => {
     setPanelView({ type: 'area-list', sortBy: 'circumference-asc' });
+    // Close overlay when opening panel
+    setOverlayState({ type: 'none' });
   }, []);
 
   const handleOpenStats = useCallback(() => {
     setIsDashboardOpen(true);
+    // Close overlay when opening dashboard
+    setOverlayState({ type: 'none' });
   }, []);
+
+  // ============================================
+  // Profile Card Handlers (ADR 009)
+  // ============================================
+
+  // WHY: Toggle profile card with mutual exclusivity
+  const handleProfileToggle = useCallback(() => {
+    setOverlayState(prev => 
+      prev.type === 'profile-card' ? { type: 'none' } : { type: 'profile-card' }
+    );
+  }, []);
+
+  // ============================================
+  // Exemption Handlers
+  // ============================================
 
   // WHY: Handler to open exemption modal from details panel
   const handleExemptDeviation = useCallback((deviationId: number) => {
@@ -189,129 +234,25 @@ export default function Home() {
         onAreasLoaded={handleAreasLoaded}
       />
       
-      {/* Hamburger Menu (ADR 008) */}
+      {/* Hamburger Menu - Top Left (ADR 009) */}
       <HamburgerMenu 
+        isOpen={overlayState.type === 'hamburger-menu'}
+        onOpenChange={handleHamburgerOpenChange}
         onOpenAreas={handleOpenAreas}
         onOpenStats={handleOpenStats}
       />
       
-      {/* Overlay UI - Status Card */}
-      <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg w-72 border border-gray-100">
-        <h1 className="font-bold text-xl text-gray-800 mb-1">CityCells: Malmö</h1>
-        
-        {loading ? (
-          <div className="text-sm text-gray-500 animate-pulse">Checking Strava...</div>
-        ) : athlete ? (
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <img src={athlete.profile} alt="Profile" className="w-10 h-10 rounded-full border border-gray-200" />
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{athlete.firstname} {athlete.lastname}</p>
-                <p className="text-xs text-green-600 font-medium">{activities.length} Walks Found</p>
-              </div>
-            </div>
-            
-            {/* Progress Section */}
-            <div className="mb-4">
-              <div className="text-xs text-gray-500 mb-1 flex justify-between">
-                <span>Progress</span>
-                <span>{progress.completedCount} / {progress.totalAreas > 0 ? progress.totalAreas : '...'}</span>
-              </div>
-              
-              {/* WHY: Multi-segment progress bar showing tier breakdown */}
-              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex">
-                {progress.tierCounts.platinum > 0 && (
-                  <div 
-                    className="h-2 transition-all duration-1000"
-                    style={{ 
-                      width: `${(progress.tierCounts.platinum / progress.totalAreas) * 100}%`,
-                      backgroundColor: getTierColor('platinum')
-                    }}
-                  />
-                )}
-                {progress.tierCounts.gold > 0 && (
-                  <div 
-                    className="h-2 transition-all duration-1000"
-                    style={{ 
-                      width: `${(progress.tierCounts.gold / progress.totalAreas) * 100}%`,
-                      backgroundColor: getTierColor('gold')
-                    }}
-                  />
-                )}
-                {progress.tierCounts.silver > 0 && (
-                  <div 
-                    className="h-2 transition-all duration-1000"
-                    style={{ 
-                      width: `${(progress.tierCounts.silver / progress.totalAreas) * 100}%`,
-                      backgroundColor: getTierColor('silver')
-                    }}
-                  />
-                )}
-                {progress.tierCounts.bronze > 0 && (
-                  <div 
-                    className="h-2 transition-all duration-1000"
-                    style={{ 
-                      width: `${(progress.tierCounts.bronze / progress.totalAreas) * 100}%`,
-                      backgroundColor: getTierColor('bronze')
-                    }}
-                  />
-                )}
-              </div>
-
-              {/* Tier Legend */}
-              {progress.completedCount > 0 && (
-                <div className="flex gap-3 mt-2 text-[10px]">
-                  {progress.tierCounts.platinum > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('platinum') }} />
-                      <span className="text-gray-600">{progress.tierCounts.platinum}</span>
-                    </div>
-                  )}
-                  {progress.tierCounts.gold > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('gold') }} />
-                      <span className="text-gray-600">{progress.tierCounts.gold}</span>
-                    </div>
-                  )}
-                  {progress.tierCounts.silver > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('silver') }} />
-                      <span className="text-gray-600">{progress.tierCounts.silver}</span>
-                    </div>
-                  )}
-                  {progress.tierCounts.bronze > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('bronze') }} />
-                      <span className="text-gray-600">{progress.tierCounts.bronze}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <button 
-                onClick={logout}
-                className="flex-1 bg-gray-100 text-gray-600 py-2 px-4 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors cursor-pointer"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-              Track your mission to walk around every sub-area of Malmö.
-            </p>
-            <button 
-              onClick={login}
-              className="w-full bg-[#fc4c02] text-white py-2.5 px-4 rounded-lg font-bold text-sm hover:bg-[#e34402] transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-2"
-            >
-              Connect with Strava
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Profile Card - Top Right, Collapsible (ADR 009) */}
+      <ProfileCard
+        athlete={athlete}
+        progress={progress}
+        loading={loading}
+        onLogin={login}
+        onLogout={logout}
+        isExpanded={overlayState.type === 'profile-card'}
+        onToggle={handleProfileToggle}
+        activitiesCount={activities.length}
+      />
 
       {/* Progress Dashboard Drawer */}
       <ProgressDashboard
