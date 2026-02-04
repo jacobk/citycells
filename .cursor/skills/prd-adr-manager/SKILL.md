@@ -14,6 +14,7 @@ This skill guides you through documenting features and decisions. It does NOT ha
 | PRD | `docs/PRD/001-mvp-mobile-walker.md` | User stories, functional requirements |
 | Feature Doc | `docs/features/{name}.md` | Implementation details, rationale |
 | Feature Index | `docs/features/README.md` | When adding new feature docs |
+| Ticket | `docs/tickets/{NNN}-{name}.md` | After documenting new/changed features |
 | Project Plan | `PROJECT_PLAN.md` | Task tracking |
 
 ---
@@ -88,10 +89,20 @@ Based on answers:
 1. Edit `docs/features/README.md`
 2. Add row to Feature Index table with status "Planned" or "In Progress"
 
+#### 3e. Create Implementation Ticket
+
+1. Check next ticket number: `ls docs/tickets/`
+2. Create `docs/tickets/{next-number}-{feature-name}.md` (e.g., `001-auth-flow.md`)
+3. Use template from [templates/ticket-template.md](templates/ticket-template.md)
+4. Fill in: Context files to load, Implementation checklist, Acceptance criteria
+5. List specific files to modify based on feature doc
+6. **Do NOT duplicate ADR/PRD content** - only reference them
+
 ### Step 4: Summary
 
 Provide summary listing:
 - All files created/modified
+- Implementation ticket created (with ticket number)
 - What sections implementation agent needs to complete
 - Any follow-up decisions needed
 
@@ -160,11 +171,22 @@ Options (read from `docs/features/README.md`):
 5. Add to Current Limitations if introducing known issues
 6. **Mark Implementation sections for update** - implementation agent fills details
 
+#### 4d. Create Implementation Ticket
+
+1. Check next ticket number: `ls docs/tickets/`
+2. Create `docs/tickets/{next-number}-{feature-name}.md`
+3. Use template from [templates/ticket-template.md](templates/ticket-template.md)
+4. Reference the new/updated ADR and PRD sections
+5. List implementation tasks derived from the changes
+6. Include acceptance criteria that verify the change
+7. **Do NOT duplicate ADR/PRD content** - only reference them
+
 ### Step 5: Summary
 
 Provide summary listing:
 - All files modified
 - What ADRs were affected and how
+- Implementation ticket created (with ticket number)
 - What implementation agent needs to update
 
 ---
@@ -176,3 +198,6 @@ Provide summary listing:
 - **Link ADRs** - Always reference relevant ADRs in feature docs
 - **Date stamps** - Use format YYYY-MM-DD for dates
 - **Kebab-case** - File names use lowercase with hyphens
+- **Always create tickets** - Every new feature or change needs an implementation ticket
+- **Tickets reference, don't repeat** - Link to ADR/PRD sections, don't duplicate content
+- **Agent context** - List files the implementation agent must read first in the ticket

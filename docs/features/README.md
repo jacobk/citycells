@@ -15,7 +15,7 @@ Enable any developer (human or AI agent) to:
 | Feature | File | Status | Key ADRs |
 |---------|------|--------|----------|
 | Authentication | [authentication.md](./authentication.md) | Implemented | [ADR 001](../ADR/001-tech-stack.md) |
-| Map Visualization | [map-visualization.md](./map-visualization.md) | Implemented | [ADR 001](../ADR/001-tech-stack.md), [ADR 002](../ADR/002-exclusive-activity-matching.md), [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |
+| Map Visualization | [map-visualization.md](./map-visualization.md) | Implemented | [ADR 001](../ADR/001-tech-stack.md), [ADR 002](../ADR/002-exclusive-activity-matching.md), [ADR 003](../ADR/003-multi-metric-completion-scoring.md), [ADR 010](../ADR/010-map-visual-design-system.md) |
 | Analysis Engine | [analysis-engine.md](./analysis-engine.md) | Implemented | [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |
 | Data Persistence | [data-persistence.md](./data-persistence.md) | Implemented | [ADR 004](../ADR/004-sqlite-storage.md) |
 | Exemption System | [exemption-system.md](./exemption-system.md) | Implemented | [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |

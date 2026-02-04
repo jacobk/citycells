@@ -68,19 +68,48 @@ The current implementation performs basic perimeter coverage analysis:
    - Must exceed 50% to be "registered" (shown in amber)
    - Must exceed 75% to be "completed" (shown in green)
 
-### Tier-Based Color Scheme
+### Visual Design System (Updated: 2026-02-04)
 
-The map now uses tier-based colors as specified in PRD 001 section 3.4:
+The map uses a **heat map style visual design** as specified in ADR 010 and PRD 001 section 3.4:
 
-| Tier | Color | Hex | Score Range |
-|------|-------|-----|-------------|
-| Platinum | Purple | `#a855f7` | ≥ 95% |
-| Gold | Gold | `#eab308` | ≥ 85% |
-| Silver | Gray | `#9ca3af` | ≥ 70% |
-| Bronze | Bronze | `#cd7f32` | ≥ 50% |
-| Not Started | Gray | `#6b7280` | No qualifying walks |
+#### Base Map
+- **Grayscale/muted base layer** to reduce visual competition with data overlays
+- Implemented via CSS filter (`grayscale(100%) brightness(1.1)`) or CartoDB Positron tiles
 
-**Fill Opacity**: 0.4 for all completed areas (per PRD 001 section 3.4).
+#### Area Fill Colors (Vibrant Purple-Pink Gradient)
+
+| Tier | Color | Hex | Opacity | Score Range |
+|------|-------|-----|---------|-------------|
+| Platinum | Deep Violet | `#7c3aed` | 0.65 | ≥ 95% |
+| Gold | Vibrant Purple | `#a855f7` | 0.60 | ≥ 85% |
+| Silver | Magenta Pink | `#d946ef` | 0.55 | ≥ 70% |
+| Bronze | Soft Pink | `#f0abfc` | 0.50 | ≥ 50% |
+| Not Started | None | — | — | No qualifying walks |
+
+**Design Rationale:** Bold purple-to-pink gradient creates visual excitement and aligns with modern design trends. High saturation colors pop dramatically against the grayscale base map while maintaining accessibility.
+
+#### Walking Route Styling
+
+| Element | Color | Hex | Width | Opacity |
+|---------|-------|-----|-------|---------|
+| Path Glow | Cyan Glow | `#22d3ee` | 7px | 0.30 |
+| Path Outline | Deep Teal | `#0f766e` | 5px | 0.60 |
+| Path Core | Electric Cyan | `#06b6d4` | 3px | 0.90 |
+
+**Design Rationale:** Electric cyan is complementary to purple-pink (maximum contrast on color wheel). Triple-layer glow effect creates a premium, modern look that makes routes visually "pop".
+
+#### Tier Medal Icons
+
+- Small tier medal icons displayed at the centroid of each completed area
+- Icons scale with zoom level, hidden below zoom 13
+- Provides instant tier recognition without hovering
+
+| Tier | Icon | Size |
+|------|------|------|
+| Platinum | Trophy | 20px |
+| Gold | Gold Medal | 18px |
+| Silver | Silver Medal | 16px |
+| Bronze | Bronze Medal | 14px |
 
 ### Key Functions
 
@@ -149,9 +178,10 @@ This design reduces visual clutter while maintaining quick access to profile inf
 
 - [ADR 001: Tech Stack](../ADR/001-tech-stack.md) - Leaflet + Turf.js decision
 - [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - Assignment rules
-- [ADR 003: Multi-Metric Scoring](../ADR/003-multi-metric-completion-scoring.md) - Future tier-based colors
+- [ADR 003: Multi-Metric Scoring](../ADR/003-multi-metric-completion-scoring.md) - Tier thresholds and scoring
 - [ADR 009: UI Navigation Layout](../ADR/009-ui-navigation-layout.md) - Current navigation layout (hamburger left, collapsible profile right)
 - [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Original panel navigation (superseded by ADR 009)
+- [ADR 010: Map Visual Design System](../ADR/010-map-visual-design-system.md) - Heat map colors, grayscale base, route styling, tier icons
 
 ## Current Limitations
 

@@ -17,6 +17,18 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Added
+- Map Visual Design System: vibrant purple-pink gradient, grayscale base map, cyan route glow, tier medal icons. (PRD 001 §3.4, ADR 010)
+  - Key files: `docs/ADR/010-map-visual-design-system.md`, `docs/PRD/001-mvp-mobile-walker.md`, `docs/features/map-visualization.md`
+  - Sequential teal gradient replaced with bold purple-pink (#7c3aed → #f0abfc)
+  - Triple-layer route styling with cyan glow effect
+  - WCAG 2.1 accessibility compliance
+- Implementation ticket system for agent-targeted task handoff. (AGENTS.md)
+  - Key files: `docs/tickets/001-map-visual-design-system.md`, `.cursor/skills/prd-adr-manager/templates/ticket-template.md`, `.cursor/skills/prd-adr-manager/SKILL.md`
+  - Sequential ticket numbering (001, 002, ...)
+  - Context-to-load section for implementation agents
+  - Integrated into PRD/ADR manager skill workflows
+
 ### Changed
 - UI Navigation Layout: swapped hamburger menu (now top-left) and profile card (now top-right). (PRD 001 §3.10, ADR 009)
   - Key files: `docs/ADR/009-ui-navigation-layout.md`, `docs/PRD/001-mvp-mobile-walker.md`, `docs/features/sub-area-list.md`, `docs/features/map-visualization.md`, `PROJECT_PLAN.md`

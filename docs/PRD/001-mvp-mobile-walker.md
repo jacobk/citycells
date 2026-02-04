@@ -3,6 +3,8 @@
 **Date:** 2026-02-02 (Updated: 2026-02-04)  
 **Status:** In Progress
 
+*Latest update: Map Visual Design System (ADR 010) - heat map colors, muted base map, route styling*
+
 ## 1. Overview
 
 The goal is to create a mobile-first web application that gamifies exploring Malmö by challenging users to walk around the borders of its 136 sub-areas (delområden). Progress is tracked automatically via Strava.
@@ -74,20 +76,46 @@ For each eligible activity:
 7.  **Tier Assignment**: Assign tier based on score (Platinum ≥0.95, Gold ≥0.85, Silver ≥0.70, Bronze ≥0.50).
 8.  **Persistence**: Store analysis results in SQLite.
 
-### 3.4 Area Status Visualization
+### 3.4 Area Status Visualization (Updated: 2026-02-04)
 
-Display completed areas with tier-colored fill:
+*Reference: ADR 010 (Map Visual Design System)*
 
-| Status      | Fill Color | Hex       | Opacity |
-|-------------|------------|-----------|---------|
-| Platinum    | Purple     | `#a855f7` | 0.4     |
-| Gold        | Gold       | `#eab308` | 0.4     |
-| Silver      | Gray       | `#9ca3af` | 0.4     |
-| Bronze      | Bronze     | `#cd7f32` | 0.4     |
-| Not Started | None       | —         | —       |
+Display completed areas using a **sequential heat map color gradient** for improved visibility and accessibility:
 
-*   Unmatched areas: Gray outline only, no fill.
-*   Border color matches tier color for completed areas.
+#### Base Map
+*   Use a **grayscale/muted base map** (CSS filter or CartoDB Positron tiles) to reduce visual competition with data overlays.
+
+#### Area Fill Colors (Vibrant Purple-Pink Gradient)
+
+| Tier        | Fill Color     | Hex       | Opacity | Border Hex |
+|-------------|----------------|-----------|---------|------------|
+| Platinum    | Deep Violet    | `#7c3aed` | 0.65    | `#6d28d9`  |
+| Gold        | Vibrant Purple | `#a855f7` | 0.60    | `#9333ea`  |
+| Silver      | Magenta Pink   | `#d946ef` | 0.55    | `#c026d3`  |
+| Bronze      | Soft Pink      | `#f0abfc` | 0.50    | `#e879f9`  |
+| Not Started | None           | —         | —       | `#64748b`  |
+
+*   Bold purple-to-pink gradient: higher scores = richer, deeper violet
+*   High saturation colors that pop against grayscale base map
+*   Meets WCAG 2.1 3:1+ contrast ratio between adjacent tiers
+
+#### Walking Route Visualization
+
+| Element            | Color        | Hex       | Width | Opacity |
+|--------------------|--------------|-----------|-------|---------|
+| Walk Path (core)   | Electric Cyan| `#06b6d4` | 3px   | 0.90    |
+| Walk Path (outline)| Deep Teal    | `#0f766e` | 5px   | 0.60    |
+| Walk Path (glow)   | Cyan Glow    | `#22d3ee` | 7px   | 0.30    |
+
+*   Triple-layer technique (glow + outline + core) creates premium, modern look
+*   Cyan provides striking complementary contrast against purple-pink fills
+
+#### Tier Medal Icons
+
+*   Display tier medal icons at the centroid of each completed area
+*   Icons: 🏆 (Platinum), 🥇 (Gold), 🥈 (Silver), 🥉 (Bronze)
+*   Visible at zoom level 13+, scale with zoom
+*   Custom SVG icons preferred for cross-platform consistency
 
 ### 3.5 Hover Interaction
 

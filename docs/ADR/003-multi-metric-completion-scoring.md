@@ -116,6 +116,8 @@ quality_score = (
 | Silver   | ≥ 0.70      | Silver  | `#9ca3af` |
 | Bronze   | ≥ 0.50      | Bronze  | `#cd7f32` |
 
+> **Note:** The colors above are for non-map contexts (badges, text labels). For **map visualization**, see [ADR 010: Map Visual Design System](./010-map-visual-design-system.md) which defines a heat map gradient color scheme for improved accessibility and visibility.
+
 ### 4. Completion Threshold Change
 
 - **Old (ADR 002)**: >75% perimeter coverage required for "Completed"
