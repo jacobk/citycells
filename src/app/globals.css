@@ -31,6 +31,6 @@ body {
    making walked areas and routes the visual focus.
    ============================================================================= */
 
-.leaflet-tile-pane {
-  filter: grayscale(100%) brightness(1.1);
+.leaflet-container .leaflet-tile-pane {
+  filter: grayscale(100%) brightness(1.1) !important;
 }
