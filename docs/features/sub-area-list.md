@@ -79,7 +79,36 @@ src/components/
 
 ### Key Functions
 
-_To be documented by implementation agent._
+**`page.tsx` - Panel Navigation State:**
+```typescript
+type PanelView = 
+  | { type: 'closed' }
+  | { type: 'area-list'; sortBy: SortOption }
+  | { type: 'area-detail'; areaId: number; fromList: boolean };
+```
+The `fromList` flag determines whether breadcrumbs are shown (true = navigated from list, false = clicked from map).
+
+**`SubAreaListPanel.tsx` - Sorting Logic:**
+```typescript
+type SortOption = 
+  | 'circumference-asc' 
+  | 'circumference-desc'
+  | 'name-asc'
+  | 'status-walked'
+  | 'status-unwalked';
+```
+
+**`Map.tsx` - Area Data Callback:**
+```typescript
+onAreasLoaded?: (areas: Map<number, AreaClickData>) => void;
+```
+Passes all area data to parent for use in list panel.
+
+**Key Integration Points:**
+- `HamburgerMenu` calls `onOpenAreas` and `onOpenStats` handlers
+- `SubAreaListPanel` calls `onSelectArea` when user taps a list item
+- `PanelBreadcrumbs` calls `onBackToList` to return from detail to list
+- `AreaDetailsPanel` accepts optional `breadcrumbs` ReactNode prop for in-panel navigation
 
 ## Rationale
 

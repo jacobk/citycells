@@ -60,6 +60,8 @@ interface MapProps {
   athleteId?: number; // WHY: Strava athlete ID for database persistence
   onProgressChange: (progress: ProgressInfo) => void;
   onAreaClick?: (areaDetails: AreaClickData) => void;
+  // WHY: Callback to pass all area data to parent for use in SubAreaListPanel (ADR 008)
+  onAreasLoaded?: (areas: Map<number, AreaClickData>) => void;
 }
 
 // WHY: Store full analysis results per area for display in popups/tooltips
@@ -117,7 +119,7 @@ function LocationMarker() {
   );
 }
 
-export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick }: MapProps) {
+export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded }: MapProps) {
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
@@ -206,7 +208,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     if (!geoData || !activities.length) {
       if (geoData) {
         const areaDetails = buildAreaDetailMap(geoData);
-        setAreaDetailsData(buildBaseAreaClickData(areaDetails));
+        const baseAreaData = buildBaseAreaClickData(areaDetails);
+        setAreaDetailsData(baseAreaData);
+        // WHY: Notify parent of all area data for use in SubAreaListPanel (ADR 008)
+        onAreasLoaded?.(baseAreaData);
         onProgressChange({
           completedCount: 0,
           totalAreas: geoData.features.length,
@@ -500,6 +505,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
 
+      // WHY: Notify parent of all area data for use in SubAreaListPanel (ADR 008)
+      onAreasLoaded?.(newAreaDetailsData);
+
       // Calculate tier counts for progress
       const tierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
       newAreaAnalyses.forEach(analysis => {
@@ -515,7 +523,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       });
     }, 100);
 
-  }, [geoData, activities, onProgressChange, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId]);
+  }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId]);
 
   // WHY: Style function returns tier-based colors per PRD 001 section 3.4
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

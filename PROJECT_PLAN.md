@@ -151,10 +151,10 @@
 - [x] Update PRD with user stories and Section 3.10
 - [x] Update map-visualization.md with new components
 - [x] Update feature index (README.md)
-- [ ] Implement HamburgerMenu component
-- [ ] Implement SubAreaListPanel component
-- [ ] Implement PanelBreadcrumbs component
-- [ ] Wire sorting logic and navigation state
+- [x] Implement HamburgerMenu component
+- [x] Implement SubAreaListPanel component
+- [x] Implement PanelBreadcrumbs component
+- [x] Wire sorting logic and navigation state
 
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI

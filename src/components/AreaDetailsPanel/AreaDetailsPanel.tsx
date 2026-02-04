@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { getTierColor, getTierDisplayName, type Tier, type AnalysisMetrics, SCORE_WEIGHTS } from '@/lib/analysis';
 import type { DeviationWithExemption } from '@/lib/exemption-types';
+import type { ReactNode } from 'react';
 
 // ============================================
 // Types
@@ -42,6 +43,8 @@ interface AreaDetailsPanelProps {
   onClose: () => void;
   onExemptDeviation?: (deviationId: number) => void;
   onRemoveExemption?: (deviationId: number) => void;
+  // WHY: Optional breadcrumbs slot for navigation when accessed from list (ADR 008)
+  breadcrumbs?: ReactNode;
 }
 
 // ============================================
@@ -67,6 +70,7 @@ export default function AreaDetailsPanel({
   onClose,
   onExemptDeviation,
   onRemoveExemption,
+  breadcrumbs,
 }: AreaDetailsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -135,6 +139,9 @@ export default function AreaDetailsPanel({
         <div className="flex justify-center py-2 cursor-grab" onClick={onClose}>
           <div className="w-12 h-1 bg-gray-300 rounded-full" />
         </div>
+
+        {/* Breadcrumbs (ADR 008) - shown when navigated from list */}
+        {breadcrumbs}
 
         {/* Header */}
         <div className="px-4 pb-3 border-b border-gray-100">

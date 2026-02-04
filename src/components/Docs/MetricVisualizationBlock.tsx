@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import type { ReactElement } from 'react';
 
 const BorderTracedVisualization = dynamic(
   () => import('@/components/Docs/MetricVisualizations/BorderTracedVisualization'),
@@ -19,7 +20,7 @@ const RouteEfficiencyVisualization = dynamic(
   { ssr: false }
 );
 
-const VISUALIZATIONS: Record<string, () => JSX.Element> = {
+const VISUALIZATIONS: Record<string, () => ReactElement> = {
   'border-traced': () => <BorderTracedVisualization />,
   'area-enclosed': () => <AreaEnclosedVisualization />,
   'path-precision': () => <PathPrecisionVisualization />,

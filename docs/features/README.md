@@ -19,8 +19,8 @@ Enable any developer (human or AI agent) to:
 | Analysis Engine | [analysis-engine.md](./analysis-engine.md) | Implemented | [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |
 | Data Persistence | [data-persistence.md](./data-persistence.md) | Implemented | [ADR 004](../ADR/004-sqlite-storage.md) |
 | Exemption System | [exemption-system.md](./exemption-system.md) | Implemented | [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |
-| Metrics Documentation | [metrics-documentation.md](./metrics-documentation.md) | Planned | [ADR 007](../ADR/007-interactive-metrics-documentation.md) |
-| Sub-Area List | [sub-area-list.md](./sub-area-list.md) | Planned | [ADR 008](../ADR/008-panel-navigation-architecture.md) |
+| Metrics Documentation | [metrics-documentation.md](./metrics-documentation.md) | Implemented | [ADR 007](../ADR/007-interactive-metrics-documentation.md) |
+| Sub-Area List | [sub-area-list.md](./sub-area-list.md) | Implemented | [ADR 008](../ADR/008-panel-navigation-architecture.md) |
 
 ## Document Template
 

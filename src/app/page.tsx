@@ -1,13 +1,25 @@
 'use client';
 
-import Map, { type AreaClickData, type ProgressInfo } from '@/components/Map';
+import CityMap, { type AreaClickData, type ProgressInfo } from '@/components/Map';
 import { useStrava } from '@/hooks/useStrava';
 import { useState, useCallback } from 'react';
 import { getTierColor, type AnalysisMetrics } from '@/lib/analysis';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AreaDetailsPanel, type AreaDetails } from '@/components/AreaDetailsPanel';
 import { ExemptionModal } from '@/components/ExemptionModal';
+import { HamburgerMenu } from '@/components/HamburgerMenu';
+import { SubAreaListPanel, type SortOption } from '@/components/SubAreaListPanel';
+import { PanelBreadcrumbs } from '@/components/PanelBreadcrumbs';
 import type { ExemptionReason } from '@/lib/exemption-types';
+
+// ============================================
+// Types - Panel Navigation State (ADR 008)
+// ============================================
+
+type PanelView = 
+  | { type: 'closed' }
+  | { type: 'area-list'; sortBy: SortOption }
+  | { type: 'area-detail'; areaId: number; fromList: boolean };
 
 const EMPTY_METRICS: AnalysisMetrics = {
   perimeterCoveragePercent: 0,
@@ -35,9 +47,16 @@ export default function Home() {
     tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0 }
   });
   
-  // WHY: State for UI panels - only one can be open at a time
+  // WHY: State for all areas data from Map (ADR 008)
+  const [allAreas, setAllAreas] = useState<Map<number, AreaClickData>>(new Map());
+  
+  // WHY: Unified panel navigation state (ADR 008)
+  const [panelView, setPanelView] = useState<PanelView>({ type: 'closed' });
+  
+  // WHY: Separate state for ProgressDashboard since it's a right drawer, not bottom sheet
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
-  const [selectedAreaDetails, setSelectedAreaDetails] = useState<AreaDetails | null>(null);
+  
+  // WHY: State for exemption modal
   const [exemptionDeviationId, setExemptionDeviationId] = useState<number | null>(null);
   const [exemptionDeviationInfo, setExemptionDeviationInfo] = useState<{
     classification: string;
@@ -49,13 +68,17 @@ export default function Home() {
     setProgress(progressInfo);
   }, []);
 
-  // WHY: Handler to close area details panel
-  const handleCloseDetails = useCallback(() => {
-    setSelectedAreaDetails(null);
+  // WHY: Handler for when Map loads all area data (ADR 008)
+  const handleAreasLoaded = useCallback((areas: Map<number, AreaClickData>) => {
+    setAllAreas(areas);
   }, []);
 
-  const handleAreaClick = useCallback((data: AreaClickData) => {
-    setSelectedAreaDetails({
+  // WHY: Compute current area details based on panelView state
+  const selectedAreaDetails: AreaDetails | null = (() => {
+    if (panelView.type !== 'area-detail') return null;
+    const data = allAreas.get(panelView.areaId);
+    if (!data) return null;
+    return {
       areaId: data.areaId,
       areaName: data.areaName,
       tier: data.tier,
@@ -65,7 +88,52 @@ export default function Home() {
       totalPerimeterMeters: data.totalPerimeterMeters,
       walks: data.walks,
       deviations: data.deviations,
+    };
+  })();
+
+  // WHY: Handler to close any bottom panel
+  const handleClosePanel = useCallback(() => {
+    setPanelView({ type: 'closed' });
+  }, []);
+
+  // WHY: Handler when clicking an area on the map (not from list)
+  const handleAreaClick = useCallback((data: AreaClickData) => {
+    setPanelView({ type: 'area-detail', areaId: data.areaId, fromList: false });
+  }, []);
+
+  // WHY: Handler when selecting an area from the list (ADR 008)
+  const handleSelectAreaFromList = useCallback((areaId: number) => {
+    setPanelView({ type: 'area-detail', areaId, fromList: true });
+  }, []);
+
+  // WHY: Handler to go back to list from area detail (ADR 008)
+  const handleBackToList = useCallback(() => {
+    // Preserve the sort option when going back
+    setPanelView(prev => {
+      if (prev.type === 'area-detail') {
+        return { type: 'area-list', sortBy: 'circumference-asc' };
+      }
+      return prev;
     });
+  }, []);
+
+  // WHY: Handler for sort change in list panel
+  const handleSortChange = useCallback((sortBy: SortOption) => {
+    setPanelView(prev => {
+      if (prev.type === 'area-list') {
+        return { ...prev, sortBy };
+      }
+      return prev;
+    });
+  }, []);
+
+  // WHY: Hamburger menu handlers (ADR 008)
+  const handleOpenAreas = useCallback(() => {
+    setPanelView({ type: 'area-list', sortBy: 'circumference-asc' });
+  }, []);
+
+  const handleOpenStats = useCallback(() => {
+    setIsDashboardOpen(true);
   }, []);
 
   // WHY: Handler to open exemption modal from details panel
@@ -111,20 +179,23 @@ export default function Home() {
     }
   }, []);
 
-  const percentage = progress.totalAreas > 0 
-    ? (progress.completedCount / progress.totalAreas) * 100 
-    : 0;
-
   return (
     <main className="min-h-screen relative overflow-hidden">
-      <Map
+      <CityMap
         activities={activities}
         athleteId={athlete?.id}
         onProgressChange={handleProgress}
         onAreaClick={handleAreaClick}
+        onAreasLoaded={handleAreasLoaded}
       />
       
-      {/* Overlay UI */}
+      {/* Hamburger Menu (ADR 008) */}
+      <HamburgerMenu 
+        onOpenAreas={handleOpenAreas}
+        onOpenStats={handleOpenStats}
+      />
+      
+      {/* Overlay UI - Status Card */}
       <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg w-72 border border-gray-100">
         <h1 className="font-bold text-xl text-gray-800 mb-1">CityCells: Malmö</h1>
         
@@ -220,12 +291,6 @@ export default function Home() {
 
             <div className="flex gap-2">
               <button 
-                onClick={() => setIsDashboardOpen(true)}
-                className="flex-1 bg-orange-500 text-white py-2 px-4 rounded-lg font-medium text-sm hover:bg-orange-600 transition-colors cursor-pointer"
-              >
-                View Stats
-              </button>
-              <button 
                 onClick={logout}
                 className="flex-1 bg-gray-100 text-gray-600 py-2 px-4 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors cursor-pointer"
               >
@@ -259,13 +324,32 @@ export default function Home() {
         athleteProfile={athlete?.profile}
       />
 
+      {/* Sub-Area List Panel (ADR 008) */}
+      <SubAreaListPanel
+        isOpen={panelView.type === 'area-list'}
+        onClose={handleClosePanel}
+        areas={allAreas}
+        sortBy={panelView.type === 'area-list' ? panelView.sortBy : 'circumference-asc'}
+        onSortChange={handleSortChange}
+        onSelectArea={handleSelectAreaFromList}
+      />
+
       {/* Area Details Bottom Sheet */}
       <AreaDetailsPanel
         details={selectedAreaDetails}
-        isOpen={selectedAreaDetails !== null}
-        onClose={handleCloseDetails}
+        isOpen={panelView.type === 'area-detail'}
+        onClose={handleClosePanel}
         onExemptDeviation={handleExemptDeviation}
         onRemoveExemption={handleRemoveExemption}
+        // WHY: Show breadcrumbs only when navigated from list (ADR 008)
+        breadcrumbs={
+          panelView.type === 'area-detail' && panelView.fromList && selectedAreaDetails ? (
+            <PanelBreadcrumbs
+              areaName={selectedAreaDetails.areaName}
+              onBackToList={handleBackToList}
+            />
+          ) : undefined
+        }
       />
 
       {/* Exemption Modal */}
