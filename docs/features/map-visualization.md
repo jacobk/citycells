@@ -126,22 +126,32 @@ Analysis runs in `setTimeout(..., 100)` to:
 - Allow the UI to show "Analyzing paths..." indicator
 - Prevent jank when processing many activities
 
-### Why Hamburger Menu in Top-Right?
+### Why Hamburger Menu in Top-Left?
 
-The hamburger menu button is positioned in the top-right corner because:
-- Top-left is occupied by the status card (athlete info, progress) - would be crowded
+The hamburger menu button is positioned in the top-left corner because:
+- Standard mobile convention places hamburger menus on the left
+- Top-right is now occupied by the collapsible profile card (avatar)
 - Bottom positions would conflict with the bottom sheet panel
-- Top-right is thumb-reachable on mobile when holding phone in right hand
-- Standard mobile app menu position that users recognize
+- Familiar pattern users expect from mobile apps
 
-See [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) for full rationale.
+See [ADR 009: UI Navigation Layout](../ADR/009-ui-navigation-layout.md) for full rationale.
+
+### Collapsible Profile Card
+
+The profile card (athlete info, progress) is now a collapsible component in the top-right:
+- **Default state**: Collapsed, showing only the user's avatar (48x48px circular button)
+- **Expanded state**: Full card with athlete name, progress bar, and logout button
+- **Mutual exclusivity**: Only one overlay (hamburger or profile) can be open at a time
+
+This design reduces visual clutter while maintaining quick access to profile information.
 
 ### ADR References
 
 - [ADR 001: Tech Stack](../ADR/001-tech-stack.md) - Leaflet + Turf.js decision
 - [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - Assignment rules
 - [ADR 003: Multi-Metric Scoring](../ADR/003-multi-metric-completion-scoring.md) - Future tier-based colors
-- [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Hamburger menu and panel navigation
+- [ADR 009: UI Navigation Layout](../ADR/009-ui-navigation-layout.md) - Current navigation layout (hamburger left, collapsible profile right)
+- [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Original panel navigation (superseded by ADR 009)
 
 ## Current Limitations
 
@@ -162,7 +172,8 @@ See [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-archite
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| HamburgerMenu | `src/components/HamburgerMenu/` | Floating menu button (top-right) with app navigation |
+| HamburgerMenu | `src/components/HamburgerMenu/` | Floating menu button (top-left) with app navigation |
+| ProfileCard | `src/components/ProfileCard/` | Collapsible profile card (top-right) with avatar, name, progress |
 | SubAreaListPanel | `src/components/SubAreaListPanel/` | Sortable list of all sub-areas in bottom sheet |
 | PanelBreadcrumbs | `src/components/PanelBreadcrumbs/` | Navigation breadcrumbs within bottom sheet |
 

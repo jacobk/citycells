@@ -156,6 +156,24 @@
 - [x] Implement PanelBreadcrumbs component
 - [x] Wire sorting logic and navigation state
 
+## Phase 6.7: UI Navigation Layout Update (ADR 009)
+
+*Reference: [ADR 009](docs/ADR/009-ui-navigation-layout.md) | [PRD §3.10](docs/PRD/001-mvp-mobile-walker.md#310-sub-area-list-view)*
+
+- [x] ADR 009: UI Navigation Layout (supersedes ADR 008)
+- [x] Update PRD 001 §3.10 with new layout and profile card behavior
+- [x] Update sub-area-list.md feature doc
+- [x] Update map-visualization.md feature doc
+- [ ] Move HamburgerMenu to top-left position (CSS update)
+- [ ] Create/refactor ProfileCard component (`src/components/ProfileCard/`)
+  - [ ] Collapsed state: avatar only (48x48px circular button)
+  - [ ] Expanded state: full card with name, progress, logout
+  - [ ] Expand/collapse animation (200-300ms)
+- [ ] Add `UIOverlayState` to page.tsx state management
+- [ ] Implement mutual exclusivity logic (only one overlay open at a time)
+- [ ] Update z-index hierarchy per ADR 009
+- [ ] Test on mobile for thumb-reachability
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

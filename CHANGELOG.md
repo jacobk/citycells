@@ -17,6 +17,13 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Changed
+- UI Navigation Layout: swapped hamburger menu (now top-left) and profile card (now top-right). (PRD 001 §3.10, ADR 009)
+  - Key files: `docs/ADR/009-ui-navigation-layout.md`, `docs/PRD/001-mvp-mobile-walker.md`, `docs/features/sub-area-list.md`, `docs/features/map-visualization.md`, `PROJECT_PLAN.md`
+  - Profile card now collapsible (avatar-only by default, expandable on tap)
+  - Mutual exclusivity: only one overlay (hamburger or profile) can be open at a time
+  - ADR 008 superseded by ADR 009
+
 ### Added
 - Sub-Area List feature: browsable list of all 136 sub-areas with sorting and navigation. (PRD 001 §3.10, ADR 008)
   - Key files: `src/components/HamburgerMenu/HamburgerMenu.tsx`, `src/components/SubAreaListPanel/SubAreaListPanel.tsx`, `src/components/PanelBreadcrumbs/PanelBreadcrumbs.tsx`, `src/app/page.tsx`, `src/components/Map/Map.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`

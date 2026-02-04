@@ -1,7 +1,7 @@
 # ADR 008: Panel Navigation Architecture with Hamburger Menu
 
 **Date:** 2026-02-04
-**Status:** Proposed
+**Status:** Superseded by ADR 009
 **Supersedes:** N/A
 
 ## Context

@@ -233,15 +233,15 @@ All visualizations are **mobile-first** (touch-optimized) and use **static examp
 *   Export database feature for backup (downloads `.db` file).
 *   Import database feature to restore from backup.
 
-### 3.10 Sub-Area List View (Added: 2026-02-04)
+### 3.10 Sub-Area List View (Added: 2026-02-04, Updated: 2026-02-04)
 
-*Reference: ADR 008 (Panel Navigation Architecture)*
+*Reference: ADR 009 (UI Navigation Layout)*
 
 Provide a browsable list of all sub-areas with sorting and filtering capabilities.
 
 #### Hamburger Menu
 
-**Location:** Floating button in top-right corner of screen.
+**Location:** Floating button in top-left corner of screen.
 
 **Design:**
 *   Circular button with hamburger icon (three horizontal lines)
@@ -251,6 +251,27 @@ Provide a browsable list of all sub-areas with sorting and filtering capabilitie
 **Menu Options:**
 *   **Areas** - Opens sub-area list in bottom sheet
 *   **Stats** - Opens existing ProgressDashboard (right drawer)
+
+**Mutual Exclusivity:** Opening the hamburger menu automatically collapses the profile card if expanded.
+
+#### Profile Card (Collapsible)
+
+**Location:** Floating button in top-right corner of screen.
+
+**States:**
+
+| State | Appearance | Default |
+|-------|------------|---------|
+| Collapsed | Avatar image only (48x48px circular button) | Yes |
+| Expanded | Full card with athlete name, progress bar, logout button | No |
+
+**Behavior:**
+*   **Tap collapsed avatar** → Expands to full profile card
+*   **Tap expanded card or avatar** → Collapses back to avatar only
+*   **Tap outside** → Collapses profile card
+*   **Open hamburger menu** → Automatically collapses profile card
+
+**Mutual Exclusivity:** Expanding the profile card automatically closes the hamburger menu if open. Only one overlay can be active at a time.
 
 #### Sub-Area List Panel
 

@@ -4,7 +4,7 @@
 
 The sub-area list provides a browsable view of all 136 Malmö sub-areas (delområden) with sorting and filtering capabilities. Users can discover areas without interacting with the map, see completion status at a glance, and drill into individual areas to view their walk history.
 
-This feature includes a hamburger menu in the top-right corner that provides app-wide navigation, making it easy to switch between the area list, stats dashboard, and map views.
+This feature includes a hamburger menu in the top-left corner that provides app-wide navigation, making it easy to switch between the area list, stats dashboard, and map views.
 
 ## User Stories
 
@@ -51,7 +51,7 @@ src/components/
 ```
 ┌─────────────────┐
 │  Hamburger Menu │
-│  (top-right)    │
+│  (top-left)     │
 └────────┬────────┘
          │ "Areas" selected
          ▼
@@ -126,11 +126,16 @@ Passes all area data to parent for use in list panel.
 - Works well with potential future deep linking
 - Doesn't conflict with map pan/zoom gestures
 
-**Hamburger Menu in Top-Right:**
-- Top-left is occupied by status card (would be crowded)
+**Hamburger Menu in Top-Left:**
+- Standard mobile convention places hamburger menus on the left
+- Profile card (now collapsible) moved to top-right
 - Bottom positions would conflict with bottom sheet
-- Top-right is thumb-reachable when holding phone in right hand
-- Standard mobile menu position users recognize
+- Familiar pattern users expect from mobile apps
+
+**Mutual Exclusivity:**
+- Only one overlay (hamburger menu OR profile card) can be open at a time
+- Opening one automatically closes the other
+- Reduces visual clutter and provides focused interaction
 
 **Default Sort by Circumference:**
 - Most common use case: "What's a quick walk I can do?"
@@ -139,7 +144,8 @@ Passes all area data to parent for use in list panel.
 
 ### ADR References
 
-- [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Core navigation patterns
+- [ADR 009: UI Navigation Layout](../ADR/009-ui-navigation-layout.md) - Current navigation layout (hamburger left, profile right, mutual exclusivity)
+- [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Original panel patterns (superseded by ADR 009)
 - [ADR 003: Multi-Metric Completion Scoring](../ADR/003-multi-metric-completion-scoring.md) - Tier badges shown in list
 
 ## Current Limitations
