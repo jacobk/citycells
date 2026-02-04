@@ -18,10 +18,13 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
-- Map Visual Design System: vibrant purple-pink gradient, grayscale base map, cyan route glow, tier medal icons. (PRD 001 §3.4, ADR 010)
-  - Key files: `docs/ADR/010-map-visual-design-system.md`, `docs/PRD/001-mvp-mobile-walker.md`, `docs/features/map-visualization.md`
-  - Sequential teal gradient replaced with bold purple-pink (#7c3aed → #f0abfc)
-  - Triple-layer route styling with cyan glow effect
+- Map Visual Design System implementation: vibrant purple-pink gradient, grayscale base map, cyan route glow, tier medal icons. (PRD 001 §3.4, ADR 010, TICKET-001)
+  - Key files: `src/lib/design-tokens.ts`, `src/components/TierIcon/TierIcon.tsx`, `src/components/Map/Map.tsx`, `src/app/globals.css`, `docs/features/map-visualization.md`
+  - Centralized design tokens for map visualization colors
+  - TierIcon component with DivIcon centroid placement (visible at zoom 13+)
+  - Triple-layer Polyline route styling with cyan glow effect
+  - CSS grayscale filter for muted base map tiles
+  - Purple-pink tier gradient: Platinum (#7c3aed) → Bronze (#f0abfc)
   - WCAG 2.1 accessibility compliance
 - Implementation ticket system for agent-targeted task handoff. (AGENTS.md)
   - Key files: `docs/tickets/001-map-visual-design-system.md`, `.cursor/skills/prd-adr-manager/templates/ticket-template.md`, `.cursor/skills/prd-adr-manager/SKILL.md`

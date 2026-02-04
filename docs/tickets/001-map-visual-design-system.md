@@ -2,7 +2,7 @@
 
 **Related:** ADR 010, PRD Section 3.4  
 **Feature:** Map Visualization  
-**Status:** Ready for Implementation  
+**Status:** Implemented  
 **Created:** 2026-02-04
 
 ## Context to Load
@@ -63,12 +63,12 @@ Create `TierIcon` component:
 
 ## Acceptance Criteria
 
-- [ ] Base map is grayscale/muted (not colorful OSM default)
-- [ ] Area fills use purple-pink gradient (darker = higher tier)
-- [ ] Routes have visible cyan glow effect
-- [ ] Tier icons appear at area centers when zoom >= 13
-- [ ] WCAG 2.1 contrast ratios maintained (3:1+ adjacent colors)
-- [ ] Colors work for common color vision deficiencies
+- [x] Base map is grayscale/muted (not colorful OSM default)
+- [x] Area fills use purple-pink gradient (darker = higher tier)
+- [x] Routes have visible cyan glow effect
+- [x] Tier icons appear at area centers when zoom >= 13
+- [x] WCAG 2.1 contrast ratios maintained (3:1+ adjacent colors)
+- [x] Colors work for common color vision deficiencies
 
 ## Files to Modify
 

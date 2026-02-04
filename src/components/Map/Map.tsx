@@ -10,14 +10,21 @@ import mapboxPolyline from '@mapbox/polyline';
 import { StravaActivity } from '@/hooks/useStrava';
 import { 
   analyzeWalk, 
-  getTierColor, 
   type Tier,
   type AnalysisMetrics,
   type StravaMetadata,
   type FullAnalysisResult,
   TIER_THRESHOLDS
 } from '@/lib/analysis';
+import {
+  getMapTierFillColor,
+  getMapTierBorderColor,
+  getMapTierOpacity,
+  UNWALKED_AREA_STYLE,
+  ROUTE_STYLES,
+} from '@/lib/design-tokens';
 import { AreaTooltip, useAreaTooltip, type TooltipData } from '@/components/AreaTooltip';
+import { TierIcon } from '@/components/TierIcon';
 import { useDatabase } from '@/hooks/useDatabase';
 import { 
   saveWalkAnalysis, 
@@ -119,11 +126,33 @@ function LocationMarker() {
   );
 }
 
+// WHY: Track zoom level for conditional rendering of tier icons (ADR 010)
+interface ZoomTrackerProps {
+  onZoomChange: (zoom: number) => void;
+}
+
+function ZoomTracker({ onZoomChange }: ZoomTrackerProps) {
+  const map = useMapEvents({
+    zoomend() {
+      onZoomChange(map.getZoom());
+    },
+  });
+
+  // Set initial zoom on mount
+  useEffect(() => {
+    onZoomChange(map.getZoom());
+  }, [map, onZoomChange]);
+
+  return null;
+}
+
 export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded }: MapProps) {
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // WHY: Track zoom for tier icon visibility (ADR 010 - icons only at zoom 13+)
+  const [currentZoom, setCurrentZoom] = useState(12);
   
   // WHY: Database hook for persistence - loads cached results and saves new analyses
   const { db, loading: dbLoading } = useDatabase();
@@ -525,31 +554,34 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
   }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId]);
 
-  // WHY: Style function returns tier-based colors per PRD 001 section 3.4
+  // WHY: Style function returns tier-based colors per ADR 010 (purple-pink gradient)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getStyle = useCallback((feature: any) => {
     const areaId = feature?.properties?.FID || feature?.id;
     const analysis = areaAnalyses.get(areaId as number);
 
     if (analysis && analysis.tier) {
-      const color = getTierColor(analysis.tier);
+      // WHY: Use design tokens for map-specific purple-pink gradient (ADR 010)
+      const fillColor = getMapTierFillColor(analysis.tier);
+      const borderColor = getMapTierBorderColor(analysis.tier);
+      const fillOpacity = getMapTierOpacity(analysis.tier);
+      
       return {
-        color: color,
+        color: borderColor,
         weight: 2,
         opacity: 0.8,
-        fillColor: color,
-        // WHY: 0.4 opacity per PRD 001 section 3.4
-        fillOpacity: 0.4
+        fillColor: fillColor,
+        fillOpacity: fillOpacity,
       };
     }
 
-    // Default style for unmatched areas
+    // WHY: Subtle styling for unwalked areas so they don't compete with completed ones
     return {
-      color: '#6b7280', // Gray-500
-      weight: 1,
-      opacity: 0.8,
-      fillColor: '#9ca3af',
-      fillOpacity: 0.1
+      color: UNWALKED_AREA_STYLE.borderColor,
+      weight: UNWALKED_AREA_STYLE.borderWeight,
+      opacity: UNWALKED_AREA_STYLE.borderOpacity,
+      fillColor: UNWALKED_AREA_STYLE.fillColor,
+      fillOpacity: UNWALKED_AREA_STYLE.fillOpacity,
     };
   }, [areaAnalyses]);
 
@@ -601,18 +633,33 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <LocationMarker />
+        <ZoomTracker onZoomChange={setCurrentZoom} />
         
-        {/* WHY: Render activities as faint blue lines for visual context */}
-        {activities.map(act => {
-          if (!act.map || !act.map.summary_polyline) return null;
+        {/* WHY: Triple-layer route styling per ADR 010 - cyan glow effect
+            Layers render bottom-to-top: glow → outline → core */}
+        {activities.flatMap(act => {
+          if (!act.map || !act.map.summary_polyline) return [];
           const positions = mapboxPolyline.decode(act.map.summary_polyline);
-          return (
+          return [
+            // Glow layer (bottom)
             <Polyline 
-              key={act.id} 
+              key={`${act.id}-glow`}
               positions={positions} 
-              pathOptions={{ color: '#3b82f6', weight: 3, opacity: 0.3 }} 
-            />
-          );
+              pathOptions={ROUTE_STYLES.glow} 
+            />,
+            // Outline layer (middle)
+            <Polyline 
+              key={`${act.id}-outline`}
+              positions={positions} 
+              pathOptions={ROUTE_STYLES.outline} 
+            />,
+            // Core layer (top)
+            <Polyline 
+              key={`${act.id}-core`}
+              positions={positions} 
+              pathOptions={ROUTE_STYLES.core} 
+            />,
+          ];
         })}
 
         {geoData && (
@@ -658,6 +705,25 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             }}
           />
         )}
+
+        {/* WHY: Tier medal icons at polygon centroids per ADR 010
+            Only render when zoom >= 13 for performance and visual clarity */}
+        {geoData && geoData.features.map(feature => {
+          const areaId = feature.properties?.FID || feature.id;
+          const analysis = areaAnalyses.get(areaId as number);
+          
+          if (!analysis || !analysis.tier) return null;
+          if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon') return null;
+
+          return (
+            <TierIcon
+              key={`tier-icon-${areaId}`}
+              feature={feature as Feature<Polygon | MultiPolygon>}
+              tier={analysis.tier}
+              zoom={currentZoom}
+            />
+          );
+        })}
       </MapContainer>
       
       {/* WHY: Tooltip overlay outside MapContainer for proper z-index */}

@@ -19,6 +19,9 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 |------|---------|
 | `src/components/Map/Map.tsx` | Main map component with analysis logic |
 | `src/components/Map/index.tsx` | Dynamic import wrapper (SSR compatibility) |
+| `src/components/TierIcon/TierIcon.tsx` | Medal icons at polygon centroids (ADR 010) |
+| `src/lib/design-tokens.ts` | Centralized map visual design tokens (ADR 010) |
+| `src/app/globals.css` | Grayscale filter for base map tiles |
 | `public/data/malmo_delomraden.geojson` | GeoJSON data for 136 sub-areas |
 | `src/app/page.tsx` | Main page integrating map with UI overlay |
 

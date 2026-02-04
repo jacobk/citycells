@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* =============================================================================
+   Map Visual Design System (ADR 010)
+   WHY: Muted base map reduces visual competition with data overlays,
+   making walked areas and routes the visual focus.
+   ============================================================================= */
+
+.leaflet-tile-pane {
+  filter: grayscale(100%) brightness(1.1);
+}
