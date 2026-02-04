@@ -126,11 +126,22 @@ Analysis runs in `setTimeout(..., 100)` to:
 - Allow the UI to show "Analyzing paths..." indicator
 - Prevent jank when processing many activities
 
+### Why Hamburger Menu in Top-Right?
+
+The hamburger menu button is positioned in the top-right corner because:
+- Top-left is occupied by the status card (athlete info, progress) - would be crowded
+- Bottom positions would conflict with the bottom sheet panel
+- Top-right is thumb-reachable on mobile when holding phone in right hand
+- Standard mobile app menu position that users recognize
+
+See [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) for full rationale.
+
 ### ADR References
 
 - [ADR 001: Tech Stack](../ADR/001-tech-stack.md) - Leaflet + Turf.js decision
 - [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - Assignment rules
 - [ADR 003: Multi-Metric Scoring](../ADR/003-multi-metric-completion-scoring.md) - Future tier-based colors
+- [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Hamburger menu and panel navigation
 
 ## Current Limitations
 
@@ -146,6 +157,16 @@ Analysis runs in `setTimeout(..., 100)` to:
 | AreaDetailsPanel | `src/components/AreaDetailsPanel/` | Bottom sheet with full score breakdown |
 | ExemptionModal | `src/components/ExemptionModal/` | Modal for marking deviations as exempt |
 | ProgressDashboard | `src/components/ProgressDashboard/` | Drawer with tier breakdown and stats |
+
+## New Components (Sub-Area List Feature)
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| HamburgerMenu | `src/components/HamburgerMenu/` | Floating menu button (top-right) with app navigation |
+| SubAreaListPanel | `src/components/SubAreaListPanel/` | Sortable list of all sub-areas in bottom sheet |
+| PanelBreadcrumbs | `src/components/PanelBreadcrumbs/` | Navigation breadcrumbs within bottom sheet |
+
+See [Sub-Area List](./sub-area-list.md) for full feature documentation.
 
 ## Planned Improvements
 

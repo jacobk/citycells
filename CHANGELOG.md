@@ -18,6 +18,10 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Sub-Area List feature documentation: browsable list of all sub-areas with sorting, hamburger menu, and breadcrumb navigation. (PRD 001 §3.10, ADR 008)
+  - Key files: `docs/ADR/008-panel-navigation-architecture.md`, `docs/features/sub-area-list.md`, `docs/PRD/001-mvp-mobile-walker.md`, `docs/features/map-visualization.md`, `docs/features/README.md`
+  - Hamburger menu in top-right, bottom sheet panel with sort options
+  - Breadcrumb navigation between list and detail views
 - Metrics Documentation feature: in-app help system with D3 visualizations for analysis metrics. (PRD 001 §3.9, ADR 007)
   - Key files: `src/app/docs/layout.tsx`, `src/app/docs/metrics/page.tsx`, `src/app/docs/metrics/[slug]/page.tsx`, `src/components/Docs/MetricCard.tsx`, `src/components/Docs/MetricVisualizations/`, `src/lib/metrics-content.ts`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`
   - User-friendly metric names: Border Traced, Area Enclosed, Path Precision, Route Efficiency

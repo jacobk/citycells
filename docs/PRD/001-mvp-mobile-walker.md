@@ -1,6 +1,6 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-03)  
+**Date:** 2026-02-02 (Updated: 2026-02-04)  
 **Status:** In Progress
 
 ## 1. Overview
@@ -28,6 +28,13 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want user-friendly metric names that summarize what I did (e.g., "Border Traced" instead of "Perimeter Coverage").
 *   **As a user,** I want to see examples of good vs. poor scores for each metric, so I know what to aim for.
 *   **As a user,** I want tips on how to improve each metric, so I can get better scores on future walks.
+
+### Sub-Area List & Navigation Stories (Added: 2026-02-04)
+*   **As a user,** I want to see a list of all sub-areas sorted by circumference, so I can find short walks to complete.
+*   **As a user,** I want to see which areas I've walked directly in the list view, so I can quickly identify remaining areas.
+*   **As a user,** I want to drill into an area from the list to see all registered walks for that area.
+*   **As a user,** I want breadcrumb navigation to return from area details to the list.
+*   **As a user,** I want a hamburger menu to access different app sections without cluttering the map interface.
 
 ## 3. Functional Requirements
 
@@ -225,6 +232,64 @@ All visualizations are **mobile-first** (touch-optimized) and use **static examp
 *   Analysis results cached—no re-analysis on page reload.
 *   Export database feature for backup (downloads `.db` file).
 *   Import database feature to restore from backup.
+
+### 3.10 Sub-Area List View (Added: 2026-02-04)
+
+*Reference: ADR 008 (Panel Navigation Architecture)*
+
+Provide a browsable list of all sub-areas with sorting and filtering capabilities.
+
+#### Hamburger Menu
+
+**Location:** Floating button in top-right corner of screen.
+
+**Design:**
+*   Circular button with hamburger icon (three horizontal lines)
+*   Semi-transparent background matching app theme
+*   Positioned above map but below modals (z-index 400-450)
+
+**Menu Options:**
+*   **Areas** - Opens sub-area list in bottom sheet
+*   **Stats** - Opens existing ProgressDashboard (right drawer)
+
+#### Sub-Area List Panel
+
+**Trigger:** Select "Areas" from hamburger menu.
+
+**Panel Type:** Slide-up bottom sheet (same as Area Details Panel).
+
+**Sorting Options:**
+*   Circumference (shortest first / longest first)
+*   Name (A-Z)
+*   Completion status (walked first / unwalked first)
+*   Area size (smallest first / largest first)
+
+**Default Sort:** Circumference ascending (shortest walks first).
+
+**List Item Display:**
+
+| Element | Description |
+|---------|-------------|
+| Area Name | Primary text, left-aligned |
+| Circumference | Secondary text, e.g., "2.3 km" |
+| Status Indicator | Tier badge (colored circle) if completed, empty circle if not |
+| Walk Count | If completed, shows "3 walks" in muted text |
+
+**Interaction:**
+*   Tap any list item → Panel transitions to Area Details view
+*   Breadcrumbs appear: "Areas" (link) > "Area Name" (current)
+*   Tap "Areas" breadcrumb → Returns to list, preserving sort selection
+
+#### Breadcrumb Navigation
+
+**Display:** Below panel header, above content.
+
+**Format:** `Areas > Västra Hamnen`
+
+**Behavior:**
+*   "Areas" is a clickable link that returns to list view
+*   Current area name is plain text (not clickable)
+*   Only shown when navigated from list (not when clicking map directly)
 
 ## 4. Non-Functional Requirements
 

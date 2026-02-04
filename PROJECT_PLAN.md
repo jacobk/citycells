@@ -145,6 +145,17 @@
 - [x] Implement Route Efficiency visualization
 - [x] Add clickable metric links to AreaDetailsPanel
 
+## Phase 6.6: Sub-Area List Feature (ADR 008)
+- [x] ADR 008: Panel Navigation Architecture
+- [x] Feature doc: sub-area-list.md
+- [x] Update PRD with user stories and Section 3.10
+- [x] Update map-visualization.md with new components
+- [x] Update feature index (README.md)
+- [ ] Implement HamburgerMenu component
+- [ ] Implement SubAreaListPanel component
+- [ ] Implement PanelBreadcrumbs component
+- [ ] Wire sorting logic and navigation state
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing
