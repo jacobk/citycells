@@ -127,8 +127,8 @@
 ## Phase 6: Database Integration (Phase 7 from plan)
 - [x] Integrate database storage to persist analysis results across sessions
 - [x] Create `analysis-persistence.ts` module for save/load functions
-- [x] Update Map component to load cached results on page load
-- [x] Only analyze new activities (skip already-analyzed)
+- [ ] Update Map component to load cached results on page load (TICKET-002)
+- [ ] Only analyze new activities (skip already-analyzed) (TICKET-002)
 - [x] Save analysis results to database after computation
 - [x] Update `docs/features/data-persistence.md` with analysis persistence flow
 

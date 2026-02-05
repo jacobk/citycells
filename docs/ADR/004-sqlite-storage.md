@@ -298,6 +298,59 @@ async function executeWrite(db: Database, sql: string, params?: any[]) {
 }
 ```
 
+#### Cache Loading Strategy (Updated: 2026-02-05)
+
+Analysis results MUST be loaded from the database before re-computation to avoid unnecessary processing on page load.
+
+**Required Page Load Flow:**
+
+```typescript
+// 1. After database initialization and user authentication
+const userId = getOrCreateUserId(stravaId);
+
+// 2. Load cached analysis results FIRST (fast - direct DB query)
+const cachedResults = loadCachedAnalyses(userId);
+
+// 3. Immediately populate UI with cached data
+// WHY: User sees completed areas instantly without waiting for analysis
+cachedResults.forEach((cached, areaFid) => {
+  areaAnalyses.set(areaFid, {
+    tier: cached.metrics.tier,
+    qualityScore: cached.metrics.rawQualityScore,
+    // ... other metrics from cache
+  });
+});
+
+// 4. Identify activities that need analysis
+const allActivityIds = activities.map(a => a.id);
+const newActivityIds = getActivitiesToAnalyze(userId, allActivityIds);
+
+// 5. Only analyze NEW activities (skip already-analyzed)
+if (newActivityIds.length > 0) {
+  const activitiesToProcess = activities.filter(
+    a => newActivityIds.includes(a.id)
+  );
+  // Run analysis only for new activities
+  // Merge results with cached data for final display
+}
+```
+
+**Expected Behavior:**
+
+| Scenario | User Experience |
+|----------|-----------------|
+| First visit | Full analysis runs, results saved to DB |
+| Return visit (same activities) | Cached results load instantly (<100ms), no analysis |
+| New activity synced | Only new activity analyzed, merged with cache |
+
+**Key Functions (in `analysis-persistence.ts`):**
+
+- `loadCachedAnalyses(userId)` - Returns Map of area FID → cached metrics
+- `getActivitiesToAnalyze(userId, activityIds)` - Returns IDs not yet analyzed
+- `saveWalkAnalysis(...)` - Persists analysis results after computation
+
+**WHY:** Analysis computation is expensive (geospatial calculations with Turf.js). Caching avoids re-computation on every page load, providing instant feedback for returning users.
+
 #### Export/Import for Backup
 
 ```typescript

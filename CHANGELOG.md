@@ -18,6 +18,11 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Analysis cache loading ticket and ADR clarification. (PRD 001 §3.8, ADR 004, TICKET-002)
+  - Key files: `docs/ADR/004-sqlite-storage.md`, `docs/tickets/002-analysis-cache-loading.md`
+  - Added "Cache Loading Strategy" section to ADR 004 specifying required page load flow
+  - Created TICKET-002 for implementing cache loading (page loads without re-analysis)
+  - Corrected PROJECT_PLAN.md: cache loading items were incorrectly marked as complete
 - Map Visual Design System implementation: vibrant purple-pink gradient, grayscale base map, cyan route glow, tier medal icons. (PRD 001 §3.4, ADR 010, TICKET-001)
   - Key files: `src/lib/design-tokens.ts`, `src/components/TierIcon/TierIcon.tsx`, `src/components/Map/Map.tsx`, `src/app/globals.css`, `docs/features/map-visualization.md`
   - Centralized design tokens for map visualization colors
