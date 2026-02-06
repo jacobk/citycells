@@ -18,6 +18,12 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Analysis cache loading on page load: cached results display instantly, only new activities are analyzed. (PRD 001 §3.8, ADR 004, TICKET-002)
+  - Key files: `src/components/Map/Map.tsx`, `src/lib/analysis-persistence.ts`, `docs/features/data-persistence.md`
+  - Loads cached tier colors and progress immediately (no "Analyzing paths..." delay)
+  - `getActivitiesToAnalyze()` skips already-analyzed activities
+  - `CachedMetrics` type exports all DB fields for full `AnalysisMetrics` reconstruction
+  - `convertCachedToFullMetrics()` helper in Map.tsx for type conversion
 - Analysis cache loading ticket and ADR clarification. (PRD 001 §3.8, ADR 004, TICKET-002)
   - Key files: `docs/ADR/004-sqlite-storage.md`, `docs/tickets/002-analysis-cache-loading.md`
   - Added "Cache Loading Strategy" section to ADR 004 specifying required page load flow
@@ -67,6 +73,12 @@ Each entry should reference:
 - Commit workflow enforces fast-forward merges to main. (AGENTS.md)
   - Key files: `.cursor/skills/commit-workflow/SKILL.md`
 ### Fixed
+- Håkanstorp test now uses real delområde polygon instead of synthetic bounding box. (ADR 003)
+  - Key files: `src/__tests__/analysis/real-activity.test.ts`, `src/__tests__/fixtures/areas/hakanstorp.json`
+  - Old test used bboxPolygon (4077m perimeter, 4x area) making all scores 0%
+  - Real polygon gives accurate results: 100% border traced, 98% area coverage, platinum tier
+  - Added assertions for all metrics: loop detection, border traced, area, alignment, efficiency, tier
+  - Area fixture extracted from `malmo_delomraden.geojson`
 - Use Strava distance for total walk length to avoid polyline truncation. (PRD 001 §3.6, ADR 003, ADR 005)
   - Key files: `src/lib/analysis.ts`, `src/components/Map/Map.tsx`, `src/hooks/useStrava.ts`, `docs/features/analysis-engine.md`, `src/__tests__/analysis/real-activity.test.ts`
 

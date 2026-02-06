@@ -7,12 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { detectLoop, analyzeWalk, LOOP_CLOSURE_THRESHOLD_METERS, type StravaMetadata } from '@/lib/analysis';
+import { detectLoop, analyzeWalk, type StravaMetadata } from '@/lib/analysis';
 import { visualizeAreaCoverage, saveSVG } from '../utils/visualization';
 import * as turf from '@turf/turf';
 import type { Feature, Polygon, Position } from 'geojson';
 import activityFixture from '../fixtures/activities/activity-17259240639.json';
 import truncatedFixture from '../fixtures/activities/activity-17270700773.json';
+import hakanstorpFixture from '../fixtures/areas/hakanstorp.json';
 
 describe('Real Activity: activity-17259240639 (Johanneslust)', () => {
   // Extract data from fixture
@@ -160,38 +161,119 @@ describe('Real Activity: activity-17259240639 (Johanneslust)', () => {
 });
 
 describe('Real Activity: activity-17270700773 (Håkanstorp)', () => {
+  // WHY: Use the actual Håkanstorp polygon from the GeoJSON data rather than a
+  // synthetic bounding box. The walk traces the real Håkanstorp border, so analysis
+  // must use the real polygon to produce meaningful scores.
+  const hakanstorpPolygon = hakanstorpFixture as Feature<Polygon>;
+  const areaSqm = turf.area(hakanstorpPolygon);
+  const perimeterLine = turf.polygonToLine(hakanstorpPolygon);
+  const perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
+
   const coordinates = truncatedFixture.coordinates as Position[];
+  const streamCoordinates = truncatedFixture.streamCoordinates as Position[];
   const stravaMetadata: StravaMetadata = {
     startLatLng: truncatedFixture.start_latlng as [number, number],
     endLatLng: truncatedFixture.end_latlng as [number, number],
     distance: truncatedFixture.distance as number,
   };
 
+  // Pre-calculate full analysis result for use across tests
+  const result = analyzeWalk(
+    coordinates,
+    hakanstorpPolygon,
+    perimeterMeters,
+    areaSqm,
+    stravaMetadata,
+    streamCoordinates
+  );
+
   it('should use Strava distance for total walk length', () => {
     const walkLine = turf.lineString(coordinates);
-    const [minX, minY, maxX, maxY] = turf.bbox(walkLine);
-    const padding = 0.002;
-    const areaPolygon = turf.bboxPolygon([
-      minX - padding,
-      minY - padding,
-      maxX + padding,
-      maxY + padding,
-    ]) as Feature<Polygon>;
-    const areaSqm = turf.area(areaPolygon);
-    const perimeterLine = turf.polygonToLine(areaPolygon);
-    const perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
-
-    const result = analyzeWalk(
-      coordinates,
-      areaPolygon,
-      perimeterMeters,
-      areaSqm,
-      stravaMetadata
-    );
-
     const polylineLength = turf.length(walkLine, { units: 'meters' });
 
+    // WHY: Strava's full GPS stream records 2050m, but the summary_polyline
+    // is truncated. The analysis should prefer Strava's distance metadata.
     expect(result.metrics.totalWalkLengthMeters).toBeCloseTo(truncatedFixture.distance, 1);
     expect(result.metrics.totalWalkLengthMeters).toBeGreaterThan(polylineLength);
+  });
+
+  it('should detect a closed loop via Strava metadata', () => {
+    // WHY: The walk starts and ends at effectively the same point (~4m gap).
+    // Strava metadata is needed because the polyline is truncated.
+    expect(result.metrics.isClosedLoop).toBe(true);
+    expect(result.metrics.loopGapMeters).toBeLessThan(10);
+  });
+
+  it('should score high on border traced (perimeter coverage)', () => {
+    // WHY: This walk closely traces the actual Håkanstorp border.
+    // With all 1173 stream GPS points within the 25m buffer, coverage should be ~100%.
+    expect(result.metrics.perimeterCoveragePercent).toBeGreaterThan(0.95);
+    expect(result.metrics.coveredDistanceMeters).toBeGreaterThan(perimeterMeters * 0.95);
+
+    console.log('Håkanstorp Border Traced:');
+    console.log(`  perimeterCoverage: ${(result.metrics.perimeterCoveragePercent * 100).toFixed(1)}%`);
+    console.log(`  coveredDistance: ${result.metrics.coveredDistanceMeters.toFixed(0)}m / ${perimeterMeters.toFixed(0)}m perimeter`);
+  });
+
+  it('should score high on area coverage', () => {
+    // WHY: The walk forms a closed loop that encloses nearly all of Håkanstorp.
+    expect(result.metrics.areaCoveragePercent).toBeGreaterThan(0.90);
+    expect(result.metrics.enclosedAreaSqm).toBeGreaterThan(areaSqm * 0.90);
+
+    console.log('Håkanstorp Area Coverage:');
+    console.log(`  areaCoverage: ${(result.metrics.areaCoveragePercent * 100).toFixed(1)}%`);
+    console.log(`  enclosedArea: ${result.metrics.enclosedAreaSqm.toFixed(0)} / ${areaSqm.toFixed(0)} sqm`);
+  });
+
+  it('should score well on alignment', () => {
+    // WHY: Average distance from walk to perimeter is ~5m (well within 25m buffer).
+    // RMSE of ~7m gives alignment score of ~86%.
+    expect(result.metrics.alignmentScore).toBeGreaterThan(0.80);
+    expect(result.metrics.rmseMeters).toBeLessThan(15);
+    expect(result.metrics.maxDeviationMeters).toBeLessThan(30);
+
+    console.log('Håkanstorp Alignment:');
+    console.log(`  alignmentScore: ${(result.metrics.alignmentScore * 100).toFixed(1)}%`);
+    console.log(`  RMSE: ${result.metrics.rmseMeters.toFixed(1)}m`);
+    console.log(`  maxDeviation: ${result.metrics.maxDeviationMeters.toFixed(1)}m`);
+    console.log(`  P90 deviation: ${result.metrics.p90DeviationMeters.toFixed(1)}m`);
+  });
+
+  it('should score high on efficiency', () => {
+    // WHY: The entire walk stays near the border with no significant detours.
+    expect(result.metrics.efficiency).toBeGreaterThan(0.95);
+
+    console.log('Håkanstorp Efficiency:');
+    console.log(`  efficiency: ${(result.metrics.efficiency * 100).toFixed(1)}%`);
+    console.log(`  borderAligned: ${result.metrics.borderAlignedLengthMeters.toFixed(0)}m / ${result.metrics.totalWalkLengthMeters.toFixed(0)}m total`);
+  });
+
+  it('should achieve platinum tier', () => {
+    // WHY: This is a near-perfect border trace walk. All metrics are excellent,
+    // so the composite quality score should comfortably exceed 95% (platinum).
+    expect(result.metrics.rawQualityScore).toBeGreaterThan(0.95);
+    expect(result.metrics.tier).toBe('platinum');
+
+    console.log('Håkanstorp Overall:');
+    console.log(`  qualityScore: ${(result.metrics.rawQualityScore * 100).toFixed(1)}%`);
+    console.log(`  tier: ${result.metrics.tier}`);
+  });
+
+  it('should have no deviation segments', () => {
+    // WHY: The walk stays consistently close to the border throughout.
+    // No GPS points exceed the 30m deviation threshold.
+    expect(result.deviations).toHaveLength(0);
+  });
+
+  it('should generate visualization', () => {
+    saveSVG('activity-17270700773-area.svg', visualizeAreaCoverage(
+      streamCoordinates,
+      hakanstorpPolygon,
+      result.metrics.enclosedAreaSqm,
+      areaSqm,
+      result.metrics.isClosedLoop,
+      result.metrics.loopGapMeters,
+      { title: 'Håkanstorp Walk - Area Coverage (Platinum)' }
+    ));
   });
 });
