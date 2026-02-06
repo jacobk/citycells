@@ -2,7 +2,7 @@
 
 import CityMap, { type AreaClickData, type ProgressInfo } from '@/components/Map';
 import { useStrava } from '@/hooks/useStrava';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { type AnalysisMetrics } from '@/lib/analysis';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AreaDetailsPanel, type AreaDetails } from '@/components/AreaDetailsPanel';
@@ -12,6 +12,7 @@ import { SubAreaListPanel, type SortOption } from '@/components/SubAreaListPanel
 import { PanelBreadcrumbs } from '@/components/PanelBreadcrumbs';
 import { ProfileCard } from '@/components/ProfileCard';
 import type { ExemptionReason } from '@/lib/exemption-types';
+import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
 
 // ============================================
 // Types - Panel Navigation State (ADR 008)
@@ -79,6 +80,11 @@ export default function Home() {
     borderGapMeters: number;
     detourDistanceMeters: number;
   } | null>(null);
+
+  // WHY: State for re-analysis (ADR 011)
+  const [reAnalysisProgress, setReAnalysisProgress] = useState<ReAnalysisProgress | null>(null);
+  // WHY: Ref to trigger map refresh after re-analysis
+  const refreshMapRef = useRef<(() => void) | null>(null);
 
   const handleProgress = useCallback((progressInfo: ProgressInfo) => {
     setProgress(progressInfo);
@@ -224,6 +230,137 @@ export default function Home() {
     }
   }, []);
 
+  // ============================================
+  // Re-Analysis Handlers (ADR 011)
+  // ============================================
+
+  /**
+   * Handle re-analysis from profile card.
+   * WHY: Re-analysis allows users to refresh cached scores when the algorithm
+   * or source data changes. See ADR 011 for modes and rationale.
+   */
+  const handleReAnalyze = useCallback(async (mode: ReAnalysisMode) => {
+    if (!athlete?.id) return;
+
+    // Dynamic imports to avoid bundling at build time
+    const { getOrCreateUserId, reAnalyzeWalks } = await import('@/lib/analysis-persistence');
+
+    const userId = getOrCreateUserId(athlete.id);
+
+    // WHY: For 'full' mode, provide a fetch function to re-fetch streams from Strava
+    const fetchStreams = mode === 'full'
+      ? async (activityId: number) => {
+          try {
+            const response = await fetch(`/api/activities/streams?id=${activityId}`);
+            if (!response.ok) return null;
+            const data = await response.json();
+            const latlng: [number, number][] = data?.streams?.latlng?.data ?? [];
+            const time: number[] | undefined = data?.streams?.time?.data;
+            const distance: number[] | undefined = data?.streams?.distance?.data;
+            return {
+              latlng,
+              time,
+              distance,
+              fetchedAt: data?.fetchedAt ?? new Date().toISOString(),
+              pointCount: latlng.length,
+            };
+          } catch {
+            return null;
+          }
+        }
+      : undefined;
+
+    // WHY: Provide activity metadata lookup so re-analysis can use correct start/end coordinates
+    // from the original Strava activity (not truncated streams or corrupted database values)
+    const getActivityMetadata = (activityId: number) => {
+      const activity = activities.find(a => a.id === activityId);
+      if (!activity) {
+        console.warn(`[handleReAnalyze] Activity ${activityId} not found in activities array (length: ${activities.length})`);
+        return null;
+      }
+      console.log(`[handleReAnalyze] Found activity ${activityId}: start_latlng=${JSON.stringify(activity.start_latlng)}, end_latlng=${JSON.stringify(activity.end_latlng)}`);
+      return {
+        startLatLng: activity.start_latlng,
+        endLatLng: activity.end_latlng,
+        distance: activity.distance,
+      };
+    };
+
+    const result = await reAnalyzeWalks(
+      userId,
+      mode,
+      undefined, // all walks
+      setReAnalysisProgress,
+      fetchStreams,
+      getActivityMetadata
+    );
+
+    // Clear progress after a delay to show completion state
+    setTimeout(() => {
+      setReAnalysisProgress(null);
+    }, 2000);
+
+    // Trigger map refresh to reload cached analyses
+    if (refreshMapRef.current) {
+      refreshMapRef.current();
+    }
+
+    if (!result.success && result.errors.length > 0) {
+      console.error('[ReAnalysis] Errors:', result.errors);
+    }
+  }, [athlete?.id, activities]);
+
+  // WHY: Callback for Map to register its refresh function
+  const handleRegisterRefresh = useCallback((refreshFn: () => void) => {
+    refreshMapRef.current = refreshFn;
+  }, []);
+
+  /**
+   * Handle per-walk re-analysis from area details panel.
+   * WHY: Allows users to re-analyze a single walk (ADR 011).
+   * The walkId here is the Strava activity ID, not the database walk ID.
+   */
+  const handleReAnalyzeWalk = useCallback(async (stravaActivityId: number, mode: ReAnalysisMode) => {
+    // Dynamic imports to avoid bundling at build time
+    const { getWalkIdByStravaActivityId, reAnalyzeWalk } = await import('@/lib/analysis-persistence');
+
+    const walkId = getWalkIdByStravaActivityId(stravaActivityId);
+    if (!walkId) {
+      console.error('[ReAnalyzeWalk] Walk not found for activity:', stravaActivityId);
+      return;
+    }
+
+    // WHY: For 'full' mode, provide a fetch function to re-fetch streams from Strava
+    const fetchStreams = mode === 'full'
+      ? async (activityId: number) => {
+          try {
+            const response = await fetch(`/api/activities/streams?id=${activityId}`);
+            if (!response.ok) return null;
+            const data = await response.json();
+            const latlng: [number, number][] = data?.streams?.latlng?.data ?? [];
+            const time: number[] | undefined = data?.streams?.time?.data;
+            const distance: number[] | undefined = data?.streams?.distance?.data;
+            return {
+              latlng,
+              time,
+              distance,
+              fetchedAt: data?.fetchedAt ?? new Date().toISOString(),
+              pointCount: latlng.length,
+            };
+          } catch {
+            return null;
+          }
+        }
+      : undefined;
+
+    await reAnalyzeWalk(walkId, mode, fetchStreams);
+
+    // Trigger map refresh to reload cached analyses
+    if (refreshMapRef.current) {
+      refreshMapRef.current();
+    }
+  }, []);
+
   return (
     <main className="min-h-screen relative overflow-hidden">
       <CityMap
@@ -232,6 +369,7 @@ export default function Home() {
         onProgressChange={handleProgress}
         onAreaClick={handleAreaClick}
         onAreasLoaded={handleAreasLoaded}
+        onRegisterRefresh={handleRegisterRefresh}
       />
       
       {/* Hamburger Menu - Top Left (ADR 009) */}
@@ -252,6 +390,8 @@ export default function Home() {
         isExpanded={overlayState.type === 'profile-card'}
         onToggle={handleProfileToggle}
         activitiesCount={activities.length}
+        onReAnalyze={handleReAnalyze}
+        reAnalysisProgress={reAnalysisProgress}
       />
 
       {/* Progress Dashboard Drawer */}
@@ -282,6 +422,7 @@ export default function Home() {
         onClose={handleClosePanel}
         onExemptDeviation={handleExemptDeviation}
         onRemoveExemption={handleRemoveExemption}
+        onReAnalyzeWalk={handleReAnalyzeWalk}
         // WHY: Show breadcrumbs only when navigated from list (ADR 008)
         breadcrumbs={
           panelView.type === 'area-detail' && panelView.fromList && selectedAreaDetails ? (

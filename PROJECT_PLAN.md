@@ -174,6 +174,23 @@
 - [x] Update z-index hierarchy per ADR 009
 - [ ] Test on mobile for thumb-reachability
 
+## Phase 6.8: Re-Analysis Feature (ADR 011)
+
+*Reference: [ADR 011](docs/ADR/011-re-analysis-strategy.md) | [Feature Doc](docs/features/re-analysis.md) | [TICKET-003](docs/tickets/003-re-analysis.md)*
+
+- [x] ADR 011: Re-Analysis Strategy
+- [x] Feature doc: re-analysis.md
+- [x] Update PRD 001 with re-analysis user stories
+- [x] Implement `listWalksWithCache()` to identify re-analyzable walks
+- [x] Implement `invalidateWalkAnalyses()` to clear cached analysis results
+- [x] Implement `reAnalyzeWalk()` for single-walk re-analysis
+- [x] Implement `reAnalyzeWalks()` for batch re-analysis with progress
+- [x] Add "Re-score All" / "Full Re-fetch" buttons to ProfileCard
+- [x] Add per-walk re-analysis menu to AreaDetailsPanel walk history
+- [x] Wire up page.tsx handlers for both entry points
+- [x] Fix loop detection during re-analysis (use original Strava activity coordinates)
+- [x] Add schema migration for start/end coordinates in walks table
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

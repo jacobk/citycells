@@ -18,6 +18,12 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Re-analysis feature: user-initiated refresh of walk scores via ProfileCard or per-walk menu. (PRD 001 §2, ADR 011, TICKET-003)
+  - Key files: `src/lib/analysis-persistence.ts`, `src/components/ProfileCard/ProfileCard.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/app/page.tsx`
+  - Two modes: "Re-score only" (fast, uses cached streams) and "Full Re-fetch" (re-fetches GPS from Strava)
+  - Batch re-analysis with progress tracking from ProfileCard
+  - Per-walk re-analysis from AreaDetailsPanel walk history
+  - Fixes loop detection during re-analysis using original Strava activity coordinates
 - Analysis cache loading on page load: cached results display instantly, only new activities are analyzed. (PRD 001 §3.8, ADR 004, TICKET-002)
   - Key files: `src/components/Map/Map.tsx`, `src/lib/analysis-persistence.ts`, `docs/features/data-persistence.md`
   - Loads cached tier colors and progress immediately (no "Analyzing paths..." delay)

@@ -246,7 +246,7 @@ export function detectLoop(
     // Convert from Strava [lat, lng] to GeoJSON [lng, lat]
     const start: Position = [stravaMetadata.startLatLng[1], stravaMetadata.startLatLng[0]];
     const end: Position = [stravaMetadata.endLatLng[1], stravaMetadata.endLatLng[0]];
-    
+
     const gapMeters = turf.distance(turf.point(start), turf.point(end), { units: 'meters' });
     const isClosedLoop = gapMeters <= LOOP_CLOSURE_THRESHOLD_METERS;
     
@@ -590,6 +590,8 @@ export function detectDeviations(
  * @param perimeterLengthMeters - Pre-calculated perimeter length
  * @param areaSqm - Pre-calculated area in square meters
  * @param stravaMetadata - Optional Strava metadata for better loop detection
+ * @param streamCoordinates - Optional high-fidelity stream coordinates
+ * @param loopStatusOverride - Optional override for loop detection (used during re-analysis without streams)
  * @returns Full analysis results including all metrics and deviations
  */
 export function analyzeWalk(
@@ -598,7 +600,8 @@ export function analyzeWalk(
   perimeterLengthMeters: number,
   areaSqm: number,
   stravaMetadata?: StravaMetadata,
-  streamCoordinates?: Position[]
+  streamCoordinates?: Position[],
+  loopStatusOverride?: { isClosedLoop: boolean; gapMeters: number }
 ): FullAnalysisResult {
   const analysisCoordinates = streamCoordinates && streamCoordinates.length > 0
     ? streamCoordinates
@@ -607,15 +610,17 @@ export function analyzeWalk(
   // Convert coordinates to LineString
   const walkLine = turf.lineString(analysisCoordinates);
   
-  // 1. Loop detection (uses Strava metadata if available for accuracy)
-  const loopResult = detectLoop(analysisCoordinates, stravaMetadata);
-  
+  // 1. Loop detection (uses override if provided, otherwise Strava metadata, otherwise coordinates)
+  // WHY: During re-analysis without streams, the polyline is too compressed for accurate loop detection.
+  // We use the previous loop status from the database instead.
+  const loopResult = loopStatusOverride ?? detectLoop(analysisCoordinates, stravaMetadata);
+
   // 2. Perimeter coverage
   const perimeterResult = calculatePerimeterCoverage(walkLine, areaPolygon, perimeterLengthMeters);
   
   // 3. Area coverage
   const areaResult = calculateAreaCoverage(analysisCoordinates, areaPolygon, areaSqm, loopResult.isClosedLoop);
-  
+
   // 4. Alignment error
   const alignmentResult = calculateAlignmentError(analysisCoordinates, areaPolygon);
   

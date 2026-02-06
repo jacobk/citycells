@@ -118,6 +118,8 @@ Analysis results are automatically saved to the database after computation and l
 - Persist across browser sessions
 - Support offline viewing of progress
 
+**Re-Analysis:** Cached analysis results can be invalidated and recomputed via the [Re-Analysis](../features/re-analysis.md) feature. Users can trigger re-score only (re-run algorithm on existing GPS cache) or full re-analyze (re-fetch streams then re-score). See [ADR 011](../ADR/011-re-analysis-strategy.md).
+
 ### Stream Data Caching (ADR 006)
 
 High-fidelity GPS streams are cached alongside walk records to avoid repeated Strava API calls.

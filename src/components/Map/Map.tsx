@@ -72,6 +72,8 @@ interface MapProps {
   onAreaClick?: (areaDetails: AreaClickData) => void;
   // WHY: Callback to pass all area data to parent for use in SubAreaListPanel (ADR 008)
   onAreasLoaded?: (areas: Map<number, AreaClickData>) => void;
+  // WHY: Callback to register refresh function for re-analysis (ADR 011)
+  onRegisterRefresh?: (refreshFn: () => void) => void;
 }
 
 // WHY: Store full analysis results per area for display in popups/tooltips
@@ -183,7 +185,7 @@ function convertCachedToFullMetrics(cached: CachedMetrics): AnalysisMetrics {
   };
 }
 
-export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded }: MapProps) {
+export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh }: MapProps) {
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
@@ -192,9 +194,21 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   const [newActivityCount, setNewActivityCount] = useState(0);
   // WHY: Track zoom for tier icon visibility (ADR 010 - icons only at zoom 13+)
   const [currentZoom, setCurrentZoom] = useState(12);
+  // WHY: Counter to force re-running the analysis effect after re-analysis (ADR 011)
+  const [refreshCounter, setRefreshCounter] = useState(0);
   
   // WHY: Database hook for persistence - loads cached results and saves new analyses
   const { db, loading: dbLoading } = useDatabase();
+
+  // WHY: Register refresh function for re-analysis (ADR 011)
+  // The refresh function increments counter to trigger the analysis effect
+  useEffect(() => {
+    if (onRegisterRefresh) {
+      onRegisterRefresh(() => {
+        setRefreshCounter(c => c + 1);
+      });
+    }
+  }, [onRegisterRefresh]);
   
   // WHY: Tooltip for hover (desktop) and long-press (mobile) per PRD 001 section 3.5
   const {
@@ -667,7 +681,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       });
     }, 100);
 
-  }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId]);
+  // WHY: refreshCounter triggers re-load of cached analyses after re-analysis (ADR 011)
+  }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
 
   // WHY: Style function returns tier-based colors per ADR 010 (purple-pink gradient)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -38,6 +38,12 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want breadcrumb navigation to return from area details to the list.
 *   **As a user,** I want a hamburger menu to access different app sections without cluttering the map interface.
 
+### Re-Analysis Stories (Added: 2026-02-06)
+*   **As a user,** I want to re-analyze my cached walks so that scores stay correct when the app's scoring formula changes.
+*   **As a user,** I want to re-fetch and re-analyze my walks so that scores reflect the latest GPS data from Strava (e.g., after editing privacy zones or correcting an activity).
+*   **As a user,** I want a re-analyze control in my profile popup so I can refresh all my walk scores in one place.
+*   **As a user,** I want to choose between re-scoring only (fast) and full re-fetch plus re-score when source data may have changed.
+
 ## 3. Functional Requirements
 
 ### 3.1 Map Interface
@@ -300,6 +306,15 @@ Provide a browsable list of all sub-areas with sorting and filtering capabilitie
 *   **Open hamburger menu** → Automatically collapses profile card
 
 **Mutual Exclusivity:** Expanding the profile card automatically closes the hamburger menu if open. Only one overlay can be active at a time.
+
+**Re-Analyze (Added: 2026-02-06):**
+*   **Location:** Inside the expanded profile card (user-profile popup).
+*   **Options:** User can choose:
+    *   **Re-score all** — Re-run the analysis algorithm on existing cached GPS data for all walks (no Strava API calls; fast). Use when the app's scoring formula has been updated.
+    *   **Re-fetch & re-score all** — Re-fetch stream data from Strava for all walks, then re-run analysis and overwrite cached results. Use when source data may have changed (e.g., privacy zones, activity edits).
+*   **Behavior:** Show progress/loading state during re-analysis; on completion, refresh map and panels so new scores and tiers appear immediately. Surface errors (e.g., API failure) so user can retry or choose re-score only.
+*   **Per-walk re-analyze:** From area details or walk list, user can trigger re-score or full re-analyze for a single walk. Same two modes apply.
+*   *Reference: ADR 011 (Re-Analysis Strategy)*
 
 #### Sub-Area List Panel
 

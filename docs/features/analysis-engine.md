@@ -2,7 +2,7 @@
 
 ## Overview
 
-The analysis engine calculates multi-metric scores for walks around Malmö's sub-areas. It evaluates how well a walk traces the border of an area and assigns quality tiers (Platinum/Gold/Silver/Bronze).
+The analysis engine calculates multi-metric scores for walks around Malmö's sub-areas. It evaluates how well a walk traces the border of an area and assigns quality tiers (Platinum/Gold/Silver/Bronze). The same pipeline can be re-run on cached walks via the [Re-Analysis](../features/re-analysis.md) feature (user-initiated), so scores stay correct when the algorithm or source data changes.
 
 ## User Stories
 

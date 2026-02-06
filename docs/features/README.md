@@ -21,6 +21,7 @@ Enable any developer (human or AI agent) to:
 | Exemption System | [exemption-system.md](./exemption-system.md) | Implemented | [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |
 | Metrics Documentation | [metrics-documentation.md](./metrics-documentation.md) | Implemented | [ADR 007](../ADR/007-interactive-metrics-documentation.md) |
 | Sub-Area List | [sub-area-list.md](./sub-area-list.md) | Implemented | [ADR 008](../ADR/008-panel-navigation-architecture.md) |
+| Re-Analysis | [re-analysis.md](./re-analysis.md) | Planned | [ADR 011](../ADR/011-re-analysis-strategy.md), [ADR 004](../ADR/004-sqlite-storage.md) |
 
 ## Document Template
 

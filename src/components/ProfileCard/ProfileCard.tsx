@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { getTierColor } from '@/lib/analysis';
 import type { ProgressInfo } from '@/components/Map';
+import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
 
 // ============================================
 // Types
@@ -17,6 +18,10 @@ interface ProfileCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   activitiesCount: number;
+  // WHY: Re-analysis callback for triggering re-analysis from profile card (ADR 011)
+  onReAnalyze?: (mode: ReAnalysisMode) => Promise<void>;
+  // WHY: Track re-analysis state for UI feedback
+  reAnalysisProgress?: ReAnalysisProgress | null;
 }
 
 // ============================================
@@ -46,8 +51,30 @@ export default function ProfileCard({
   isExpanded,
   onToggle,
   activitiesCount,
+  onReAnalyze,
+  reAnalysisProgress,
 }: ProfileCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  // WHY: Track local loading state for re-analyze buttons (ADR 011)
+  const [isReAnalyzing, setIsReAnalyzing] = useState(false);
+  const [reAnalyzeError, setReAnalyzeError] = useState<string | null>(null);
+
+  // Handle re-analyze button click
+  const handleReAnalyze = async (mode: ReAnalysisMode) => {
+    if (!onReAnalyze || isReAnalyzing) return;
+
+    setIsReAnalyzing(true);
+    setReAnalyzeError(null);
+
+    try {
+      await onReAnalyze(mode);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Re-analysis failed';
+      setReAnalyzeError(errorMessage);
+    } finally {
+      setIsReAnalyzing(false);
+    }
+  };
 
   // Close card when clicking outside
   useEffect(() => {
@@ -219,6 +246,70 @@ export default function ProfileCard({
                 </div>
               )}
             </div>
+
+            {/* WHY: Re-analyze section per ADR 011 and PRD 3.10
+                Two modes: re-score (fast, uses cached GPS) and full (re-fetches from Strava) */}
+            {onReAnalyze && progress.completedCount > 0 && (
+              <div className="mb-4 pt-3 border-t border-gray-100">
+                <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                  <span>Re-analyze Walks</span>
+                  <span 
+                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 text-[9px] text-gray-400 cursor-help"
+                    title="Re-score: Fast, uses cached GPS data. Use after app updates.&#10;Full: Re-fetches GPS from Strava. Use if you edited activities."
+                  >
+                    ?
+                  </span>
+                </div>
+
+                {/* Re-analysis progress indicator */}
+                {isReAnalyzing && reAnalysisProgress && (
+                  <div className="bg-blue-50 rounded-lg p-2 mb-2 text-xs">
+                    <div className="flex items-center gap-2 text-blue-700">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>
+                        Re-analyzing {reAnalysisProgress.current} of {reAnalysisProgress.total}...
+                      </span>
+                    </div>
+                    {reAnalysisProgress.currentWalkName && (
+                      <div className="text-blue-600 truncate mt-1 pl-6">
+                        {reAnalysisProgress.currentWalkName}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Error message */}
+                {reAnalyzeError && (
+                  <div className="bg-red-50 text-red-700 rounded-lg p-2 mb-2 text-xs">
+                    {reAnalyzeError}
+                  </div>
+                )}
+
+                {/* Re-analyze buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleReAnalyze('rescore')}
+                    disabled={isReAnalyzing}
+                    className="flex-1 bg-purple-100 text-purple-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Re-score All
+                  </button>
+                  <button
+                    onClick={() => handleReAnalyze('full')}
+                    disabled={isReAnalyzing}
+                    className="flex-1 bg-purple-100 text-purple-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Full Re-fetch
+                  </button>
+                </div>
+                <div className="text-[10px] text-gray-400 mt-1.5 leading-tight">
+                  Re-score: Fast, uses cached GPS. Full: Re-fetches from Strava.
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-2">
               <button 

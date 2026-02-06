@@ -20,7 +20,7 @@ const INDEXEDDB_NAME = 'citycells-db';
 const INDEXEDDB_STORE = 'database';
 
 // WHY: Schema version for migrations - increment when schema changes
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // ============================================
 // Types
@@ -183,6 +183,12 @@ CREATE TABLE IF NOT EXISTS walks (
   streams_json TEXT,
   streams_fetched_at TEXT,
   stream_point_count INTEGER,
+  -- WHY: Store original start/end coordinates from Strava activity for accurate loop detection
+  -- during re-analysis. Streams can be truncated by privacy zones, but activity start/end are not.
+  start_lat REAL,
+  start_lng REAL,
+  end_lat REAL,
+  end_lng REAL,
   started_at TEXT,
   synced_at TEXT DEFAULT (datetime('now'))
 );
@@ -356,6 +362,30 @@ export async function initDatabase(): Promise<Database> {
       }
       if (!columnNames.has('stream_point_count')) {
         db.run('ALTER TABLE walks ADD COLUMN stream_point_count INTEGER');
+      }
+    }
+
+    // WHY: Schema version 3 adds start/end coordinates for accurate loop detection during re-analysis
+    // Streams can be truncated by privacy zones, but activity start/end are not.
+    if (currentVersion < 3) {
+      const columnsResult = db.exec("PRAGMA table_info(walks)");
+      const columnNames = new Set(
+        columnsResult.length > 0
+          ? columnsResult[0].values.map(row => row[1] as string)
+          : []
+      );
+
+      if (!columnNames.has('start_lat')) {
+        db.run('ALTER TABLE walks ADD COLUMN start_lat REAL');
+      }
+      if (!columnNames.has('start_lng')) {
+        db.run('ALTER TABLE walks ADD COLUMN start_lng REAL');
+      }
+      if (!columnNames.has('end_lat')) {
+        db.run('ALTER TABLE walks ADD COLUMN end_lat REAL');
+      }
+      if (!columnNames.has('end_lng')) {
+        db.run('ALTER TABLE walks ADD COLUMN end_lng REAL');
       }
     }
 
