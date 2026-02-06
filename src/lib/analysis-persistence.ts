@@ -174,25 +174,46 @@ export async function saveWalkAnalysis(
 }
 
 /**
- * Load cached analysis results for a user's activities.
- * WHY: Returns cached results to avoid re-computation on page load.
+ * Cached metrics type returned by loadCachedAnalyses.
+ * WHY: Export type for use in Map.tsx to convert to full AnalysisMetrics.
  */
-export function loadCachedAnalyses(userId: number): Map<number, {
+export interface CachedMetrics {
+  perimeterCoveragePercent: number;
+  areaCoveragePercent: number;
+  rawQualityScore: number;
+  tier: string | null;
+  isClosedLoop: boolean;
+  // Additional fields from DB for full AnalysisMetrics reconstruction
+  coveredDistanceMeters: number;
+  rmseMeters: number;
+  maxDeviationMeters: number;
+  p90DeviationMeters: number;
+  efficiency: number;
+  enclosedAreaSqm: number;
+  loopGapMeters: number;
+}
+
+/**
+ * Cached analysis result type returned by loadCachedAnalyses.
+ */
+export interface CachedAnalysis {
   areaId: number;
   analysisId: number;
-  metrics: {
-    perimeterCoveragePercent: number;
-    areaCoveragePercent: number;
-    rawQualityScore: number;
-    tier: string | null;
-    isClosedLoop: boolean;
-  };
+  metrics: CachedMetrics;
   activityIds: number[];
-}> {
+}
+
+/**
+ * Load cached analysis results for a user's activities.
+ * WHY: Returns cached results to avoid re-computation on page load.
+ * See ADR 004 Cache Loading Strategy for the intended flow.
+ */
+export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> {
   const db = getDatabase();
 
   // Get all area completions for this user
   // WHY: Join with areas table to get FID (GeoJSON identifier) instead of database id
+  // WHY: Select all metrics fields needed to reconstruct AnalysisMetrics for UI display
   const result = db.exec(
     `SELECT 
       a.fid as area_fid,
@@ -202,6 +223,13 @@ export function loadCachedAnalyses(userId: number): Map<number, {
       wa.raw_quality_score,
       wa.tier,
       wa.is_closed_loop,
+      wa.covered_distance_meters,
+      wa.rmse_meters,
+      wa.max_deviation_meters,
+      wa.p90_deviation_meters,
+      wa.efficiency,
+      wa.enclosed_area_sqm,
+      wa.loop_gap_meters,
       GROUP_CONCAT(DISTINCT w.strava_activity_id) as activity_ids
     FROM area_completions ac
     JOIN areas a ON ac.area_id = a.id
@@ -212,24 +240,14 @@ export function loadCachedAnalyses(userId: number): Map<number, {
     [userId]
   );
 
-  const cached = new Map<number, {
-    areaId: number;
-    analysisId: number;
-    metrics: {
-      perimeterCoveragePercent: number;
-      areaCoveragePercent: number;
-      rawQualityScore: number;
-      tier: string | null;
-      isClosedLoop: boolean;
-    };
-    activityIds: number[];
-  }>();
+  const cached = new Map<number, CachedAnalysis>();
 
   if (result.length > 0) {
     for (const row of result[0].values) {
       const areaId = row[0] as number;
       const analysisId = row[1] as number;
-      const activityIdsStr = row[7] as string;
+      // WHY: activity_ids is now at index 14 after adding more columns
+      const activityIdsStr = row[14] as string;
       const activityIds = activityIdsStr ? activityIdsStr.split(',').map(Number) : [];
 
       cached.set(areaId, {
@@ -241,6 +259,13 @@ export function loadCachedAnalyses(userId: number): Map<number, {
           rawQualityScore: row[4] as number,
           tier: row[5] as string | null,
           isClosedLoop: (row[6] as number) === 1,
+          coveredDistanceMeters: row[7] as number,
+          rmseMeters: row[8] as number,
+          maxDeviationMeters: row[9] as number,
+          p90DeviationMeters: row[10] as number,
+          efficiency: row[11] as number,
+          enclosedAreaSqm: row[12] as number,
+          loopGapMeters: row[13] as number,
         },
         activityIds,
       });

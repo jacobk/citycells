@@ -28,7 +28,10 @@ import { TierIcon } from '@/components/TierIcon';
 import { useDatabase } from '@/hooks/useDatabase';
 import { 
   saveWalkAnalysis, 
-  getOrCreateUserId 
+  getOrCreateUserId,
+  loadCachedAnalyses,
+  getActivitiesToAnalyze,
+  type CachedMetrics
 } from '@/lib/analysis-persistence';
 import { 
   getWalkIdByActivityId,
@@ -146,11 +149,47 @@ function ZoomTracker({ onZoomChange }: ZoomTrackerProps) {
   return null;
 }
 
+/**
+ * Convert cached metrics from database to full AnalysisMetrics type.
+ * WHY: Cached data from loadCachedAnalyses() doesn't include computed fields
+ * (alignmentScore, borderAlignedLengthMeters, totalWalkLengthMeters) that aren't
+ * stored in the database. These are recomputed or set to defaults.
+ * See ADR 004 Cache Loading Strategy.
+ */
+function convertCachedToFullMetrics(cached: CachedMetrics): AnalysisMetrics {
+  // WHY: Alignment score formula: 1 - min(rmse/50, 1)
+  // 50m is the max deviation threshold where score becomes 0
+  // See ADR 003 for scoring formula rationale
+  const alignmentScore = 1 - Math.min((cached.rmseMeters ?? 0) / 50, 1);
+
+  return {
+    perimeterCoveragePercent: cached.perimeterCoveragePercent,
+    coveredDistanceMeters: cached.coveredDistanceMeters,
+    areaCoveragePercent: cached.areaCoveragePercent,
+    enclosedAreaSqm: cached.enclosedAreaSqm,
+    isClosedLoop: cached.isClosedLoop,
+    loopGapMeters: cached.loopGapMeters,
+    rmseMeters: cached.rmseMeters,
+    maxDeviationMeters: cached.maxDeviationMeters,
+    p90DeviationMeters: cached.p90DeviationMeters,
+    alignmentScore,
+    efficiency: cached.efficiency,
+    // WHY: These fields aren't stored in the database - set to 0 for cached data
+    // They're only used for detailed analysis display, not tier calculation
+    borderAlignedLengthMeters: 0,
+    totalWalkLengthMeters: 0,
+    rawQualityScore: cached.rawQualityScore,
+    tier: cached.tier as Tier,
+  };
+}
+
 export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded }: MapProps) {
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // WHY: Track count of new activities for "Analyzing X new activities" message
+  const [newActivityCount, setNewActivityCount] = useState(0);
   // WHY: Track zoom for tier icon visibility (ADR 010 - icons only at zoom 13+)
   const [currentZoom, setCurrentZoom] = useState(12);
   
@@ -252,7 +291,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
     // WHY: Defer analysis to next tick to not block UI rendering
     setTimeout(async () => {
-      setIsAnalyzing(true);
       console.log('[Map] Starting analysis for', activities.length, 'activities');
       
       // WHY: Database is optional - get userId only if db is available
@@ -269,6 +307,80 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       
       // Pre-process areas with their geometry and metrics
       const allAreaDetails = buildAreaDetailMap(geoData);
+      const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
+
+      // WHY: Load cached analysis results to avoid re-computation (ADR 004)
+      // This provides instant feedback for returning users
+      let cachedResults = new Map<number, ReturnType<typeof loadCachedAnalyses> extends Map<number, infer V> ? V : never>();
+      if (userId !== null) {
+        try {
+          cachedResults = loadCachedAnalyses(userId);
+          console.log(`[Map] Loaded ${cachedResults.size} cached analyses from database`);
+        } catch (e) {
+          console.warn('[Map] Could not load cached analyses:', e);
+        }
+      }
+
+      // WHY: Display cached results instantly while checking for new activities (ADR 004)
+      if (cachedResults.size > 0) {
+        cachedResults.forEach((cached, areaFid) => {
+          newAreaAnalyses.set(areaFid, {
+            areaId: areaFid,
+            tier: cached.metrics.tier as Tier,
+            qualityScore: cached.metrics.rawQualityScore,
+            metrics: convertCachedToFullMetrics(cached.metrics),
+            matchedActivities: cached.activityIds.map(id => ({ id, name: '' }))
+          });
+
+          // Also update area details data for the AreaDetailsPanel
+          const areaDetails = newAreaDetailsData.get(areaFid);
+          if (areaDetails) {
+            areaDetails.tier = cached.metrics.tier as Tier;
+            areaDetails.qualityScore = cached.metrics.rawQualityScore;
+            areaDetails.metrics = convertCachedToFullMetrics(cached.metrics);
+            areaDetails.walks = cached.activityIds.map(id => ({
+              id,
+              name: '',
+              qualityScore: cached.metrics.rawQualityScore,
+              isBest: true
+            }));
+          }
+        });
+
+        // Immediately update UI with cached data
+        setAreaAnalyses(new Map(newAreaAnalyses));
+        setAreaDetailsData(new Map(newAreaDetailsData));
+        onAreasLoaded?.(new Map(newAreaDetailsData));
+
+        // Update progress with cached tier counts
+        const cachedTierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
+        newAreaAnalyses.forEach(a => { if (a.tier) cachedTierCounts[a.tier]++; });
+        onProgressChange({
+          completedCount: newAreaAnalyses.size,
+          totalAreas: geoData.features.length,
+          tierCounts: cachedTierCounts
+        });
+      }
+
+      // WHY: Skip already-analyzed activities (ADR 004 Cache Loading Strategy)
+      const activityIds = activities.map(a => a.id);
+      const needsAnalysis = userId !== null 
+        ? getActivitiesToAnalyze(userId, activityIds)
+        : activityIds;
+
+      console.log(`[Map] ${needsAnalysis.length} of ${activityIds.length} activities need analysis`);
+
+      if (needsAnalysis.length === 0) {
+        // All activities already analyzed - skip analysis entirely
+        console.log('[Map] All activities already analyzed, using cached data');
+        setIsAnalyzing(false);
+        setNewActivityCount(0);
+        return;
+      }
+
+      // WHY: Only show "Analyzing" when there are new activities to process
+      setNewActivityCount(needsAnalysis.length);
+      setIsAnalyzing(true);
 
       // WHY: Stay below Strava rate limits during initial sync (ADR 006).
       const STREAM_REQUEST_LIMIT = 80;
@@ -340,8 +452,11 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         }
       }
 
-      // Pre-process all activities to coordinates
-      console.log(`[Map] All activities: ${activities.length}`, activities.map(a => a.id));
+      // Pre-process only NEW activities that need analysis
+      // WHY: Skip already-analyzed activities to avoid redundant computation (ADR 004)
+      const activitiesToProcess = activities.filter(a => needsAnalysis.includes(a.id));
+      console.log(`[Map] Processing ${activitiesToProcess.length} new activities (skipping ${activities.length - activitiesToProcess.length} already-analyzed)`);
+      
       const processedActivities: Array<{
         original: StravaActivity;
         coordinates: Position[];
@@ -351,7 +466,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         shouldSaveStreams: boolean;
       }> = [];
 
-      for (const act of activities) {
+      for (const act of activitiesToProcess) {
         if (!act.map || !act.map.summary_polyline) continue;
         try {
           const decoded = mapboxPolyline.decode(act.map.summary_polyline);
@@ -495,9 +610,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         });
       }
 
-      const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
-
-      // Create final analysis results using best score per area
+      // WHY: Merge new analysis results with cached data in newAreaAnalyses
+      // newAreaDetailsData was already created and populated with cached data earlier
       areaActivityScores.forEach((scores, areaId) => {
         // WHY: Use best score among all walks for this area
         const bestWalk = scores.reduce((best, current) => 
@@ -533,6 +647,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       setAreaDetailsData(newAreaDetailsData);
       setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
+      setNewActivityCount(0);
 
       // WHY: Notify parent of all area data for use in SubAreaListPanel (ADR 008)
       onAreasLoaded?.(newAreaDetailsData);
@@ -617,9 +732,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
   return (
     <div className="h-screen w-full relative">
-      {isAnalyzing && (
+      {isAnalyzing && newActivityCount > 0 && (
         <div className="absolute top-20 left-4 z-[400] bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded shadow">
-          Analyzing paths...
+          Analyzing {newActivityCount} new {newActivityCount === 1 ? 'activity' : 'activities'}...
         </div>
       )}
       <MapContainer 

@@ -2,7 +2,7 @@
 
 **Related:** ADR 004 (Cache Loading Strategy section), PRD Section 3.8  
 **Feature:** Data Persistence  
-**Status:** Ready for Implementation  
+**Status:** Implemented  
 **Created:** 2026-02-05
 
 ## Summary
@@ -95,11 +95,11 @@ setAreaAnalyses(newAreaAnalyses);
 
 ## Acceptance Criteria
 
-- [ ] Page with existing analyses loads instantly without "Analyzing paths..." message
-- [ ] Cached tier colors and scores display immediately on map
-- [ ] Adding a new Strava activity only analyzes the new activity
-- [ ] Progress bar shows correct counts from cached data on load
-- [ ] Console logs show "Skipping X already-analyzed activities" or similar
+- [x] Page with existing analyses loads instantly without "Analyzing paths..." message
+- [x] Cached tier colors and scores display immediately on map
+- [x] Adding a new Strava activity only analyzes the new activity
+- [x] Progress bar shows correct counts from cached data on load
+- [x] Console logs show "X of Y activities need analysis" or similar
 - [ ] Clear IndexedDB → full analysis runs again (regression test)
 
 ## Files to Modify

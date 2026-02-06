@@ -96,19 +96,21 @@ WHY: Every write is wrapped in a transaction for atomicity, then immediately per
 
 ### Analysis Result Persistence
 
-Analysis results are automatically saved to the database after computation:
+Analysis results are automatically saved to the database after computation and loaded on subsequent page visits.
 
-**Flow:**
-1. **Load Cached Results** - On page load, check database for existing analyses
-2. **Identify New Activities** - Compare current Strava activities with analyzed ones
-3. **Analyze Only New** - Only run analysis for activities not yet in database
-4. **Save Results** - Store analysis results, deviations, and update area_completions
-5. **Merge & Display** - Combine cached and new results for UI
+**Flow (implemented in `Map.tsx`):**
+1. **Load Cached Results** - On page load, `loadCachedAnalyses()` retrieves existing analyses from database
+2. **Immediate UI Update** - Cached tier colors and progress are displayed instantly (no "Analyzing paths..." delay)
+3. **Identify New Activities** - `getActivitiesToAnalyze()` compares current Strava activities with analyzed ones
+4. **Analyze Only New** - Only run analysis for activities not yet in database
+5. **Save Results** - `saveWalkAnalysis()` stores results, deviations, and updates area_completions
+6. **Merge & Display** - New results are merged with cached data for final UI state
 
-**Key Functions:**
+**Key Functions (in `analysis-persistence.ts`):**
 - `saveWalkAnalysis()` - Saves full analysis result including deviations
-- `loadCachedAnalyses()` - Loads cached results for fast page rendering
+- `loadCachedAnalyses()` - Loads cached results with all metrics for fast page rendering
 - `getActivitiesToAnalyze()` - Identifies which activities need analysis
+- `getOrCreateUserId()` - Maps Strava user ID to internal database ID
 
 **WHY:** Analysis computation is expensive (geospatial calculations). Caching results means:
 - Fast page loads (no re-computation)
