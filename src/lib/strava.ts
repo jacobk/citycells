@@ -39,3 +39,88 @@ export async function refreshAccessToken(refreshToken: string) {
     throw err;
   }
 }
+
+// ============================================
+// Token Validation Utilities (ADR 013)
+// ============================================
+
+/**
+ * Token validation result returned by getValidAccessToken.
+ */
+export interface TokenValidationResult {
+  accessToken: string;
+  refreshed: boolean;
+  newTokens?: {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+  };
+}
+
+/**
+ * Cookie values needed for token validation.
+ * WHY: Accept these as params so we can use this from API routes.
+ */
+export interface TokenCookies {
+  accessToken: string | undefined;
+  refreshToken: string | undefined;
+  expiresAt: string | undefined;
+}
+
+// WHY: 5-minute buffer ensures we refresh before token actually expires
+// This prevents race conditions where token expires mid-request
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get a valid access token, refreshing if needed.
+ * WHY: Centralizes token refresh logic for all API routes.
+ * See ADR 013 "Automatic Token Refresh" section for the algorithm.
+ * 
+ * @param cookies - Current token cookies from the request
+ * @returns TokenValidationResult with valid token, or null if auth required
+ */
+export async function getValidAccessToken(
+  cookies: TokenCookies
+): Promise<TokenValidationResult | null> {
+  const { accessToken, refreshToken, expiresAt } = cookies;
+
+  // WHY: No refresh token means user must re-authenticate
+  if (!refreshToken) {
+    console.log('[getValidAccessToken] No refresh token - auth required');
+    return null;
+  }
+
+  const now = Date.now();
+  const expiresAtMs = expiresAt ? parseInt(expiresAt, 10) : 0;
+  const needsRefresh = !accessToken || (expiresAtMs && now > expiresAtMs - TOKEN_REFRESH_BUFFER_MS);
+
+  if (!needsRefresh && accessToken) {
+    // Token is still valid
+    return {
+      accessToken,
+      refreshed: false,
+    };
+  }
+
+  // Token expired or expiring soon - refresh it
+  console.log('[getValidAccessToken] Token expired or expiring, refreshing...');
+  
+  try {
+    const refreshed = await refreshAccessToken(refreshToken);
+    
+    return {
+      accessToken: refreshed.access_token,
+      refreshed: true,
+      newTokens: {
+        access_token: refreshed.access_token,
+        refresh_token: refreshed.refresh_token,
+        expires_in: refreshed.expires_in,
+      },
+    };
+  } catch (err) {
+    // WHY: Refresh failure means token is likely revoked
+    // Client should clear tokens and prompt re-authentication
+    console.error('[getValidAccessToken] Token refresh failed:', err);
+    return null;
+  }
+}

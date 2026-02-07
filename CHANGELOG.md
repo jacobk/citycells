@@ -18,6 +18,13 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Persistent Strava authentication: users stay authenticated across browser sessions. (PRD 001 §2, ADR 013, TICKET-005)
+  - Key files: `src/lib/auth-persistence.ts`, `src/lib/db.ts`, `src/lib/strava.ts`, `src/hooks/useStrava.ts`, `src/app/api/auth/restore-session/route.ts`
+  - Tokens stored in SQLite (IndexedDB) for persistence, HTTP-only cookies for API route auth
+  - Automatic session restoration for returning users via `/api/auth/restore-session`
+  - `getValidAccessToken()` utility for centralized token refresh in API routes
+  - Token CRUD operations in db.ts: `getUserByStravaId()`, `updateUserTokens()`, `clearUserTokens()`
+  - Updated `useStrava` hook with SQLite check on mount and session restoration flow
 - Subarea visual context enhancements: mini-map in details panel and circumference in hover tooltip. (PRD 001 §3.5/3.6, ADR 012, TICKET-004)
   - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/lib/geo-utils.ts`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/AreaTooltip/AreaTooltip.tsx`, `src/components/Map/Map.tsx`
   - Interactive mini-map in AreaDetailsPanel showing subarea boundary with street-level tiles

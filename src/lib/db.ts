@@ -49,6 +49,24 @@ export interface UserProgressRow {
 
 export type Tier = 'platinum' | 'gold' | 'silver' | 'bronze';
 
+// WHY: UserRow includes token fields for persistent authentication (ADR 013)
+export interface UserRow {
+  id: number;
+  strava_id: number;
+  username: string | null;
+  access_token: string | null;
+  refresh_token: string | null;
+  token_expires_at: number | null;
+  created_at: string;
+}
+
+// WHY: TokenData is used to update user tokens after OAuth or refresh
+export interface TokenData {
+  access_token: string;
+  refresh_token: string;
+  token_expires_at: number; // Unix timestamp in seconds
+}
+
 // ============================================
 // Module State
 // ============================================
@@ -714,6 +732,103 @@ export function getUserProgress(userId: number): UserProgressRow | null {
     silver_count: row[7] as number,
     bronze_count: row[8] as number,
   };
+}
+
+// ============================================
+// User Token Operations (ADR 013)
+// ============================================
+
+/**
+ * Get a user by their Strava ID.
+ * WHY: Used to check for existing user with stored tokens on page load.
+ * See ADR 013 for the returning user flow.
+ */
+export function getUserByStravaId(stravaId: number): UserRow | null {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    `SELECT id, strava_id, username, access_token, refresh_token, token_expires_at, created_at
+     FROM users WHERE strava_id = ? LIMIT 1`,
+    [stravaId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return null;
+  }
+
+  const row = result[0].values[0];
+  return {
+    id: row[0] as number,
+    strava_id: row[1] as number,
+    username: row[2] as string | null,
+    access_token: row[3] as string | null,
+    refresh_token: row[4] as string | null,
+    token_expires_at: row[5] as number | null,
+    created_at: row[6] as string,
+  };
+}
+
+/**
+ * Update tokens for a user (create if not exists).
+ * WHY: Called after OAuth callback and token refresh to persist tokens.
+ * See ADR 013 "Token Storage Strategy" section.
+ */
+export async function updateUserTokens(
+  stravaId: number,
+  tokens: TokenData,
+  username?: string
+): Promise<number> {
+  const database = getDatabase();
+  
+  // Check if user exists
+  const existing = database.exec('SELECT id FROM users WHERE strava_id = ?', [stravaId]);
+  
+  if (existing.length > 0 && existing[0].values.length > 0) {
+    // Update existing user
+    const userId = existing[0].values[0][0] as number;
+    await executeWrite(
+      `UPDATE users 
+       SET access_token = ?, refresh_token = ?, token_expires_at = ?, username = COALESCE(?, username)
+       WHERE strava_id = ?`,
+      [tokens.access_token, tokens.refresh_token, tokens.token_expires_at, username || null, stravaId]
+    );
+    console.log(`[DB] Updated tokens for user ${stravaId}`);
+    return userId;
+  } else {
+    // Create new user
+    await executeWrite(
+      `INSERT INTO users (strava_id, username, access_token, refresh_token, token_expires_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [stravaId, username || null, tokens.access_token, tokens.refresh_token, tokens.token_expires_at]
+    );
+    const newUser = database.exec('SELECT id FROM users WHERE strava_id = ?', [stravaId]);
+    const userId = newUser[0].values[0][0] as number;
+    console.log(`[DB] Created user ${stravaId} with tokens`);
+    return userId;
+  }
+}
+
+/**
+ * Clear tokens for a user (logout).
+ * WHY: On logout, clear tokens from SQLite but keep user record for potential re-auth.
+ * See ADR 013 "User logout" in Token Lifecycle.
+ */
+export async function clearUserTokens(stravaId: number): Promise<void> {
+  await executeWrite(
+    `UPDATE users 
+     SET access_token = NULL, refresh_token = NULL, token_expires_at = NULL
+     WHERE strava_id = ?`,
+    [stravaId]
+  );
+  console.log(`[DB] Cleared tokens for user ${stravaId}`);
+}
+
+/**
+ * Check if database is initialized.
+ * WHY: Used by auth-persistence to safely check for stored tokens before DB is ready.
+ */
+export function isDatabaseInitialized(): boolean {
+  return isInitialized && db !== null;
 }
 
 /**

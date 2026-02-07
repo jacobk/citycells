@@ -1,47 +1,51 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getStravaClient, refreshAccessToken } from '@/lib/strava';
+import { getStravaClient, getValidAccessToken } from '@/lib/strava';
 
+/**
+ * GET /api/activities
+ * 
+ * Fetches Strava activities for the authenticated user.
+ * WHY: Uses getValidAccessToken() for automatic token refresh (ADR 013).
+ */
 export async function GET() {
   const cookieStore = await cookies();
-  let accessToken = cookieStore.get('strava_access_token')?.value;
-  const refreshToken = cookieStore.get('strava_refresh_token')?.value;
-  const expiresAt = cookieStore.get('strava_expires_at')?.value;
+  
+  // WHY: Use centralized token validation with automatic refresh
+  const tokenResult = await getValidAccessToken({
+    accessToken: cookieStore.get('strava_access_token')?.value,
+    refreshToken: cookieStore.get('strava_refresh_token')?.value,
+    expiresAt: cookieStore.get('strava_expires_at')?.value,
+  });
 
-  if (!refreshToken) {
+  if (!tokenResult) {
+    // WHY: Token validation failed - user must re-authenticate
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  // Check if token needs refresh
-  if (!accessToken || (expiresAt && Date.now() > parseInt(expiresAt))) {
-    try {
-      const refreshed = await refreshAccessToken(refreshToken);
-      accessToken = refreshed.access_token;
-      const newExpiresAt = Date.now() + (refreshed.expires_in * 1000);
+  // WHY: If tokens were refreshed, update cookies for future requests
+  if (tokenResult.refreshed && tokenResult.newTokens) {
+    const newExpiresAt = Date.now() + (tokenResult.newTokens.expires_in * 1000);
 
-      // Update cookies
-      cookieStore.set('strava_access_token', refreshed.access_token, { 
-        httpOnly: true, 
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-        maxAge: refreshed.expires_in
-      });
-      cookieStore.set('strava_refresh_token', refreshed.refresh_token, { 
-        httpOnly: true, 
-        secure: process.env.NODE_ENV === 'production',
-        path: '/'
-      });
-      cookieStore.set('strava_expires_at', newExpiresAt.toString(), { 
-        httpOnly: true, 
-        secure: process.env.NODE_ENV === 'production',
-        path: '/'
-      });
-    } catch {
-      return NextResponse.json({ error: 'Session expired' }, { status: 401 });
-    }
+    cookieStore.set('strava_access_token', tokenResult.newTokens.access_token, { 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: tokenResult.newTokens.expires_in
+    });
+    cookieStore.set('strava_refresh_token', tokenResult.newTokens.refresh_token, { 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production',
+      path: '/'
+    });
+    cookieStore.set('strava_expires_at', newExpiresAt.toString(), { 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production',
+      path: '/'
+    });
   }
 
-  const strava = getStravaClient(accessToken);
+  const strava = getStravaClient(tokenResult.accessToken);
   
   try {
     // Fetch user activities
