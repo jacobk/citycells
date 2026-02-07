@@ -22,6 +22,11 @@ export function getStravaClient(accessToken?: string) {
   return new strava.client(accessToken);
 }
 
+/**
+ * Generate Strava OAuth authorization URL.
+ * WHY: Per Strava API Brand Guidelines, OAuth must link to https://www.strava.com/oauth/authorize
+ * The strava-v3 library's getRequestAccessURL() generates the correct URL format.
+ */
 export function getOAuthUrl() {
   return strava.oauth.getRequestAccessURL({
     scope: STRAVA_SCOPES,

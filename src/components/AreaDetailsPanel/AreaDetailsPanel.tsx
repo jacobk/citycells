@@ -443,13 +443,18 @@ export default function AreaDetailsPanel({
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
+                        {walk.name && (
+                          <div className="text-sm font-medium text-gray-800 mb-1">{walk.name}</div>
+                        )}
+                        {/* WHY: Use "View on Strava" text format with exact Strava orange (#FC5200) per Strava API Brand Guidelines */}
                         <a
                           href={`https://www.strava.com/activities/${walk.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm font-medium text-orange-600 hover:text-orange-700 hover:underline"
+                          className="text-sm font-medium hover:underline"
+                          style={{ color: '#FC5200' }}
                         >
-                          {walk.name}
+                          View on Strava
                         </a>
                         {walk.date && (
                           <div className="text-xs text-gray-500 mt-0.5">{walk.date}</div>

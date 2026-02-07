@@ -337,9 +337,17 @@ export default function ProfileCard({
             </p>
             <button 
               onClick={onLogin}
-              className="w-full bg-[#fc4c02] text-white py-2.5 px-4 rounded-lg font-bold text-sm hover:bg-[#e34402] transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-2"
+              className="w-full cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center"
+              aria-label="Connect with Strava"
             >
-              Connect with Strava
+              {/* WHY: Use official Strava "Connect with Strava" button per Strava API Brand Guidelines
+                  Button height: 48px @1x, 96px @2x per guidelines */}
+              <img
+                src="/strava/btn_strava_connect_with_orange.svg"
+                alt="Connect with Strava"
+                className="h-12 w-auto"
+                style={{ maxWidth: '100%' }}
+              />
             </button>
           </div>
         )}

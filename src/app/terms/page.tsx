@@ -78,6 +78,20 @@ export default function TermsPage() {
 
         <div className="mt-12 pt-8 border-t">
           <Link href="/" className="text-blue-600 hover:underline">← Back to CityCells</Link>
+          
+          {/* WHY: "Powered by Strava" branding per Strava API Brand Guidelines - separate from app name */}
+          <div className="mt-6 text-xs text-gray-500 text-center">
+            Powered by{' '}
+            <a 
+              href="https://www.strava.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="font-medium hover:underline"
+              style={{ color: '#FC5200' }}
+            >
+              Strava
+            </a>
+          </div>
         </div>
       </div>
     </div>

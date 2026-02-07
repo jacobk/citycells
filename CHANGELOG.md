@@ -18,6 +18,13 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Strava API brand guidelines compliance: official Connect with Strava button, standardized "View on Strava" links, and "Powered by Strava" branding. (TICKET-010)
+  - Key files: `src/components/ProfileCard/ProfileCard.tsx`, `src/components/AreaTooltip/AreaTooltip.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/app/privacy/page.tsx`, `src/app/terms/page.tsx`, `src/lib/strava.ts`, `public/strava/`
+  - Replaced custom "Connect with Strava" button with official Strava button assets (48px height per guidelines)
+  - All activity links now use "View on Strava" text format with exact Strava orange color (#FC5200)
+  - Added "Powered by Strava" branding to privacy and terms page footers
+  - Verified OAuth URL points to correct Strava endpoint (https://www.strava.com/oauth/authorize)
+  - Required for Strava production access compliance
 - Privacy policy and terms pages for Strava production access. (TICKET-010, ADR 016)
   - Key files: `docs/privacy-policy.md`, `src/app/privacy/page.tsx`, `src/app/terms/page.tsx`, `src/components/HamburgerMenu/HamburgerMenu.tsx`
   - Privacy policy page at `/privacy` covering data collection, storage, usage, user rights, and GDPR compliance

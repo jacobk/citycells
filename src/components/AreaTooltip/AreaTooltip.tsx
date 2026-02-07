@@ -169,17 +169,22 @@ export default function AreaTooltip({ data, position, onClose }: AreaTooltipProp
       {data.bestWalkId && (
         <div className="border-t border-gray-100 pt-2 mt-2">
           <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Best Walk</div>
+          {data.bestWalkName && (
+            <div className="text-xs text-gray-700 font-medium mb-1">{data.bestWalkName}</div>
+          )}
+          {/* WHY: Use "View on Strava" text format with exact Strava orange (#FC5200) per Strava API Brand Guidelines */}
           <a
             href={`https://www.strava.com/activities/${data.bestWalkId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-orange-600 hover:text-orange-700 hover:underline flex items-center gap-1"
+            className="text-xs font-medium hover:underline flex items-center gap-1"
+            style={{ color: '#FC5200' }}
             onClick={(e) => e.stopPropagation()}
           >
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
               <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
             </svg>
-            {data.bestWalkName || 'View on Strava'}
+            View on Strava
           </a>
           {data.bestWalkDate && (
             <div className="text-[10px] text-gray-400 mt-0.5">
