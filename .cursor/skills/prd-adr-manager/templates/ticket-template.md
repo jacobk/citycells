@@ -37,6 +37,17 @@ Files the implementation agent MUST read first:
 
 {Add more tasks as needed...}
 
+## Maintainability
+
+Before implementing, review for:
+
+- [ ] **Refactor opportunity?** Related code that should be consolidated
+- [ ] **DRY check** - Similar logic elsewhere to unify
+- [ ] **Modularity** - Can new code be isolated for testing/reuse?
+- [ ] **Debt impact** - Does this create or reduce technical debt?
+
+{Document specific refactoring or cleanup tasks discovered during planning}
+
 ## Acceptance Criteria
 
 - [ ] {Criterion 1 - verifiable outcome}
@@ -70,3 +81,4 @@ Before finalizing ticket:
 - [ ] Acceptance criteria are verifiable (not vague)
 - [ ] Files to modify list includes both existing and new files
 - [ ] No content is duplicated from ADR/PRD (only references)
+- [ ] Maintainability section reviewed (refactoring, DRY, modularity)

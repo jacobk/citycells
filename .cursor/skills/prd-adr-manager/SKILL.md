@@ -19,6 +19,19 @@ This skill guides you through documenting features and decisions. It does NOT ha
 
 ---
 
+## Maintainability Mindset
+
+Every feature and change is an opportunity to improve code quality. When documenting work, always consider:
+
+- **Refactoring opportunities** - Is this a good time to consolidate related logic?
+- **DRY violations** - Does similar logic exist elsewhere that should be unified?
+- **Modularity** - Can this be designed for easy testing and reuse?
+- **Technical debt** - Will this change create or reduce debt?
+
+These considerations should surface in ADRs, tickets, and feature docs—not be an afterthought.
+
+---
+
 ## Workflow Selection
 
 **New Feature** - Use when adding entirely new capability:
@@ -69,6 +82,7 @@ Based on answers:
 2. Create `docs/ADR/{next-number}-{kebab-case-name}.md`
 3. Use template from [templates/adr-template.md](templates/adr-template.md)
 4. Fill in: Context, Decision (detailed), Consequences
+5. **Include maintainability impact**: Does this decision improve modularity, reduce duplication, or enable easier testing?
 
 #### 3b. Update PRD
 
@@ -97,6 +111,7 @@ Based on answers:
 4. Fill in: Context files to load, Implementation checklist, Acceptance criteria
 5. List specific files to modify based on feature doc
 6. **Do NOT duplicate ADR/PRD content** - only reference them
+7. **Identify refactoring scope**: Note any DRY violations to fix, code to modularize, or technical debt to address as part of this work
 
 ### Step 4: Summary
 
@@ -180,6 +195,7 @@ Options (read from `docs/features/README.md`):
 5. List implementation tasks derived from the changes
 6. Include acceptance criteria that verify the change
 7. **Do NOT duplicate ADR/PRD content** - only reference them
+8. **Identify refactoring scope**: Note any DRY violations to fix, code to modularize, or technical debt to address as part of this work
 
 ### Step 5: Summary
 
@@ -193,6 +209,7 @@ Provide summary listing:
 
 ## Important Reminders
 
+- **Maintainability first** - Every ticket and ADR must address refactoring opportunities, DRY violations, and modularity
 - **No implementation analysis** - This skill documents WHAT and WHY, not HOW
 - **Leave placeholders** - Implementation sections are filled by implementation agent
 - **Link ADRs** - Always reference relevant ADRs in feature docs

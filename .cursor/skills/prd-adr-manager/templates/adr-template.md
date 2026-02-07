@@ -56,6 +56,12 @@ example_formula = value_a / value_b
 
 - {Technical impact 1}
 - {Technical impact 2}
+
+### Maintainability
+
+- {Impact on code modularity}
+- {DRY implications - consolidates or duplicates logic?}
+- {Testing implications}
 ```
 
 ---
@@ -68,6 +74,7 @@ Before finalizing ADR:
 - [ ] Context explains WHY this decision is needed
 - [ ] Decision section is detailed enough to implement
 - [ ] Consequences cover positive, negative, and technical impacts
+- [ ] Maintainability consequences documented
 - [ ] Status is set correctly
 - [ ] Date is current
 - [ ] File name follows pattern: `{number}-{kebab-case-title}.md`
