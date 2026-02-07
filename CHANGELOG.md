@@ -17,6 +17,11 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Fixed
+- Vercel deployment build failure: added missing `src/lib/requestOrigin.ts` file to repository. (TICKET-009, ADR 016)
+  - Key files: `src/lib/requestOrigin.ts`
+  - File was created locally but not committed, causing module resolution errors in Vercel builds
+  - Handles Vercel proxy headers (`x-forwarded-host`, `x-forwarded-proto`) for correct OAuth redirects
 ### Added
 - Expandable bottom panel with multi-state slide behavior: four states (closed, collapsed ~40vh, expanded ~85vh, full-screen ~95vh) with touch gestures for mobile and click-to-toggle for desktop. (PRD 001 §3.6, ADR 015, TICKET-008)
   - Key files: `src/hooks/useExpandablePanel.ts`, `src/lib/panel-state.ts`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/AreaMiniMap/AreaMiniMap.tsx`
