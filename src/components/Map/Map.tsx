@@ -23,6 +23,7 @@ import {
   UNWALKED_AREA_STYLE,
   ROUTE_STYLES,
 } from '@/lib/design-tokens';
+import { calculatePerimeterMeters } from '@/lib/geo-utils';
 import { AreaTooltip, useAreaTooltip, type TooltipData } from '@/components/AreaTooltip';
 import { TierIcon } from '@/components/TierIcon';
 import { useDatabase } from '@/hooks/useDatabase';
@@ -108,6 +109,8 @@ export interface AreaClickData {
   metrics: AnalysisMetrics | null;
   totalAreaSqm: number;
   totalPerimeterMeters: number;
+  // WHY: Geometry needed for mini-map display in AreaDetailsPanel (ADR 012)
+  geometry?: GeoJSON.Geometry;
   walks: AreaWalkInfo[];
   deviations: DeviationWithExemption[];
 }
@@ -239,16 +242,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       try {
         const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
-        const perimeterLine = turf.polygonToLine(featurePolygon);
-
-        let perimeterMeters: number;
-        if (perimeterLine.type === 'FeatureCollection') {
-          perimeterMeters = perimeterLine.features.reduce((sum, f) => 
-            sum + turf.length(f, { units: 'meters' }), 0);
-        } else {
-          perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
-        }
-
+        // WHY: Use shared geo-utils to avoid duplicating perimeter logic (see geo-utils.ts)
+        const perimeterMeters = calculatePerimeterMeters(featurePolygon);
         const areaSqm = turf.area(featurePolygon);
 
         areaDetails.set(areaId as number, { 
@@ -277,6 +272,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         metrics: null,
         totalAreaSqm: detail.areaSqm,
         totalPerimeterMeters: detail.perimeterMeters,
+        // WHY: Geometry passed through for mini-map in AreaDetailsPanel (ADR 012)
+        geometry: detail.feature.geometry,
         walks: [],
         deviations: [],
       });
@@ -716,10 +713,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   }, [areaAnalyses]);
 
   // Create tooltip data from a feature
+  // WHY: Include circumferenceMeters for walk time estimate in tooltip (ADR 012)
   const getTooltipData = useCallback((feature: Feature): TooltipData => {
     const areaId = feature.properties?.FID || feature.id;
     const areaName = feature.properties?.delomr || 'Unknown Area';
     const analysis = areaAnalyses.get(areaId as number);
+    const areaData = areaDetailsData.get(areaId as number);
+    const circumferenceMeters = areaData?.totalPerimeterMeters;
 
     if (analysis) {
       // Find best walk (first one is used as best for now)
@@ -728,6 +728,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       return {
         areaId: areaId as number,
         areaName,
+        circumferenceMeters,
         tier: analysis.tier,
         qualityScore: analysis.qualityScore,
         walkCount: analysis.matchedActivities.length,
@@ -739,11 +740,12 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     return {
       areaId: areaId as number,
       areaName,
+      circumferenceMeters,
       tier: null,
       qualityScore: 0,
       walkCount: 0,
     };
-  }, [areaAnalyses]);
+  }, [areaAnalyses, areaDetailsData]);
 
   return (
     <div className="h-screen w-full relative">

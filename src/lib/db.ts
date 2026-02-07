@@ -492,18 +492,9 @@ async function seedAreasFromGeoJSON(): Promise<void> {
         continue;
       }
 
-      // Calculate perimeter
-      const perimeterLine = turf.polygonToLine(feature);
-      let perimeterMeters: number;
-      
-      if (perimeterLine.type === 'FeatureCollection') {
-        // WHY: MultiPolygon returns FeatureCollection, sum all perimeters
-        perimeterMeters = perimeterLine.features.reduce((sum, f) => {
-          return sum + turf.length(f, { units: 'meters' });
-        }, 0);
-      } else {
-        perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
-      }
+      // WHY: Use shared geo-utils to avoid duplicating perimeter logic (see geo-utils.ts)
+      const { calculatePerimeterMeters } = await import('@/lib/geo-utils');
+      const perimeterMeters = calculatePerimeterMeters(feature);
 
       // Calculate area
       const areaSqm = turf.area(feature);

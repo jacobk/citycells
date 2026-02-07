@@ -18,6 +18,12 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Subarea visual context enhancements: mini-map in details panel and circumference in hover tooltip. (PRD 001 §3.5/3.6, ADR 012, TICKET-004)
+  - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/lib/geo-utils.ts`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/AreaTooltip/AreaTooltip.tsx`, `src/components/Map/Map.tsx`
+  - Interactive mini-map in AreaDetailsPanel showing subarea boundary with street-level tiles
+  - Circumference with estimated walk time ("2.3 km (~28 min)") in hover tooltip for all areas
+  - Created `geo-utils.ts` as single source of truth for perimeter calculation (refactored from Map.tsx and db.ts)
+  - AreaMiniMap uses tier-colored fill at 0.2 opacity with 3px stroke, pan/zoom enabled
 - Re-analysis feature: user-initiated refresh of walk scores via ProfileCard or per-walk menu. (PRD 001 §2, ADR 011, TICKET-003)
   - Key files: `src/lib/analysis-persistence.ts`, `src/components/ProfileCard/ProfileCard.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/app/page.tsx`
   - Two modes: "Re-score only" (fast, uses cached streams) and "Full Re-fetch" (re-fetches GPS from Strava)

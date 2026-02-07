@@ -191,6 +191,19 @@
 - [x] Fix loop detection during re-analysis (use original Strava activity coordinates)
 - [x] Add schema migration for start/end coordinates in walks table
 
+## Phase 6.9: Subarea Visual Context (ADR 012)
+
+*Reference: [ADR 012](docs/ADR/012-details-panel-mini-map.md) | [TICKET-004](docs/tickets/004-subarea-visual-context.md)*
+
+- [x] ADR 012: Details Panel Mini-Map
+- [x] Update PRD 001 with visual context user stories (Sections 3.5, 3.6)
+- [x] Create `src/lib/geo-utils.ts` shared perimeter utilities (refactored from Map.tsx and db.ts)
+- [x] Create `AreaMiniMap` component (`src/components/AreaMiniMap/`)
+- [x] Integrate mini-map into AreaDetailsPanel (below header, above score breakdown)
+- [x] Add circumference with walk time to AreaTooltip
+- [x] Pass geometry through data flow (AreaClickData -> AreaDetails)
+- [x] Update feature docs and changelog
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

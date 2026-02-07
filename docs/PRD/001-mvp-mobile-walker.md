@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-04)  
+**Date:** 2026-02-02 (Updated: 2026-02-07)  
 **Status:** In Progress
 
-*Latest update: Map Visual Design System (ADR 010) - heat map colors, muted base map, route styling*
+*Latest update: Persistent Strava Authentication (ADR 013) - tokens stored in SQLite for seamless returning user experience*
 
 ## 1. Overview
 
@@ -14,6 +14,7 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 ### Core Stories
 *   **As a user,** I want to see a map of Malmö with all sub-areas outlined, so I know where to walk.
 *   **As a user,** I want to log in with my Strava account, so the app can access my walks.
+*   **As a user,** I want my Strava connection to persist across browser sessions, so I don't have to re-authenticate every time I open the app.
 *   **As a user,** I want the app to automatically find my walks tagged with `#malmödelområde` and match them to the areas.
 *   **As a user,** I want to clearly see which areas I have completed and their quality tier (Platinum/Gold/Silver/Bronze).
 *   **As a user,** I want to see a progress bar indicating how many total areas I have conquered.
@@ -37,6 +38,13 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want to drill into an area from the list to see all registered walks for that area.
 *   **As a user,** I want breadcrumb navigation to return from area details to the list.
 *   **As a user,** I want a hamburger menu to access different app sections without cluttering the map interface.
+
+### Subarea Visual Context Stories (Added: 2026-02-07)
+*   **As a user,** I want to see a mini-map of the selected subarea in the details panel, so I can study the area and plan my walking route.
+*   **As a user,** I want to see streets and paths in the mini-map, so I can find walkable routes along the boundary.
+*   **As a user,** I want to pan and zoom the mini-map, so I can explore different parts of the boundary in detail.
+*   **As a user,** I want to see the circumference distance when hovering over an area, so I can quickly estimate how long a walk would take.
+*   **As a user,** I want to see an estimated walk time alongside the circumference, so I can plan my walks around my available time.
 
 ### Re-Analysis Stories (Added: 2026-02-06)
 *   **As a user,** I want to re-analyze my cached walks so that scores stay correct when the app's scoring formula changes.
@@ -123,21 +131,24 @@ Display completed areas using a **sequential heat map color gradient** for impro
 *   Visible at zoom level 13+, scale with zoom
 *   Custom SVG icons preferred for cross-platform consistency
 
-### 3.5 Hover Interaction
+### 3.5 Hover Interaction (Updated: 2026-02-07)
 
 **Desktop:** Mouse hover over area.  
 **Mobile:** Long-press (500ms) on area.
 
 Display floating tooltip with:
 *   Area name (e.g., "Västra Hamnen")
+*   **Circumference with estimated walk time** (e.g., "2.3 km (~28 min)")
 *   Tier badge icon (colored circle or medal)
 *   Quality score (e.g., "Score: 0.82")
 *   Number of matched walks (e.g., "3 walks")
 *   Best walk date and Strava link
 
+**Walk Time Estimate:** Calculated at 5 km/h average walking pace (12 minutes per km).
+
 Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 
-### 3.6 Area Details Panel
+### 3.6 Area Details Panel (Updated: 2026-02-07)
 
 **Trigger:** Click/tap on any area (completed or not).
 
@@ -149,6 +160,18 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 *   Area name (large)
 *   Tier badge and quality score (if completed)
 *   "Not yet walked" indicator (if incomplete)
+
+#### Mini-Map (Added: 2026-02-07)
+
+*Reference: ADR 012 (Details Panel Mini-Map)*
+
+*   **Location:** Below header, above score breakdown
+*   **Dimensions:** Full panel width, ~200px height (responsive)
+*   **Purpose:** Enable users to study the area and plan walking routes
+*   **Base Map:** Full street-level tiles (same provider as main map) showing streets, paths, landmarks
+*   **Boundary Overlay:** Subarea polygon with prominent stroke and low-opacity tier-colored fill (streets visible through fill)
+*   **Interactivity:** Pan and zoom enabled for detailed exploration
+*   **Bounds:** Auto-fit to polygon with padding on initial load
 
 #### Score Breakdown (if completed)
 

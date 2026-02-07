@@ -6,6 +6,8 @@ import { getTierColor, getTierDisplayName, type Tier, type AnalysisMetrics, SCOR
 import type { DeviationWithExemption } from '@/lib/exemption-types';
 import type { ReactNode } from 'react';
 import type { ReAnalysisMode } from '@/lib/analysis-persistence';
+// WHY: Dynamic import for Leaflet-based mini-map to avoid SSR issues (ADR 012)
+import AreaMiniMap from '@/components/AreaMiniMap';
 
 // ============================================
 // Types
@@ -30,6 +32,8 @@ export interface AreaDetails {
   // Area geometry info
   totalAreaSqm: number;
   totalPerimeterMeters: number;
+  // WHY: Geometry needed for mini-map display (ADR 012)
+  geometry?: GeoJSON.Geometry;
   
   // Walk info
   walks: WalkInfo[];
@@ -218,6 +222,16 @@ export default function AreaDetailsPanel({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+
+          {/* Mini-Map (ADR 012) - shows subarea boundary for route planning */}
+          {details.geometry && (
+            <section>
+              <AreaMiniMap
+                geometry={details.geometry}
+                tier={details.tier}
+              />
+            </section>
+          )}
           
           {/* Score Breakdown (if completed) */}
           {details.tier && (

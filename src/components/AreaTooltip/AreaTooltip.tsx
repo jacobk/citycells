@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getTierColor, getTierDisplayName, type Tier } from '@/lib/analysis';
+import { formatCircumferenceWithTime } from '@/lib/geo-utils';
 
 // WHY: 500ms long-press threshold per PRD 001 section 3.5
 const LONG_PRESS_DURATION_MS = 500;
@@ -9,6 +10,8 @@ const LONG_PRESS_DURATION_MS = 500;
 export interface TooltipData {
   areaId: number;
   areaName: string;
+  // WHY: Circumference shown for all areas (completed and not) per ADR 012
+  circumferenceMeters?: number;
   tier: Tier;
   qualityScore: number;
   walkCount: number;
@@ -113,9 +116,16 @@ export default function AreaTooltip({ data, position, onClose }: AreaTooltipProp
       }}
     >
       {/* Header: Area Name */}
-      <div className="font-bold text-gray-900 text-sm mb-2 pr-6">
+      <div className="font-bold text-gray-900 text-sm mb-1 pr-6">
         {data.areaName}
       </div>
+
+      {/* WHY: Circumference with walk time shown for all areas per ADR 012 / PRD 3.5 */}
+      {data.circumferenceMeters != null && (
+        <div className="text-xs text-gray-500 mb-2">
+          {formatCircumferenceWithTime(data.circumferenceMeters)}
+        </div>
+      )}
 
       {/* Close button (mobile) */}
       <button

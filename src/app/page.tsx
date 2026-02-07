@@ -108,6 +108,8 @@ export default function Home() {
       metrics: data.metrics ?? EMPTY_METRICS,
       totalAreaSqm: data.totalAreaSqm,
       totalPerimeterMeters: data.totalPerimeterMeters,
+      // WHY: Geometry passed through for mini-map in AreaDetailsPanel (ADR 012)
+      geometry: data.geometry,
       walks: data.walks,
       deviations: data.deviations,
     };

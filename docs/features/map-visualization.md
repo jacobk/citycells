@@ -20,7 +20,9 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 | `src/components/Map/Map.tsx` | Main map component with analysis logic |
 | `src/components/Map/index.tsx` | Dynamic import wrapper (SSR compatibility) |
 | `src/components/TierIcon/TierIcon.tsx` | Medal icons at polygon centroids (ADR 010) |
+| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Interactive mini-map for details panel (ADR 012) |
 | `src/lib/design-tokens.ts` | Centralized map visual design tokens (ADR 010) |
+| `src/lib/geo-utils.ts` | Shared perimeter calculation and walk time formatting |
 | `src/app/globals.css` | Grayscale filter for base map tiles |
 | `public/data/malmo_delomraden.geojson` | GeoJSON data for 136 sub-areas |
 | `src/app/page.tsx` | Main page integrating map with UI overlay |
@@ -185,6 +187,7 @@ This design reduces visual clutter while maintaining quick access to profile inf
 - [ADR 009: UI Navigation Layout](../ADR/009-ui-navigation-layout.md) - Current navigation layout (hamburger left, collapsible profile right)
 - [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Original panel navigation (superseded by ADR 009)
 - [ADR 010: Map Visual Design System](../ADR/010-map-visual-design-system.md) - Heat map colors, grayscale base, route styling, tier icons
+- [ADR 012: Details Panel Mini-Map](../ADR/012-details-panel-mini-map.md) - Mini-map in details panel, circumference in tooltip
 
 ## Current Limitations
 
@@ -200,6 +203,12 @@ This design reduces visual clutter while maintaining quick access to profile inf
 | AreaDetailsPanel | `src/components/AreaDetailsPanel/` | Bottom sheet with full score breakdown |
 | ExemptionModal | `src/components/ExemptionModal/` | Modal for marking deviations as exempt |
 | ProgressDashboard | `src/components/ProgressDashboard/` | Drawer with tier breakdown and stats |
+
+## New Components (Subarea Visual Context)
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| AreaMiniMap | `src/components/AreaMiniMap/` | Interactive mini-map in details panel for route planning (ADR 012) |
 
 ## New Components (Sub-Area List Feature)
 
@@ -220,3 +229,32 @@ See [PROJECT_PLAN.md](../../PROJECT_PLAN.md) Phase 4-5 for:
 - Hover tooltips
 - Area details panel
 - Progress dashboard with tier breakdown
+
+### Subarea Visual Context (Implemented - ADR 012)
+
+Two enhancements for spatial awareness and route planning:
+
+1. **Mini-Map in Details Panel**
+   - Interactive React-Leaflet map inside AreaDetailsPanel (below header, above score breakdown)
+   - Full street-level base map (same tiles as main map)
+   - Boundary polygon with prominent stroke (3px), low-opacity tier fill (0.2)
+   - Pan and zoom enabled for route exploration; zoom controls hidden (gesture-only)
+   - Auto-fits to polygon bounds on initial load with padding
+   - 200px height, full panel width
+
+2. **Circumference in Hover Tooltip**
+   - Shows distance with estimated walk time (e.g., "2.3 km (~28 min)")
+   - Walk time calculated at 5 km/h (12 min/km) via shared `formatCircumferenceWithTime()`
+   - Displayed for all areas (completed and not started)
+
+**Key Implementation Files:**
+
+| File | Purpose |
+|------|---------|
+| `src/lib/geo-utils.ts` | Shared perimeter calculation and walk time formatting (single source of truth) |
+| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Interactive mini-map component |
+| `src/components/AreaMiniMap/index.tsx` | Dynamic import wrapper (SSR) |
+
+**Refactoring Note:** Perimeter calculation was previously duplicated in `Map.tsx` and `db.ts`. Both now use `calculatePerimeterMeters()` from `geo-utils.ts` to ensure a single source of truth.
+
+**Reference:** [ADR 012](../ADR/012-details-panel-mini-map.md) | [Ticket 004](../tickets/004-subarea-visual-context.md)
