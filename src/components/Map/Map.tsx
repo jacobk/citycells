@@ -21,8 +21,13 @@ import {
   getMapTierBorderColor,
   getMapTierOpacity,
   UNWALKED_AREA_STYLE,
-  ROUTE_STYLES,
 } from '@/lib/design-tokens';
+import {
+  prepareDeviationColoredRoute,
+  prepareUnmatchedRoute,
+  getRoutePathOptions,
+  type RouteSegment,
+} from '@/lib/route-visualization';
 import { calculatePerimeterMeters } from '@/lib/geo-utils';
 import { AreaTooltip, useAreaTooltip, type TooltipData } from '@/components/AreaTooltip';
 import { TierIcon } from '@/components/TierIcon';
@@ -32,6 +37,7 @@ import {
   getOrCreateUserId,
   loadCachedAnalyses,
   getActivitiesToAnalyze,
+  loadActivityAreaAssignments,
   type CachedMetrics
 } from '@/lib/analysis-persistence';
 import { 
@@ -75,6 +81,8 @@ interface MapProps {
   onAreasLoaded?: (areas: Map<number, AreaClickData>) => void;
   // WHY: Callback to register refresh function for re-analysis (ADR 011)
   onRegisterRefresh?: (refreshFn: () => void) => void;
+  // WHY: Route visibility toggle - hidden by default per ADR 010 Section 3
+  showRoutes?: boolean;
 }
 
 // WHY: Store full analysis results per area for display in popups/tooltips
@@ -188,7 +196,14 @@ function convertCachedToFullMetrics(cached: CachedMetrics): AnalysisMetrics {
   };
 }
 
-export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh }: MapProps) {
+// WHY: Store route visualization data per activity for deviation-colored rendering (ADR 010)
+interface ActivityRouteData {
+  activityId: number;
+  segments: RouteSegment[];
+  assignedAreaId: number | null;
+}
+
+export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, showRoutes = false }: MapProps) {
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
@@ -199,6 +214,14 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   const [currentZoom, setCurrentZoom] = useState(12);
   // WHY: Counter to force re-running the analysis effect after re-analysis (ADR 011)
   const [refreshCounter, setRefreshCounter] = useState(0);
+  
+  // WHY: Store route visualization data for deviation-colored rendering (ADR 010)
+  // This stores processed route segments with colors based on distance from assigned area boundary
+  const [routeVisualizationData, setRouteVisualizationData] = useState<Map<number, ActivityRouteData>>(new Map());
+  
+  // WHY: Track which activity is assigned to which area for route deviation coloring
+  // This is populated during analysis and used by route visualization effect
+  const [activityAreaAssignments, setActivityAreaAssignments] = useState<Map<number, number>>(new Map());
   
   // WHY: Database hook for persistence - loads cached results and saves new analyses
   const { db, loading: dbLoading } = useDatabase();
@@ -302,8 +325,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
     // WHY: Defer analysis to next tick to not block UI rendering
     setTimeout(async () => {
-      console.log('[Map] Starting analysis for', activities.length, 'activities');
-      
       // WHY: Database is optional - get userId only if db is available
       let userId: number | null = null;
       if (db && !dbLoading && athleteId) {
@@ -326,7 +347,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       if (userId !== null) {
         try {
           cachedResults = loadCachedAnalyses(userId);
-          console.log(`[Map] Loaded ${cachedResults.size} cached analyses from database`);
         } catch (e) {
           console.warn('[Map] Could not load cached analyses:', e);
         }
@@ -379,11 +399,17 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         ? getActivitiesToAnalyze(userId, activityIds)
         : activityIds;
 
-      console.log(`[Map] ${needsAnalysis.length} of ${activityIds.length} activities need analysis`);
-
       if (needsAnalysis.length === 0) {
         // All activities already analyzed - skip analysis entirely
-        console.log('[Map] All activities already analyzed, using cached data');
+        // WHY: Load ALL activity-to-area assignments from database for route visualization
+        // loadActivityAreaAssignments returns all activities with their primary area, not just
+        // the best activity per area like loadCachedAnalyses does. This ensures all routes
+        // can be colored based on their deviation from assigned area boundaries.
+        if (userId !== null) {
+          const allAssignments = loadActivityAreaAssignments(userId);
+          setActivityAreaAssignments(allAssignments);
+        }
+        
         setIsAnalyzing(false);
         setNewActivityCount(0);
         return;
@@ -655,6 +681,23 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         }
       });
 
+      // WHY: Store activity-to-area assignments for route deviation coloring (ADR 010)
+      // This enables the route visualization effect to calculate deviation colors
+      const newAssignments = new Map<number, number>();
+      activityBestArea.forEach((value, activityId) => {
+        newAssignments.set(activityId, value.areaId);
+      });
+      // WHY: After analysis, load ALL assignments from database to ensure complete coverage
+      // The newAssignments from activityBestArea only contains newly analyzed activities.
+      // loadActivityAreaAssignments returns all activities with their primary area assignment.
+      if (userId !== null) {
+        const allAssignments = loadActivityAreaAssignments(userId);
+        setActivityAreaAssignments(allAssignments);
+      } else {
+        // Fallback for no userId: use only the newly analyzed assignments
+        setActivityAreaAssignments(newAssignments);
+      }
+
       setAreaDetailsData(newAreaDetailsData);
       setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
@@ -680,6 +723,72 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
   // WHY: refreshCounter triggers re-load of cached analyses after re-analysis (ADR 011)
   }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
+
+  // WHY: Prepare route visualization data when routes are shown (ADR 010)
+  // This effect calculates deviation-colored segments for each activity based on
+  // its distance from the assigned area boundary. Runs on-demand when showRoutes is true.
+  useEffect(() => {
+    if (!showRoutes || !geoData || activities.length === 0) {
+      // Clear route data when routes are hidden
+      if (!showRoutes && routeVisualizationData.size > 0) {
+        setRouteVisualizationData(new Map());
+      }
+      return;
+    }
+
+    // Build area details map for boundary access
+    const areaDetails = buildAreaDetailMap(geoData);
+    const newRouteData = new Map<number, ActivityRouteData>();
+    
+    activities.forEach(activity => {
+      if (!activity.map || !activity.map.summary_polyline) return;
+
+      try {
+        // Decode polyline - prefer stream data if available in cache
+        // WHY: Stream data provides full path without privacy zone truncation (ADR 006)
+        let coordinates: Position[];
+        const hasDb = Boolean(db && !dbLoading);
+        const cachedStreams = hasDb ? getWalkStreams(activity.id) : null;
+        
+        if (cachedStreams && cachedStreams.latlng.length > 0) {
+          // Use stream data (convert from [lat, lng] to [lng, lat] for GeoJSON)
+          coordinates = cachedStreams.latlng.map(([lat, lng]) => [lng, lat]);
+        } else {
+          // Fallback to summary_polyline
+          const decoded = mapboxPolyline.decode(activity.map.summary_polyline);
+          coordinates = decoded.map(pt => [pt[1], pt[0]]);
+        }
+
+        // Check if activity is assigned to an area
+        const assignedAreaId = activityAreaAssignments.get(activity.id) ?? null;
+        
+        let segments: RouteSegment[];
+        if (assignedAreaId !== null) {
+          // Get the area boundary for deviation calculation
+          const areaDetail = areaDetails.get(assignedAreaId);
+          if (areaDetail) {
+            segments = prepareDeviationColoredRoute(coordinates, areaDetail.feature);
+          } else {
+            // Area not found - render as unmatched
+            segments = prepareUnmatchedRoute(coordinates);
+          }
+        } else {
+          // No assigned area - render in neutral color
+          segments = prepareUnmatchedRoute(coordinates);
+        }
+
+        newRouteData.set(activity.id, {
+          activityId: activity.id,
+          segments,
+          assignedAreaId,
+        });
+      } catch (e) {
+        console.warn('[Map] Error preparing route visualization for activity', activity.id, e);
+      }
+    });
+
+    setRouteVisualizationData(newRouteData);
+  }, [showRoutes, geoData, activities, activityAreaAssignments, buildAreaDetailMap, db, dbLoading, routeVisualizationData.size]);
 
   // WHY: Style function returns tier-based colors per ADR 010 (purple-pink gradient)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -767,33 +876,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         <LocationMarker />
         <ZoomTracker onZoomChange={setCurrentZoom} />
         
-        {/* WHY: Triple-layer route styling per ADR 010 - cyan glow effect
-            Layers render bottom-to-top: glow → outline → core */}
-        {activities.flatMap(act => {
-          if (!act.map || !act.map.summary_polyline) return [];
-          const positions = mapboxPolyline.decode(act.map.summary_polyline);
-          return [
-            // Glow layer (bottom)
-            <Polyline 
-              key={`${act.id}-glow`}
-              positions={positions} 
-              pathOptions={ROUTE_STYLES.glow} 
-            />,
-            // Outline layer (middle)
-            <Polyline 
-              key={`${act.id}-outline`}
-              positions={positions} 
-              pathOptions={ROUTE_STYLES.outline} 
-            />,
-            // Core layer (top)
-            <Polyline 
-              key={`${act.id}-core`}
-              positions={positions} 
-              pathOptions={ROUTE_STYLES.core} 
-            />,
-          ];
-        })}
-
         {geoData && (
           <GeoJSON 
             key={`geojson-${areaAnalyses.size}`}
@@ -836,6 +918,23 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               });
             }}
           />
+        )}
+
+        {/* WHY: Route visualization with deviation-based coloring per ADR 010
+            - Hidden by default, shown via toggle control
+            - Green segments = within 25m of boundary (on-track)
+            - Red segments = beyond 25m of boundary (deviation)
+            - Renders AFTER GeoJSON layer so routes are visible on top of area fills */}
+        {showRoutes && routeVisualizationData.size > 0 && (
+          Array.from(routeVisualizationData.values()).flatMap(routeData =>
+            routeData.segments.map((segment, segmentIndex) => (
+              <Polyline
+                key={`route-${routeData.activityId}-${segmentIndex}`}
+                positions={segment.positions}
+                pathOptions={getRoutePathOptions(segment.color)}
+              />
+            ))
+          )
         )}
 
         {/* WHY: Tier medal icons at polygon centroids per ADR 010

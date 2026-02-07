@@ -11,6 +11,9 @@ interface HamburgerMenuProps {
   onOpenChange: (open: boolean) => void;
   onOpenAreas: () => void;
   onOpenStats: () => void;
+  // WHY: Route toggle controlled from page level per ADR 010 Section 3
+  showRoutes: boolean;
+  onShowRoutesChange: (show: boolean) => void;
 }
 
 // ============================================
@@ -32,7 +35,14 @@ interface HamburgerMenuProps {
  * - Controlled component (state managed by parent for mutual exclusivity)
  * - Click outside to close
  */
-export default function HamburgerMenu({ isOpen, onOpenChange, onOpenAreas, onOpenStats }: HamburgerMenuProps) {
+export default function HamburgerMenu({ 
+  isOpen, 
+  onOpenChange, 
+  onOpenAreas, 
+  onOpenStats,
+  showRoutes,
+  onShowRoutesChange,
+}: HamburgerMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
@@ -134,6 +144,35 @@ export default function HamburgerMenu({ isOpen, onOpenChange, onOpenAreas, onOpe
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             <span>Stats</span>
+          </button>
+          
+          {/* WHY: Divider separates navigation items from settings toggles */}
+          <div className="border-t border-gray-100 my-1" />
+          
+          {/* WHY: Route toggle per ADR 010 - routes hidden by default, toggle to show */}
+          <button
+            onClick={() => onShowRoutesChange(!showRoutes)}
+            className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 cursor-pointer"
+            role="switch"
+            aria-checked={showRoutes}
+          >
+            {/* Route/Path icon */}
+            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            <span className="flex-1">Show Routes</span>
+            {/* WHY: Visual toggle indicator */}
+            <div 
+              className={`w-8 h-5 rounded-full transition-colors ${
+                showRoutes ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <div 
+                className={`w-4 h-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${
+                  showRoutes ? 'translate-x-3.5' : 'translate-x-0.5'
+                }`}
+              />
+            </div>
           </button>
         </div>
       </div>

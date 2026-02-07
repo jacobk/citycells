@@ -18,6 +18,15 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Walk route visualization with deviation-based coloring: routes hidden by default, toggle to show with green/red coloring based on distance from area boundary. (PRD 001 §3.4, ADR 010 §3, TICKET-007)
+  - Key files: `src/lib/route-visualization.ts`, `src/lib/design-tokens.ts`, `src/components/Map/Map.tsx`, `src/components/HamburgerMenu/HamburgerMenu.tsx`, `src/app/page.tsx`
+  - Toggle control in hamburger menu dropdown ("Show Routes")
+  - Green segments within 25m of assigned area boundary (on-track)
+  - Red segments beyond 25m of boundary (deviation)
+  - Gray for unmatched activities
+  - Prefers stream data for full paths (no privacy zone truncation)
+  - Routes render above area fills but below tier icons (correct z-order)
+  - Deprecated old triple-layer cyan glow route styling
 - Offline support: app works without internet after first load. (PRD 001 §3.11, ADR 014, TICKET-006)
   - Key files: `public/sw.js`, `src/components/ServiceWorkerRegistration/`, `src/hooks/useOnlineStatus.ts`, `src/components/OfflineIndicator/`, `src/app/layout.tsx`
   - Service Worker precaches GeoJSON and WASM; caches map tiles on first use (stale-while-revalidate, 500 tile limit)

@@ -62,12 +62,39 @@ export const UNWALKED_AREA_STYLE = {
 } as const;
 
 // =============================================================================
+// ROUTE DEVIATION COLORS (ADR 010 Section 3)
+// WHY: Binary threshold coloring provides clear visual feedback on walk quality.
+// Green = on-track (within 25m buffer), Red = deviation (outside 25m buffer).
+// 25m threshold matches perimeter coverage buffer in ADR 002/003.
+// =============================================================================
+
+export const ROUTE_DEVIATION_COLORS = {
+  onTrack: '#22c55e',    // Green - within 25m buffer
+  deviation: '#ef4444',   // Red - outside 25m buffer
+  unmatched: '#94a3b8',   // Slate - activity not assigned to any area
+} as const;
+
+// WHY: 25m threshold matches the buffer used for perimeter coverage calculation
+// See ADR 002 and ADR 003 for rationale
+export const ROUTE_DEVIATION_THRESHOLD_METERS = 25;
+
+// WHY: Thinner, cleaner lines (3px) reduce visual clutter compared to old glow effect
+export const ROUTE_SEGMENT_STYLE = {
+  weight: 3,
+  opacity: 0.85,
+  lineCap: 'round' as const,
+  lineJoin: 'round' as const,
+} as const;
+
+// =============================================================================
 // ROUTE TRIPLE-LAYER STYLING (Cyan Glow Effect)
+// @deprecated Use ROUTE_DEVIATION_COLORS and ROUTE_SEGMENT_STYLE instead (ADR 010)
 // WHY: Electric cyan is complementary to purple-pink (maximum contrast).
 // Triple-layer (glow + outline + core) creates premium, modern look.
 // Layers render bottom-to-top: glow → outline → core
 // =============================================================================
 
+/** @deprecated Use ROUTE_DEVIATION_COLORS and ROUTE_SEGMENT_STYLE instead (ADR 010) */
 export const ROUTE_STYLES = {
   glow: {
     color: '#22d3ee',  // Cyan Glow
@@ -143,4 +170,14 @@ export function getMapTierOpacity(tier: Tier): number | undefined {
 export function getTierIconConfig(tier: Tier): { emoji: string; size: number } | undefined {
   if (!tier) return undefined;
   return TIER_ICONS[tier];
+}
+
+/**
+ * Get route segment color based on distance from boundary.
+ * WHY: Binary threshold provides clear visual feedback (green = good, red = deviation).
+ */
+export function getRouteSegmentColor(distanceMeters: number): string {
+  return distanceMeters <= ROUTE_DEVIATION_THRESHOLD_METERS
+    ? ROUTE_DEVIATION_COLORS.onTrack
+    : ROUTE_DEVIATION_COLORS.deviation;
 }

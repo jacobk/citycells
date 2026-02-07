@@ -634,7 +634,7 @@ export async function saveWalkStreams(walkId: number, streams: CachedStreams): P
 export function getWalkStreams(stravaActivityId: number): CachedStreams | null {
   const database = getDatabase();
   const result = database.exec(
-    'SELECT streams_json FROM walks WHERE strava_activity_id = ? LIMIT 1',
+    'SELECT streams_json, stream_point_count FROM walks WHERE strava_activity_id = ? LIMIT 1',
     [stravaActivityId]
   );
 
@@ -643,13 +643,19 @@ export function getWalkStreams(stravaActivityId: number): CachedStreams | null {
   }
 
   const streamsJson = result[0].values[0][0] as string | null;
+  
   if (!streamsJson) {
     return null;
   }
 
   try {
-    return JSON.parse(streamsJson) as CachedStreams;
-  } catch {
+    const parsed = JSON.parse(streamsJson) as CachedStreams;
+    if (parsed.latlng.length === 0) {
+      return null;
+    }
+    return parsed;
+  } catch (e) {
+    console.error(`[getWalkStreams] Failed to parse streams_json for activity ${stravaActivityId}:`, e);
     return null;
   }
 }

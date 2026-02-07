@@ -119,16 +119,30 @@ Display completed areas using a **sequential heat map color gradient** for impro
 *   High saturation colors that pop against grayscale base map
 *   Meets WCAG 2.1 3:1+ contrast ratio between adjacent tiers
 
-#### Walking Route Visualization
+#### Walking Route Visualization (Updated: 2026-02-07)
 
-| Element            | Color        | Hex       | Width | Opacity |
-|--------------------|--------------|-----------|-------|---------|
-| Walk Path (core)   | Electric Cyan| `#06b6d4` | 3px   | 0.90    |
-| Walk Path (outline)| Deep Teal    | `#0f766e` | 5px   | 0.60    |
-| Walk Path (glow)   | Cyan Glow    | `#22d3ee` | 7px   | 0.30    |
+**Default State:** Routes are **hidden by default** to reduce visual clutter. A toggle control allows users to show/hide walking routes.
 
-*   Triple-layer technique (glow + outline + core) creates premium, modern look
-*   Cyan provides striking complementary contrast against purple-pink fills
+**Toggle Control:**
+*   Location: Map controls area (e.g., alongside zoom controls or in hamburger menu)
+*   Label: "Show Walk Routes" or route icon
+*   Default: OFF
+
+**When Visible — Deviation-Based Coloring:**
+
+| Condition | Color | Hex | Description |
+|-----------|-------|-----|-------------|
+| Within 25m buffer | Green | `#22c55e` | On-track, following boundary |
+| Outside 25m buffer | Red | `#ef4444` | Deviation from boundary |
+
+| Element | Width | Opacity |
+|---------|-------|---------|
+| Route Segment | 3px | 0.85 |
+
+*   Binary threshold coloring: green = on boundary, red = deviation
+*   Thinner lines reduce visual clutter (3px vs. previous 7px glow layer)
+*   Routes render **above area fills** so they are visible on completed areas
+*   Uses stream data (ADR 006) for full path visibility including privacy zone segments
 
 #### Tier Medal Icons
 

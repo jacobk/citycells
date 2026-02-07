@@ -305,6 +305,41 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
 }
 
 /**
+ * Load all activity-to-area assignments for a user.
+ * WHY: Returns the primary area assignment for each activity, used for route
+ * deviation coloring. Unlike loadCachedAnalyses which only returns the best
+ * activity per area, this returns ALL activities with their assigned areas.
+ * 
+ * @returns Map of Strava activity ID → area FID (GeoJSON identifier)
+ */
+export function loadActivityAreaAssignments(userId: number): Map<number, number> {
+  const db = getDatabase();
+  
+  // WHY: Get the primary area assignment for each activity
+  // Each activity can match multiple areas, but only one is marked as is_primary_match
+  const result = db.exec(
+    `SELECT w.strava_activity_id, a.fid
+     FROM walks w
+     JOIN walk_analyses wa ON w.id = wa.walk_id
+     JOIN areas a ON wa.area_id = a.id
+     WHERE w.user_id = ? AND wa.is_primary_match = 1`,
+    [userId]
+  );
+  
+  const assignments = new Map<number, number>();
+  
+  if (result.length > 0) {
+    for (const row of result[0].values) {
+      const activityId = row[0] as number;
+      const areaFid = row[1] as number;
+      assignments.set(activityId, areaFid);
+    }
+  }
+  
+  return assignments;
+}
+
+/**
  * Check which activities need analysis (not yet analyzed or updated).
  * WHY: Only analyze new or changed activities to save computation.
  */

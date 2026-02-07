@@ -1,7 +1,7 @@
 # ADR 010: Map Visual Design System
 
-**Date:** 2026-02-04
-**Status:** Proposed
+**Date:** 2026-02-04 (Updated: 2026-02-07)
+**Status:** Accepted
 **Supersedes:** N/A (refines visual aspects of ADR 003)
 
 ## Context
@@ -78,49 +78,81 @@ We will implement a **Map Visual Design System** that applies accessibility-firs
 - **Excellent contrast**: Stands out dramatically against grayscale base map
 - **Accessibility**: Purple-pink spectrum is distinguishable for most color vision types
 
-### 3. Walking Route Visualization
+### 3. Walking Route Visualization (Updated: 2026-02-07)
 
-**Decision:** Walked routes must have significantly higher contrast than area fills using a complementary color.
+**Decision:** Walk routes are hidden by default and shown on-demand via a toggle control. When visible, route segments are colored based on deviation from the sub-area boundary.
 
-**Route Styling:**
+#### 3.1 Route Visibility Toggle
 
-| Element | Color | Hex | Width | Opacity |
-|---------|-------|-----|-------|---------|
-| Walk Path | Electric Cyan | `#06b6d4` | 3px | 0.90 |
-| Walk Path Outline | Deep Teal | `#0f766e` | 5px | 0.6 |
-| Walk Path Glow | Cyan Glow | `#22d3ee` | 7px | 0.3 |
+**Decision:** Walking routes are hidden by default to reduce visual clutter. A toggle control allows users to show/hide routes.
+
+**Rationale:**
+- Default map view is cleaner, emphasizing completed areas over individual paths
+- Users can enable routes when they want to study their walking patterns
+- Reduces visual noise when many areas have been completed
+
+**Toggle Control:**
+- Location: Map controls area (alongside zoom controls or in hamburger menu)
+- Default state: OFF (routes hidden)
+- Label: "Show Walk Routes" or icon-only (path/route icon)
+
+#### 3.2 Route Deviation Coloring
+
+**Decision:** When routes are visible, each segment is colored based on its distance from the sub-area boundary using a binary threshold:
+
+| Condition | Color | Hex | Description |
+|-----------|-------|-----|-------------|
+| Within 25m buffer | Green | `#22c55e` | On-track, following boundary |
+| Outside 25m buffer | Red | `#ef4444` | Deviation from boundary |
 
 **Implementation:**
 ```typescript
-// Glow layer (bottom)
-const routeGlow = {
-  color: '#22d3ee',
-  weight: 7,
-  opacity: 0.3,
-  lineCap: 'round',
-  lineJoin: 'round'
+// For each segment of the walk path:
+// 1. Calculate distance from segment midpoint to nearest boundary point
+// 2. Apply color based on threshold
+
+const getSegmentColor = (distanceFromBoundary: number): string => {
+  return distanceFromBoundary <= 25 ? '#22c55e' : '#ef4444';
 };
 
-// Outline layer (middle)
-const routeOutline = {
-  color: '#0f766e',
-  weight: 5,
-  opacity: 0.6,
-  lineCap: 'round',
-  lineJoin: 'round'
-};
-
-// Core layer (top)
-const routeCore = {
-  color: '#06b6d4',
+// Segment styling
+const routeSegment = {
   weight: 3,
-  opacity: 0.90,
+  opacity: 0.85,
   lineCap: 'round',
   lineJoin: 'round'
 };
 ```
 
-**Rationale:** Electric cyan provides striking contrast against the purple-pink fills (complementary on the color wheel). The triple-layer technique (glow + outline + core) creates a premium, modern look that makes routes visually "pop" while maintaining readability.
+**Rationale:**
+- Binary threshold provides clear visual feedback (good vs. deviation)
+- 25m aligns with existing buffer used for perimeter coverage calculation (ADR 002, ADR 003)
+- Green/red intuitive color coding (on-track vs. off-track)
+- Simpler than gradient approach, easier for users to interpret at a glance
+
+#### 3.3 Route Data Source
+
+**Decision:** Routes must use stream data (per ADR 006) to display full paths including segments hidden by Strava privacy zones.
+
+**Rationale:**
+- `summary_polyline` is truncated at start/end due to privacy zones
+- Stream data provides complete GPS coordinates
+- Users see their actual walking path, not a truncated version
+
+**Fallback:** If stream data unavailable (rate limits, older activities), use `summary_polyline` with visual indicator that path may be incomplete.
+
+#### 3.4 Simplified Route Styling
+
+**Decision:** Remove triple-layer glow effect in favor of simpler deviation-colored segments.
+
+| Element | Color | Width | Opacity |
+|---------|-------|-------|---------|
+| Route Segment | Green (`#22c55e`) or Red (`#ef4444`) | 3px | 0.85 |
+
+**Rationale:**
+- Deviation coloring is the primary visual signal; glow effect would obscure color changes
+- Thinner, cleaner lines reduce visual clutter (original feedback: "lines too chunky")
+- Simpler rendering improves performance with many routes
 
 ### 4. Tier Medal Icons
 
@@ -168,16 +200,18 @@ const labelPoint = turf.booleanPointInPolygon(centroid, areaPolygon)
 - Medal icons provide redundant tier encoding (shape + position, not just color)
 - Higher opacities (0.50-0.65) ensure sufficient contrast even for low vision users
 
-### 6. Visual Hierarchy Summary
+### 6. Visual Hierarchy Summary (Updated: 2026-02-07)
 
 **Z-order (bottom to top):**
 1. Grayscale base map tiles
 2. Unwalked area outlines (gray, subtle)
-3. Walked area fills (teal gradient)
-4. Walked area borders (matching teal, slightly darker)
-5. Walking route polylines (orange-red, high contrast)
+3. Walked area fills (purple-pink gradient)
+4. Walked area borders (matching purple-pink, slightly darker)
+5. **Walking route polylines (green/red deviation coloring, when visible)** — Routes render ABOVE area fills so they are visible against completed areas
 6. Tier medal icons (centered in areas)
 7. UI overlays (tooltips, panels, buttons)
+
+**Route Visibility Note:** Routes are hidden by default. When toggled on, they appear at layer 5, ensuring they are visible on top of completed area fills.
 
 ## Consequences
 
@@ -189,13 +223,15 @@ const labelPoint = turf.booleanPointInPolygon(centroid, areaPolygon)
 - **Intuitive progress**: Gradient shows progress intensity at a glance (deeper = better)
 - **Accessible**: Meets WCAG 2.1 contrast requirements with higher opacities
 - **Gamification enhanced**: Medal icons + bold colors reward achievement visually
-- **Premium feel**: Triple-layer route glow creates polished, app-store-ready appearance
+- **Cleaner default view**: Routes hidden by default reduces visual clutter (2026-02-07 update)
+- **Deviation feedback**: Green/red coloring gives immediate feedback on walk quality (2026-02-07 update)
+- **Full path visibility**: Using stream data shows complete walks without privacy zone truncation (2026-02-07 update)
 
 ### Negative
 
 - **Bold aesthetic**: May not appeal to users preferring muted/professional palettes
 - **Emoji inconsistency**: Medal emoji appearance varies by platform (mitigated by custom SVG)
-- **Performance**: Additional glow layer on routes may impact rendering on older devices
+- **Stream data dependency**: Full paths require fetching stream data per activity (API usage)
 
 ### Technical
 
@@ -204,6 +240,9 @@ const labelPoint = turf.booleanPointInPolygon(centroid, areaPolygon)
 - Icon component creation with centroid calculation
 - Update `getStyle()` function with new color palette
 - Color constants should be centralized in a design tokens file
+- Route toggle control UI component (2026-02-07 update)
+- Per-segment distance calculation for deviation coloring (2026-02-07 update)
+- Stream data integration for route visualization (reference ADR 006) (2026-02-07 update)
 
 ## Migration
 

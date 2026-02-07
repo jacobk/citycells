@@ -90,7 +90,7 @@ export async function GET(request: Request) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Failed to fetch activity streams', error);
+    console.error(`[API:streams] Failed to fetch activity streams for ${activityId}:`, error);
     return NextResponse.json({ error: 'Failed to fetch activity streams' }, { status: 500 });
   }
 }

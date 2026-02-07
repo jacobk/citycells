@@ -73,6 +73,9 @@ export default function Home() {
   // Only one of hamburger menu or profile card can be open at a time
   const [overlayState, setOverlayState] = useState<UIOverlayState>({ type: 'none' });
   
+  // WHY: Route visibility toggle - hidden by default per ADR 010 Section 3
+  const [showRoutes, setShowRoutes] = useState(false);
+  
   // WHY: State for exemption modal
   const [exemptionDeviationId, setExemptionDeviationId] = useState<number | null>(null);
   const [exemptionDeviationInfo, setExemptionDeviationInfo] = useState<{
@@ -372,6 +375,7 @@ export default function Home() {
         onAreaClick={handleAreaClick}
         onAreasLoaded={handleAreasLoaded}
         onRegisterRefresh={handleRegisterRefresh}
+        showRoutes={showRoutes}
       />
       
       {/* Hamburger Menu - Top Left (ADR 009) */}
@@ -380,6 +384,8 @@ export default function Home() {
         onOpenChange={handleHamburgerOpenChange}
         onOpenAreas={handleOpenAreas}
         onOpenStats={handleOpenStats}
+        showRoutes={showRoutes}
+        onShowRoutesChange={setShowRoutes}
       />
       
       {/* Profile Card - Top Right, Collapsible (ADR 009) */}

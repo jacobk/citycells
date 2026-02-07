@@ -22,6 +22,7 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 | `src/components/TierIcon/TierIcon.tsx` | Medal icons at polygon centroids (ADR 010) |
 | `src/components/AreaMiniMap/AreaMiniMap.tsx` | Interactive mini-map for details panel (ADR 012) |
 | `src/lib/design-tokens.ts` | Centralized map visual design tokens (ADR 010) |
+| `src/lib/route-visualization.ts` | Route deviation calculation and segment coloring utilities (ADR 010) |
 | `src/lib/geo-utils.ts` | Shared perimeter calculation and walk time formatting |
 | `src/app/globals.css` | Grayscale filter for base map tiles |
 | `public/data/malmo_delomraden.geojson` | GeoJSON data for 136 sub-areas |
@@ -93,15 +94,26 @@ The map uses a **heat map style visual design** as specified in ADR 010 and PRD 
 
 **Design Rationale:** Bold purple-to-pink gradient creates visual excitement and aligns with modern design trends. High saturation colors pop dramatically against the grayscale base map while maintaining accessibility.
 
-#### Walking Route Styling
+#### Walking Route Styling (Updated: 2026-02-07)
 
-| Element | Color | Hex | Width | Opacity |
-|---------|-------|-----|-------|---------|
-| Path Glow | Cyan Glow | `#22d3ee` | 7px | 0.30 |
-| Path Outline | Deep Teal | `#0f766e` | 5px | 0.60 |
-| Path Core | Electric Cyan | `#06b6d4` | 3px | 0.90 |
+**Visibility:** Routes are **hidden by default** to reduce visual clutter. Users toggle route visibility via a control in the map UI.
 
-**Design Rationale:** Electric cyan is complementary to purple-pink (maximum contrast on color wheel). Triple-layer glow effect creates a premium, modern look that makes routes visually "pop".
+**Deviation-Based Coloring:** When visible, route segments are colored based on distance from the sub-area boundary:
+
+| Condition | Color | Hex | Width | Opacity |
+|-----------|-------|-----|-------|---------|
+| Within 25m buffer | Green | `#22c55e` | 3px | 0.85 |
+| Outside 25m buffer | Red | `#ef4444` | 3px | 0.85 |
+
+**Data Source:** Routes use Strava stream data (ADR 006) to display the complete path, including segments that may be hidden by privacy zones in `summary_polyline`.
+
+**Z-Order:** Routes render above completed area fills, ensuring they are visible when overlaid on completed (colored) areas.
+
+**Design Rationale:**
+- Binary threshold (green/red) provides immediate feedback on walk quality
+- 25m threshold matches the buffer used for perimeter coverage scoring (ADR 002, 003)
+- Thinner 3px lines reduce "chunky" appearance compared to previous triple-layer glow
+- Hidden by default keeps the map clean; users opt-in to see route details
 
 #### Tier Medal Icons
 
@@ -184,9 +196,10 @@ This design reduces visual clutter while maintaining quick access to profile inf
 - [ADR 001: Tech Stack](../ADR/001-tech-stack.md) - Leaflet + Turf.js decision
 - [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - Assignment rules
 - [ADR 003: Multi-Metric Scoring](../ADR/003-multi-metric-completion-scoring.md) - Tier thresholds and scoring
+- [ADR 006: Strava Activity Streams](../ADR/006-strava-activity-streams.md) - High-fidelity GPS data for full route visualization
 - [ADR 009: UI Navigation Layout](../ADR/009-ui-navigation-layout.md) - Current navigation layout (hamburger left, collapsible profile right)
 - [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Original panel navigation (superseded by ADR 009)
-- [ADR 010: Map Visual Design System](../ADR/010-map-visual-design-system.md) - Heat map colors, grayscale base, route styling, tier icons
+- [ADR 010: Map Visual Design System](../ADR/010-map-visual-design-system.md) - Heat map colors, grayscale base, route styling (deviation coloring), tier icons
 - [ADR 012: Details Panel Mini-Map](../ADR/012-details-panel-mini-map.md) - Mini-map in details panel, circumference in tooltip
 
 ## Current Limitations
@@ -258,3 +271,45 @@ Two enhancements for spatial awareness and route planning:
 **Refactoring Note:** Perimeter calculation was previously duplicated in `Map.tsx` and `db.ts`. Both now use `calculatePerimeterMeters()` from `geo-utils.ts` to ensure a single source of truth.
 
 **Reference:** [ADR 012](../ADR/012-details-panel-mini-map.md) | [Ticket 004](../tickets/004-subarea-visual-context.md)
+
+### Walk Route Visualization (Implemented - ADR 010)
+
+Route visualization with deviation-based coloring to show walk quality at a glance:
+
+1. **Toggle Control in Hamburger Menu**
+   - Routes hidden by default to reduce visual clutter
+   - Toggle switch in hamburger menu dropdown: "Show Routes"
+   - State managed at page level, passed to Map component
+
+2. **Deviation-Based Segment Coloring**
+   - Green (`#22c55e`): Segment midpoint within 25m of assigned area boundary
+   - Red (`#ef4444`): Segment midpoint beyond 25m of assigned area boundary
+   - Gray (`#94a3b8`): Activity not assigned to any area (unmatched)
+   - 25m threshold matches perimeter coverage buffer (ADR 002/003)
+
+3. **Stream Data for Full Paths**
+   - Prefers cached stream data from IndexedDB when available
+   - Falls back to `summary_polyline` if streams not cached
+   - Stream data provides full path without privacy zone truncation (ADR 006)
+
+4. **Z-Order: Routes Above Area Fills**
+   - Routes render after GeoJSON layer (area polygons)
+   - Routes render before TierIcon markers
+   - Ensures routes are visible on top of completed (colored) areas
+
+**Key Implementation Files:**
+
+| File | Purpose |
+|------|---------|
+| `src/lib/route-visualization.ts` | Deviation calculation, segment coloring, route data preparation |
+| `src/lib/design-tokens.ts` | Route deviation colors and segment styling constants |
+| `src/components/HamburgerMenu/HamburgerMenu.tsx` | Toggle control for route visibility |
+| `src/components/Map/Map.tsx` | Route rendering with deviation-colored Polylines |
+| `src/app/page.tsx` | `showRoutes` state management |
+
+**Performance Considerations:**
+- Route visualization data calculated on-demand when toggle is enabled
+- Consecutive same-color segments grouped to reduce Polyline element count
+- Stream data cached in IndexedDB (no additional API calls for visualization)
+
+**Reference:** [ADR 010](../ADR/010-map-visual-design-system.md) Section 3 | [Ticket 007](../tickets/007-walk-route-visualization.md)
