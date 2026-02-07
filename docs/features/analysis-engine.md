@@ -292,19 +292,34 @@ These metrics are clickable links to in-app documentation (see [Metrics Document
 | Alignment Score | **Path Precision** | 20% |
 | Efficiency | **Route Efficiency** | 15% |
 
+## Exemption-Adjusted Scoring
+
+When users mark deviations as exempt (see [Exemption System](./exemption-system.md)), the quality score is recalculated to exclude those deviations:
+
+- **`raw_quality_score`**: Original score calculated from all GPS points
+- **`quality_score`**: Adjusted score after exemptions are applied (preferred for display)
+
+The system automatically:
+- Stores both scores in `walk_analyses` table
+- Prefers `quality_score` when loading cached results (falls back to `raw_quality_score` if no exemptions)
+- Selects best walk per area based on adjusted scores
+- Updates `area_completions` with adjusted scores and tiers
+
+**WHY:** This ensures displayed scores and tiers match what users see after applying exemptions, preventing score instability across page reloads.
+
 ## Current Limitations
 
-1. **No exemption adjustment yet**: Raw scores don't account for exempted deviations (Phase 4.4)
-2. **Performance with many points**: RMSE calculation is O(n × m) where n = walk points, m = perimeter segments
-3. **Self-intersecting walks**: May cause issues with area coverage calculation
-4. **No persistence**: Analysis results recalculated on every page load (Phase 7)
+1. **Performance with many points**: RMSE calculation is O(n × m) where n = walk points, m = perimeter segments
+2. **Self-intersecting walks**: May cause issues with area coverage calculation
+3. ~~**No persistence**~~ - ✅ Implemented: Analysis results cached in SQLite (see [Data Persistence](./data-persistence.md))
+4. ~~**No exemption adjustment yet**~~ - ✅ Implemented: Exemptions adjust scores automatically
 
 ## Planned Improvements
 
-1. **Exemption-adjusted scores** - Recalculate metrics excluding exempt deviations
-2. **Caching** - Store intermediate results for faster recalculation
-3. **Spatial indexing** - Use R-tree for faster point-to-line distance queries
-4. ~~**Debug visualization in app**~~ - See [Metrics Documentation](./metrics-documentation.md) for in-app D3 visualizations
+1. **Spatial indexing** - Use R-tree for faster point-to-line distance queries
+2. ~~**Debug visualization in app**~~ - ✅ See [Metrics Documentation](./metrics-documentation.md) for in-app D3 visualizations
+3. ~~**Caching**~~ - ✅ Implemented: Results cached in SQLite database
+4. ~~**Exemption-adjusted scores**~~ - ✅ Implemented: Scores automatically recalculate with exemptions
 
 ## Related Features
 

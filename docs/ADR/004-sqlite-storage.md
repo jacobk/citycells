@@ -116,6 +116,9 @@ CREATE TABLE walk_analyses (
   raw_quality_score REAL,
   
   -- Computed score (after exemptions applied)
+  -- WHY: When exemptions are applied, quality_score is recalculated and updated.
+  -- The system prefers quality_score over raw_quality_score when loading cached results
+  -- to ensure displayed scores match exemption-adjusted tiers.
   quality_score REAL,
   tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze')),
   
@@ -346,10 +349,14 @@ if (newActivityIds.length > 0) {
 **Key Functions (in `analysis-persistence.ts`):**
 
 - `loadCachedAnalyses(userId)` - Returns Map of area FID → cached metrics
+  - **WHY:** Uses `COALESCE(quality_score, raw_quality_score)` to prefer exemption-adjusted scores
+  - Ensures displayed scores match tiers calculated with exemptions applied
 - `getActivitiesToAnalyze(userId, activityIds)` - Returns IDs not yet analyzed
 - `saveWalkAnalysis(...)` - Persists analysis results after computation
+  - **WHY:** Selects best walk per area using adjusted scores (`COALESCE(quality_score, raw_quality_score)`)
+  - Ensures `area_completions` reflects the actual best walk after exemptions
 
-**WHY:** Analysis computation is expensive (geospatial calculations with Turf.js). Caching avoids re-computation on every page load, providing instant feedback for returning users.
+**WHY:** Analysis computation is expensive (geospatial calculations with Turf.js). Caching avoids re-computation on every page load, providing instant feedback for returning users. The preference for `quality_score` ensures score stability across rebuilds when exemptions are applied.
 
 #### Export/Import for Backup
 

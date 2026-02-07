@@ -200,6 +200,12 @@ quality_score = (
 - `exemption_reason`: Required text (e.g., "Private property", "Highway", "Construction")
 - `exempted_at`: Timestamp
 
+**Score Storage and Loading:**
+- Both `raw_quality_score` (original) and `quality_score` (adjusted) are stored in `walk_analyses`
+- When loading cached results, the system prefers `quality_score` using `COALESCE(quality_score, raw_quality_score)`
+- Best walk selection uses adjusted scores to ensure `area_completions` reflects actual best performance
+- **WHY:** This ensures displayed scores and tiers match exemption-adjusted values, preventing score instability across page reloads
+
 ## UI Display of Metrics
 
 The calculated metrics are displayed in the Area Details Panel (see PRD 001, section 3.6) to provide users with transparent feedback on their walk performance:

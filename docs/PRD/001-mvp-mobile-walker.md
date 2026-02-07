@@ -418,6 +418,7 @@ Provide a browsable list of all sub-areas with sorting and filtering capabilitie
 *   **Privacy:** Only access read permissions for Strava activities. All data stays on user's device.
 *   **Offline Capable:** After initial load, app works offline for viewing map, sub-areas, progress, and area details; sync and external APIs require network (see ADR 014, Section 3.11).
 *   **Responsive:** Details panel adapts to screen size (full sheet on mobile, side panel on desktop).
+*   **Deployment:** Application deployed to Vercel platform for public access. OAuth callback requires publicly accessible URL. See ADR 016 for deployment architecture and configuration.
 
 ## 5. Future Considerations (Post-MVP)
 

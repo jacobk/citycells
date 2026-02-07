@@ -108,7 +108,12 @@ Analysis results are automatically saved to the database after computation and l
 
 **Key Functions (in `analysis-persistence.ts`):**
 - `saveWalkAnalysis()` - Saves full analysis result including deviations
+  - Stores both `raw_quality_score` (original) and `quality_score` (adjusted with exemptions)
+  - Selects best walk per area using adjusted scores
 - `loadCachedAnalyses()` - Loads cached results with all metrics for fast page rendering
+  - **WHY:** Uses `COALESCE(quality_score, raw_quality_score)` to prefer exemption-adjusted scores
+  - Ensures displayed scores match tiers calculated with exemptions applied
+  - Prevents score instability across page reloads
 - `getActivitiesToAnalyze()` - Identifies which activities need analysis
 - `getOrCreateUserId()` - Maps Strava user ID to internal database ID
 
@@ -117,6 +122,8 @@ Analysis results are automatically saved to the database after computation and l
 - Only analyze new activities
 - Persist across browser sessions
 - Support offline viewing of progress
+
+**Score Consistency:** The system stores both `raw_quality_score` (original) and `quality_score` (adjusted with exemptions). When loading cached results, `quality_score` is preferred to ensure displayed scores and tiers match what users see after applying exemptions. This prevents scores from jumping between tiers on rebuild.
 
 **Re-Analysis:** Cached analysis results can be invalidated and recomputed via the [Re-Analysis](../features/re-analysis.md) feature. Users can trigger re-score only (re-run algorithm on existing GPS cache) or full re-analyze (re-fetch streams then re-score). See [ADR 011](../ADR/011-re-analysis-strategy.md).
 
