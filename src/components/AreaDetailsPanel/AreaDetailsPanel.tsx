@@ -9,6 +9,8 @@ import type { ReAnalysisMode } from '@/lib/analysis-persistence';
 // WHY: Dynamic import for Leaflet-based mini-map to avoid SSR issues (ADR 012)
 import AreaMiniMap from '@/components/AreaMiniMap';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+// WHY: Panel state management and gesture handling (ADR 015)
+import { useExpandablePanel } from '@/hooks/useExpandablePanel';
 
 // ============================================
 // Types
@@ -88,6 +90,11 @@ export default function AreaDetailsPanel({
   const [reAnalyzingWalkId, setReAnalyzingWalkId] = useState<number | null>(null);
   // WHY: Disable per-walk re-analyze when offline per ADR 014
   const { isOnline } = useOnlineStatus();
+  // WHY: Panel state management and gesture handling (ADR 015)
+  const { state: panelState, height: panelHeight, handlers, isDragging } = useExpandablePanel({
+    isOpen,
+    onClose,
+  });
 
   // Handle per-walk re-analyze
   const handleReAnalyzeWalk = async (walkId: number, mode: ReAnalysisMode) => {
@@ -165,11 +172,16 @@ export default function AreaDetailsPanel({
     return `${Math.round(meters)} m`;
   };
 
+  // WHY: Calculate backdrop opacity based on panel state (more opaque when expanded)
+  const backdropOpacity = panelState === 'fullscreen' ? 'bg-black/40' : 
+                          panelState === 'expanded' ? 'bg-black/30' : 
+                          'bg-black/20';
+
   return (
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/30 z-[500] transition-opacity duration-300 ${
+        className={`fixed inset-0 ${backdropOpacity} z-[500] transition-opacity duration-300 ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onClick={onClose}
@@ -178,12 +190,19 @@ export default function AreaDetailsPanel({
       {/* Panel */}
       <div
         ref={panelRef}
-        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-[501] transform transition-transform duration-300 ease-out max-h-[85vh] overflow-hidden flex flex-col ${
+        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-[501] transform transition-[transform,height] duration-300 ease-out overflow-hidden flex flex-col ${
           isOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
+        style={{ height: isOpen ? panelHeight : '0' }}
       >
         {/* Drag Handle */}
-        <div className="flex justify-center py-2 cursor-grab" onClick={onClose}>
+        {/* WHY: 48px touch target for easy dragging (ADR 015) */}
+        <div 
+          className={`flex justify-center py-6 transition-opacity duration-150 ${
+            isDragging ? 'cursor-grabbing opacity-70' : 'cursor-grab opacity-100'
+          } hover:bg-gray-100 active:opacity-70`}
+          {...handlers}
+        >
           <div className="w-12 h-1 bg-gray-300 rounded-full" />
         </div>
 
@@ -232,6 +251,7 @@ export default function AreaDetailsPanel({
               <AreaMiniMap
                 geometry={details.geometry}
                 tier={details.tier}
+                panelState={panelState}
               />
             </section>
           )}

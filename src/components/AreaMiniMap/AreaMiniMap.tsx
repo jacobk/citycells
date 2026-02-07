@@ -25,11 +25,16 @@ import {
   TIER_BORDER_COLORS,
   UNWALKED_AREA_STYLE,
 } from '@/lib/design-tokens';
+// WHY: Panel state for dynamic height adaptation (ADR 015)
+import type { PanelState } from '@/lib/panel-state';
+import { getMiniMapHeight } from '@/lib/panel-state';
 
 interface AreaMiniMapProps {
   geometry: GeoJSON.Geometry;
   tier?: Tier;
   className?: string;
+  // WHY: Panel state determines mini-map height (ADR 015)
+  panelState?: PanelState;
 }
 
 // WHY: 0.2 opacity so streets remain visible through the fill (ADR 012)
@@ -63,7 +68,29 @@ function FitBoundsUpdater({ geometry }: { geometry: GeoJSON.Geometry }) {
   return null;
 }
 
-export default function AreaMiniMap({ geometry, tier, className }: AreaMiniMapProps) {
+/**
+ * Child component that calls invalidateSize when panel state changes.
+ * WHY: Leaflet map needs to recalculate its size when container height changes.
+ * We use setTimeout to ensure CSS transition completes before resize.
+ */
+function MapResizeUpdater({ panelState }: { panelState?: PanelState }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !panelState) return;
+
+    // WHY: Wait for CSS transition to complete before resizing (300ms transition)
+    const timeoutId = setTimeout(() => {
+      map.invalidateSize();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [panelState, map]);
+
+  return null;
+}
+
+export default function AreaMiniMap({ geometry, tier, className, panelState }: AreaMiniMapProps) {
   // WHY: Wrap geometry in a GeoJSON Feature for the GeoJSON component
   const featureData = useMemo<GeoJSON.FeatureCollection>(() => ({
     type: 'FeatureCollection',
@@ -86,11 +113,17 @@ export default function AreaMiniMap({ geometry, tier, className }: AreaMiniMapPr
     fillOpacity: MINI_MAP_FILL_OPACITY,
   }), [fillColor, borderColor]);
 
+  // WHY: Calculate dynamic height based on panel state (ADR 015)
+  const miniMapHeight = getMiniMapHeight(panelState ?? 'expanded');
+
   // WHY: Default center is Malmö - will be overridden by fitBounds
   const defaultCenter: [number, number] = [55.59, 13.00];
 
   return (
-    <div className={`w-full h-[200px] rounded-lg overflow-hidden ${className ?? ''}`}>
+    <div 
+      className={`w-full rounded-lg overflow-hidden transition-[height] duration-300 ease-out ${className ?? ''}`}
+      style={{ height: `${miniMapHeight}px` }}
+    >
       <MapContainer
         center={defaultCenter}
         zoom={14}
@@ -115,6 +148,7 @@ export default function AreaMiniMap({ geometry, tier, className }: AreaMiniMapPr
           style={style}
         />
         <FitBoundsUpdater geometry={geometry} />
+        <MapResizeUpdater panelState={panelState} />
       </MapContainer>
     </div>
   );

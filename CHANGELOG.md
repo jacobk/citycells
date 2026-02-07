@@ -18,6 +18,14 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Expandable bottom panel with multi-state slide behavior: four states (closed, collapsed ~40vh, expanded ~85vh, full-screen ~95vh) with touch gestures for mobile and click-to-toggle for desktop. (PRD 001 §3.6, ADR 015, TICKET-008)
+  - Key files: `src/hooks/useExpandablePanel.ts`, `src/lib/panel-state.ts`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/AreaMiniMap/AreaMiniMap.tsx`
+  - Touch devices can slide panel up/down to transition between states
+  - Desktop users can click drag handle to cycle through collapsed → expanded → full-screen
+  - Fast swipe down closes panel regardless of current state
+  - Mini-map height adapts to panel state (150px / 200px / 400px)
+  - Smooth CSS transitions between all state transitions
+  - Velocity-based gesture detection for natural mobile interactions
 - Walk route visualization with deviation-based coloring: routes hidden by default, toggle to show with green/red coloring based on distance from area boundary. (PRD 001 §3.4, ADR 010 §3, TICKET-007)
   - Key files: `src/lib/route-visualization.ts`, `src/lib/design-tokens.ts`, `src/components/Map/Map.tsx`, `src/components/HamburgerMenu/HamburgerMenu.tsx`, `src/app/page.tsx`
   - Toggle control in hamburger menu dropdown ("Show Routes")
