@@ -290,19 +290,73 @@ export async function recalculateScoreWithExemptions(walkAnalysisId: number): Pr
     WHERE id = ?
   `, [adjustedQualityScore, adjustedTier, walkAnalysisId]);
 
-  // Update area_completions if this is the best walk
-  db.run(`
-    UPDATE area_completions
-    SET best_quality_score = ?,
-        tier = ?,
-        total_exemptions = (
-          SELECT COUNT(*) FROM deviations d
-          JOIN walk_analyses wa ON d.walk_analysis_id = wa.id
-          WHERE wa.area_id = area_completions.area_id
-            AND d.is_exempt = 1
-        )
-    WHERE best_walk_analysis_id = ?
-  `, [adjustedQualityScore, adjustedTier, walkAnalysisId]);
+  // Get area_id and user_id for this analysis
+  const areaUserResult = db.exec(`
+    SELECT wa.area_id, w.user_id
+    FROM walk_analyses wa
+    JOIN walks w ON wa.walk_id = w.id
+    WHERE wa.id = ?
+  `, [walkAnalysisId]);
+
+  if (areaUserResult.length > 0 && areaUserResult[0].values.length > 0) {
+    const areaId = areaUserResult[0].values[0][0] as number;
+    const userId = areaUserResult[0].values[0][1] as number;
+
+    // WHY: Find the best walk for this area (using adjusted scores)
+    // This ensures area_completions reflects the actual best walk after exemptions
+    const bestAnalysis = db.exec(
+      `SELECT wa.id, COALESCE(wa.quality_score, wa.raw_quality_score) as quality_score, wa.tier 
+       FROM walk_analyses wa
+       JOIN walks w ON wa.walk_id = w.id
+       WHERE wa.area_id = ? AND w.user_id = ?
+       ORDER BY COALESCE(wa.quality_score, wa.raw_quality_score) DESC LIMIT 1`,
+      [areaId, userId]
+    );
+
+    if (bestAnalysis.length > 0 && bestAnalysis[0].values.length > 0) {
+      const bestId = bestAnalysis[0].values[0][0] as number;
+      const bestScore = bestAnalysis[0].values[0][1] as number;
+      const bestTier = bestAnalysis[0].values[0][2] as string | null;
+
+      // Update area_completions with the best walk (which might be this one or another)
+      db.run(`
+        UPDATE area_completions
+        SET best_walk_analysis_id = ?,
+            best_quality_score = ?,
+            tier = ?,
+            total_exemptions = (
+              SELECT COUNT(*) FROM deviations d
+              JOIN walk_analyses wa ON d.walk_analysis_id = wa.id
+              WHERE wa.area_id = area_completions.area_id
+                AND d.is_exempt = 1
+            )
+        WHERE area_id = ? AND user_id = ?
+      `, [bestId, bestScore, bestTier, areaId, userId]);
+
+      // If no area_completion exists yet, create it
+      const existing = db.exec(
+        'SELECT id FROM area_completions WHERE area_id = ? AND user_id = ?',
+        [areaId, userId]
+      );
+      if (existing.length === 0 || existing[0].values.length === 0) {
+        const walkCount = db.exec(
+          `SELECT COUNT(*) FROM walk_analyses wa
+           JOIN walks w ON wa.walk_id = w.id
+           WHERE wa.area_id = ? AND w.user_id = ?`,
+          [areaId, userId]
+        );
+        const totalWalks = walkCount[0].values[0][0] as number;
+
+        db.run(`
+          INSERT INTO area_completions (
+            user_id, area_id, best_walk_analysis_id, best_quality_score, tier,
+            total_walks, first_completed_at, best_completed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+          [userId, areaId, bestId, bestScore, bestTier, totalWalks]
+        );
+      }
+    }
+  }
 
   await persistDatabase();
 

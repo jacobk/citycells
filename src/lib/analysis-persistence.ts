@@ -9,8 +9,8 @@
  */
 
 import { getDatabase, executeWrite, getWalkStreams, saveWalkStreams } from './db';
-import type { FullAnalysisResult, StravaMetadata } from './analysis';
-import { analyzeWalk } from './analysis';
+import type { FullAnalysisResult, StravaMetadata, Tier } from './analysis';
+import { analyzeWalk, TIER_THRESHOLDS } from './analysis';
 import type { StravaActivity } from '@/hooks/useStrava';
 import type { Position, Feature, Polygon, MultiPolygon } from 'geojson';
 import type { CachedStreams } from '@/lib/types/strava-streams';
@@ -116,7 +116,7 @@ export async function saveWalkAnalysis(
       metrics.isClosedLoop ? 1 : 0,
       metrics.loopGapMeters,
       metrics.rawQualityScore,
-      metrics.rawQualityScore, // quality_score same as raw for now
+      metrics.rawQualityScore, // quality_score same as raw initially; recalculated if exemptions exist
       metrics.tier || null,
       isPrimaryMatch ? 1 : 0,
     ]
@@ -168,19 +168,40 @@ export async function saveWalkAnalysis(
     );
   }
 
+  // WHY: After saving deviations, recalculate quality_score if any exemptions exist
+  // This ensures quality_score reflects exemption adjustments even after re-analysis
+  // Note: During re-analysis, exemptions are deleted, so this will just set quality_score = raw_quality_score
+  const { recalculateScoreWithExemptions } = await import('./exemptions');
+  await recalculateScoreWithExemptions(analysisId);
+
   // 4. Update area_completions (denormalized for fast queries)
+  // WHY: Use COALESCE to prefer quality_score (adjusted with exemptions) over raw_quality_score
+  // This ensures the best walk is selected based on adjusted scores, not raw scores
   const bestAnalysis = db.exec(
-    `SELECT wa.id, wa.raw_quality_score, wa.tier FROM walk_analyses wa
+    `SELECT wa.id, COALESCE(wa.quality_score, wa.raw_quality_score) as quality_score
+     FROM walk_analyses wa
      JOIN walks w ON wa.walk_id = w.id
      WHERE wa.area_id = ? AND w.user_id = ?
-     ORDER BY wa.raw_quality_score DESC LIMIT 1`,
+     ORDER BY COALESCE(wa.quality_score, wa.raw_quality_score) DESC LIMIT 1`,
     [areaId, userId]
   );
 
   if (bestAnalysis.length > 0 && bestAnalysis[0].values.length > 0) {
     const bestId = bestAnalysis[0].values[0][0] as number;
     const bestScore = bestAnalysis[0].values[0][1] as number;
-    const bestTier = bestAnalysis[0].values[0][2] as string | null;
+    
+    // WHY: Recalculate tier from adjusted score to ensure consistency
+    // Don't use stored tier as it might be from raw_quality_score
+    let bestTier: Tier = null;
+    if (bestScore >= TIER_THRESHOLDS.platinum) {
+      bestTier = 'platinum';
+    } else if (bestScore >= TIER_THRESHOLDS.gold) {
+      bestTier = 'gold';
+    } else if (bestScore >= TIER_THRESHOLDS.silver) {
+      bestTier = 'silver';
+    } else if (bestScore >= TIER_THRESHOLDS.bronze) {
+      bestTier = 'bronze';
+    }
 
     const walkCount = db.exec(
       `SELECT COUNT(*) FROM walk_analyses wa
@@ -243,14 +264,18 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
   // Get all area completions for this user
   // WHY: Join with areas table to get FID (GeoJSON identifier) instead of database id
   // WHY: Select all metrics fields needed to reconstruct AnalysisMetrics for UI display
+  // WHY: Use COALESCE to prefer quality_score (adjusted with exemptions) over raw_quality_score
+  // This ensures displayed scores match the tier that was calculated with exemptions applied
+  // WHY: Calculate tier from the adjusted score to ensure consistency
   const result = db.exec(
     `SELECT 
       a.fid as area_fid,
       ac.best_walk_analysis_id,
       wa.perimeter_coverage_percent,
       wa.area_coverage_percent,
-      wa.raw_quality_score,
-      wa.tier,
+      COALESCE(wa.quality_score, wa.raw_quality_score) as quality_score,
+      COALESCE(wa.quality_score, wa.raw_quality_score) as score_for_tier,
+      wa.tier as stored_tier,
       wa.is_closed_loop,
       wa.covered_distance_meters,
       wa.rmse_meters,
@@ -275,9 +300,30 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
     for (const row of result[0].values) {
       const areaId = row[0] as number;
       const analysisId = row[1] as number;
-      // WHY: activity_ids is now at index 14 after adding more columns
-      const activityIdsStr = row[14] as string;
+      const adjustedScore = row[4] as number; // COALESCE(quality_score, raw_quality_score)
+      const storedTier = row[6] as string | null;
+      // WHY: activity_ids is now at index 15 after adding score_for_tier column
+      const activityIdsStr = row[15] as string;
       const activityIds = activityIdsStr ? activityIdsStr.split(',').map(Number) : [];
+
+      // WHY: Recalculate tier from adjusted score to ensure consistency
+      // The stored tier might be from raw_quality_score, but we're displaying adjusted score
+      let calculatedTier: Tier = null;
+      if (adjustedScore >= TIER_THRESHOLDS.platinum) {
+        calculatedTier = 'platinum';
+      } else if (adjustedScore >= TIER_THRESHOLDS.gold) {
+        calculatedTier = 'gold';
+      } else if (adjustedScore >= TIER_THRESHOLDS.silver) {
+        calculatedTier = 'silver';
+      } else if (adjustedScore >= TIER_THRESHOLDS.bronze) {
+        calculatedTier = 'bronze';
+      }
+      
+      // WHY: Debug logging to help diagnose score instability
+      // Log if stored tier doesn't match calculated tier (indicates mismatch)
+      if (storedTier !== calculatedTier) {
+        console.warn(`[loadCachedAnalyses] Area ${areaId}: Tier mismatch! Stored: ${storedTier}, Calculated: ${calculatedTier}, Score: ${adjustedScore.toFixed(3)}`);
+      }
 
       cached.set(areaId, {
         areaId,
@@ -285,16 +331,16 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
         metrics: {
           perimeterCoveragePercent: row[2] as number,
           areaCoveragePercent: row[3] as number,
-          rawQualityScore: row[4] as number,
-          tier: row[5] as string | null,
-          isClosedLoop: (row[6] as number) === 1,
-          coveredDistanceMeters: row[7] as number,
-          rmseMeters: row[8] as number,
-          maxDeviationMeters: row[9] as number,
-          p90DeviationMeters: row[10] as number,
-          efficiency: row[11] as number,
-          enclosedAreaSqm: row[12] as number,
-          loopGapMeters: row[13] as number,
+          rawQualityScore: adjustedScore, // This is the adjusted score (COALESCE result)
+          tier: calculatedTier, // Recalculated from adjusted score for consistency
+          isClosedLoop: (row[7] as number) === 1,
+          coveredDistanceMeters: row[8] as number,
+          rmseMeters: row[9] as number,
+          maxDeviationMeters: row[10] as number,
+          p90DeviationMeters: row[11] as number,
+          efficiency: row[12] as number,
+          enclosedAreaSqm: row[13] as number,
+          loopGapMeters: row[14] as number,
         },
         activityIds,
       });
@@ -772,7 +818,7 @@ export async function reAnalyzeWalk(
       distance: walkData.distance ?? undefined,
     };
 
-    await saveWalkAnalysis(
+    const analysisId =     await saveWalkAnalysis(
       walkData.userId,
       activity,
       bestAreaId,
