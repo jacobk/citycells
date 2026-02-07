@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react';
 import { getTierColor } from '@/lib/analysis';
 import type { ProgressInfo } from '@/components/Map';
 import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 // ============================================
 // Types
@@ -58,6 +59,8 @@ export default function ProfileCard({
   // WHY: Track local loading state for re-analyze buttons (ADR 011)
   const [isReAnalyzing, setIsReAnalyzing] = useState(false);
   const [reAnalyzeError, setReAnalyzeError] = useState<string | null>(null);
+  // WHY: Disable re-analyze when offline per ADR 014 and TICKET-006
+  const { isOnline } = useOnlineStatus();
 
   // Handle re-analyze button click
   const handleReAnalyze = async (mode: ReAnalysisMode) => {
@@ -289,24 +292,31 @@ export default function ProfileCard({
                 )}
 
                 {/* Re-analyze buttons */}
+                {/* WHY: Disable when offline per ADR 014 - re-analyze requires network */}
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleReAnalyze('rescore')}
-                    disabled={isReAnalyzing}
+                    disabled={isReAnalyzing || !isOnline}
+                    title={!isOnline ? 'Requires internet' : undefined}
                     className="flex-1 bg-purple-100 text-purple-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Re-score All
                   </button>
                   <button
                     onClick={() => handleReAnalyze('full')}
-                    disabled={isReAnalyzing}
+                    disabled={isReAnalyzing || !isOnline}
+                    title={!isOnline ? 'Requires internet' : undefined}
                     className="flex-1 bg-purple-100 text-purple-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Full Re-fetch
                   </button>
                 </div>
                 <div className="text-[10px] text-gray-400 mt-1.5 leading-tight">
-                  Re-score: Fast, uses cached GPS. Full: Re-fetches from Strava.
+                  {!isOnline ? (
+                    <span className="text-amber-600">Offline — re-analysis unavailable</span>
+                  ) : (
+                    'Re-score: Fast, uses cached GPS. Full: Re-fetches from Strava.'
+                  )}
                 </div>
               </div>
             )}

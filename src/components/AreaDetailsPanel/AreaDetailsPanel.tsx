@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import type { ReAnalysisMode } from '@/lib/analysis-persistence';
 // WHY: Dynamic import for Leaflet-based mini-map to avoid SSR issues (ADR 012)
 import AreaMiniMap from '@/components/AreaMiniMap';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 // ============================================
 // Types
@@ -85,6 +86,8 @@ export default function AreaDetailsPanel({
   const [openWalkMenuId, setOpenWalkMenuId] = useState<number | null>(null);
   // WHY: Track loading state for per-walk re-analyze
   const [reAnalyzingWalkId, setReAnalyzingWalkId] = useState<number | null>(null);
+  // WHY: Disable per-walk re-analyze when offline per ADR 014
+  const { isOnline } = useOnlineStatus();
 
   // Handle per-walk re-analyze
   const handleReAnalyzeWalk = async (walkId: number, mode: ReAnalysisMode) => {
@@ -438,8 +441,9 @@ export default function AreaDetailsPanel({
                             Best
                           </span>
                         )}
-                        {/* WHY: Per-walk re-analyze menu (ADR 011) */}
-                        {onReAnalyzeWalk && (
+                        {/* WHY: Per-walk re-analyze menu (ADR 011)
+                            Hidden when offline per ADR 014 - re-analyze requires network */}
+                        {onReAnalyzeWalk && isOnline && (
                           <div className="relative" data-walk-menu>
                             {reAnalyzingWalkId === walk.id ? (
                               <div className="w-6 h-6 flex items-center justify-center">

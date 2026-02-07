@@ -17,28 +17,31 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) section 2 (Offline Support Stori
 
 ## Implementation
 
-> **Note:** This section is completed by the implementation agent.
-
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| TBD | Service Worker registration and cache strategy |
-| TBD | Offline detection (hook or context) and UI indicator |
-| TBD | Map tile layer / cache integration for offline tiles |
+| `public/sw.js` | Service Worker with precache (GeoJSON, WASM) and runtime cache for tiles and app assets |
+| `src/components/ServiceWorkerRegistration/` | Client component that registers the SW on mount |
+| `src/hooks/useOnlineStatus.ts` | Hook exposing `isOnline` via `navigator.onLine` + online/offline events |
+| `src/components/OfflineIndicator/` | Banner shown at top of viewport when offline |
+| `src/components/ProfileCard/ProfileCard.tsx` | Re-analyze buttons disabled when offline |
+| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Per-walk re-analyze menu hidden when offline |
+| `src/app/layout.tsx` | Mounts ServiceWorkerRegistration and OfflineIndicator |
 | `src/lib/db.ts` | Existing; area/analysis data already local (no change required for offline read) |
 
 ### Data Flow
 
 - **App load offline:** Service Worker serves cached app shell (HTML, JS, CSS, WASM). App initializes; database restores from IndexedDB. Map requests tiles from cache when available.
 - **Navigation:** All list and detail data comes from SQLite; no network required.
-- **Map tiles:** Fetched via same-origin or SW-intercepted requests; cached on first use; served from cache when offline.
+- **Map tiles:** Fetched via same-origin or SW-intercepted requests; cached on first use (stale-while-revalidate strategy); served from cache when offline.
 
 ### Key Functions
 
-- TBD: Service Worker install/activate/fetch handlers; precache and runtime cache for tiles.
-- TBD: `useOnlineStatus()` or similar to expose `navigator.onLine` and online/offline events.
-- TBD: Offline banner or icon component.
+- **`public/sw.js`:** `install` event precaches `/data/malmo_delomraden.geojson` and `/sql-wasm/sql-wasm.wasm`. `fetch` event intercepts requests: OSM tiles use stale-while-revalidate with a 500-tile cache limit; app assets use cache-first; navigation uses network-first with cache fallback; API routes are not cached (return 503 offline).
+- **`useOnlineStatus()`:** Uses `useSyncExternalStore` to subscribe to `online`/`offline` window events; returns `{ isOnline: boolean }`.
+- **`OfflineIndicator`:** Renders a fixed amber banner "You're offline — viewing cached data" when `!isOnline`; hidden when online.
+- **Graceful degradation:** `ProfileCard` disables "Re-score All" and "Full Re-fetch" buttons and shows "Offline — re-analysis unavailable" message when offline. `AreaDetailsPanel` hides the per-walk re-analyze menu when offline.
 
 ## Rationale
 

@@ -18,6 +18,13 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Offline support: app works without internet after first load. (PRD 001 §3.11, ADR 014, TICKET-006)
+  - Key files: `public/sw.js`, `src/components/ServiceWorkerRegistration/`, `src/hooks/useOnlineStatus.ts`, `src/components/OfflineIndicator/`, `src/app/layout.tsx`
+  - Service Worker precaches GeoJSON and WASM; caches map tiles on first use (stale-while-revalidate, 500 tile limit)
+  - Offline detection via `useOnlineStatus` hook using `useSyncExternalStore`
+  - Amber banner "You're offline — viewing cached data" when offline
+  - Re-analyze buttons disabled when offline with "Requires internet" messaging
+  - Per-walk re-analyze menu hidden when offline in AreaDetailsPanel
 - Persistent Strava authentication: users stay authenticated across browser sessions. (PRD 001 §2, ADR 013, TICKET-005)
   - Key files: `src/lib/auth-persistence.ts`, `src/lib/db.ts`, `src/lib/strava.ts`, `src/hooks/useStrava.ts`, `src/app/api/auth/restore-session/route.ts`
   - Tokens stored in SQLite (IndexedDB) for persistence, HTTP-only cookies for API route auth
