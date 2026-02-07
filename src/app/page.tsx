@@ -428,6 +428,7 @@ export default function Home() {
         details={selectedAreaDetails}
         isOpen={panelView.type === 'area-detail'}
         onClose={handleClosePanel}
+        activities={activities}
         onExemptDeviation={handleExemptDeviation}
         onRemoveExemption={handleRemoveExemption}
         onReAnalyzeWalk={handleReAnalyzeWalk}

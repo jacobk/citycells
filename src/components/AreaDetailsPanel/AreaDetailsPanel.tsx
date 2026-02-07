@@ -11,6 +11,14 @@ import AreaMiniMap from '@/components/AreaMiniMap';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 // WHY: Panel state management and gesture handling (ADR 015)
 import { useExpandablePanel } from '@/hooks/useExpandablePanel';
+// WHY: Database hook for route data access (Ticket 011)
+import { useDatabase } from '@/hooks/useDatabase';
+// WHY: Route visualization for mini-map walk routes (Ticket 011)
+import type { RouteSegment } from '@/lib/route-visualization';
+import { prepareDeviationColoredRoute } from '@/lib/route-visualization';
+import { getWalkStreams, getDatabase } from '@/lib/db';
+import mapboxPolyline from '@mapbox/polyline';
+import type { Feature, Polygon, MultiPolygon, Position } from 'geojson';
 
 // ============================================
 // Types
@@ -23,6 +31,8 @@ export interface WalkInfo {
   distanceMeters?: number;
   qualityScore?: number;
   isBest?: boolean;
+  // WHY: summary_polyline from Strava API for route visualization fallback (Ticket 011)
+  summaryPolyline?: string;
 }
 
 export interface AreaDetails {
@@ -55,6 +65,8 @@ interface AreaDetailsPanelProps {
   breadcrumbs?: ReactNode;
   // WHY: Per-walk re-analyze callback (ADR 011)
   onReAnalyzeWalk?: (walkId: number, mode: ReAnalysisMode) => Promise<void>;
+  // WHY: Activities array for accessing summary_polyline from API (Ticket 011)
+  activities?: Array<{ id: number; map?: { summary_polyline?: string } }>;
 }
 
 // ============================================
@@ -82,6 +94,7 @@ export default function AreaDetailsPanel({
   onRemoveExemption,
   breadcrumbs,
   onReAnalyzeWalk,
+  activities = [],
 }: AreaDetailsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   // WHY: Track which walk's menu is open (ADR 011)
@@ -95,6 +108,12 @@ export default function AreaDetailsPanel({
     isOpen,
     onClose,
   });
+  // WHY: Database hook for route data access - matches main map pattern (Ticket 011)
+  const { db, loading: dbLoading } = useDatabase();
+  // WHY: Route visualization state for mini-map (Ticket 011)
+  const [showRoute, setShowRoute] = useState(false);
+  const [selectedWalkId, setSelectedWalkId] = useState<number | null>(null);
+  const [routeSegments, setRouteSegments] = useState<RouteSegment[] | null>(null);
 
   // Handle per-walk re-analyze
   const handleReAnalyzeWalk = async (walkId: number, mode: ReAnalysisMode) => {
@@ -111,6 +130,120 @@ export default function AreaDetailsPanel({
       setReAnalyzingWalkId(null);
     }
   };
+
+  // WHY: Initialize selected walk when details.walks changes (Ticket 011)
+  // Default to best walk, or first walk if only one exists
+  useEffect(() => {
+    if (!details || details.walks.length === 0) {
+      setSelectedWalkId(null);
+      setRouteSegments(null);
+      setShowRoute(false); // Reset toggle when no walks
+      return;
+    }
+
+    // Find best walk or use first walk if only one exists
+    const bestWalk = details.walks.find(w => w.isBest);
+    const walkToSelect = bestWalk || details.walks[0];
+    setSelectedWalkId(walkToSelect.id);
+  }, [details?.walks]);
+
+  // WHY: Reset route toggle when panel closes (Ticket 011)
+  useEffect(() => {
+    if (!isOpen) {
+      setShowRoute(false);
+    }
+  }, [isOpen]);
+
+  // WHY: Load route data when selectedWalkId changes (Ticket 011)
+  // Matches main map pattern: check db && !dbLoading before accessing streams
+  useEffect(() => {
+    if (!selectedWalkId || !details?.geometry) {
+      setRouteSegments(null);
+      return;
+    }
+
+    // WHY: Wait for database to be ready before accessing streams (matches main map pattern)
+    const hasDb = Boolean(db && !dbLoading);
+    if (!hasDb) {
+      setRouteSegments(null);
+      return;
+    }
+
+    try {
+      // Try to get stream data first (preferred - full path without privacy zone truncation)
+      // WHY: Stream data provides full path without privacy zone truncation (ADR 006)
+      const cachedStreams = getWalkStreams(selectedWalkId);
+      console.log(`[AreaDetailsPanel] getWalkStreams(${selectedWalkId}) returned:`, cachedStreams ? `streams with ${cachedStreams.latlng.length} points` : 'null');
+      let coordinates: Position[] | null = null;
+
+      if (cachedStreams && cachedStreams.latlng.length > 0) {
+        // Convert from [lat, lng] to [lng, lat] for GeoJSON format
+        coordinates = cachedStreams.latlng.map(([lat, lng]) => [lng, lat]);
+        console.log(`[AreaDetailsPanel] Using stream data for walk ${selectedWalkId}: ${coordinates.length} points`);
+      } else {
+        // Fallback to summary_polyline - prefer from activities array (API), then WalkInfo, then database
+        let polyline: string | null = null;
+        
+        // WHY: Prefer summary_polyline from activities array (matches main map pattern)
+        // This is the most reliable source as it comes directly from Strava API
+        const activity = activities.find(a => a.id === selectedWalkId);
+        if (activity?.map?.summary_polyline) {
+          polyline = activity.map.summary_polyline;
+          console.log(`[AreaDetailsPanel] Using summary_polyline from activities array for walk ${selectedWalkId}`);
+        } else {
+          // Fallback to WalkInfo (may be populated during analysis)
+          const walkInfo = details.walks.find(w => w.id === selectedWalkId);
+          if (walkInfo?.summaryPolyline) {
+            polyline = walkInfo.summaryPolyline;
+            console.log(`[AreaDetailsPanel] Using summary_polyline from WalkInfo for walk ${selectedWalkId}`);
+          } else {
+            // Last resort: database polyline (may be truncated)
+            const database = getDatabase();
+            const result = database.exec(
+              'SELECT polyline FROM walks WHERE strava_activity_id = ? LIMIT 1',
+              [selectedWalkId]
+            );
+
+            if (result.length > 0 && result[0].values.length > 0) {
+              polyline = result[0].values[0][0] as string | null;
+              if (polyline) {
+                console.log(`[AreaDetailsPanel] Using polyline from database for walk ${selectedWalkId}`);
+              }
+            }
+          }
+        }
+
+        if (polyline) {
+          // Decode polyline and convert from [lat, lng] to [lng, lat] for GeoJSON format
+          const decoded = mapboxPolyline.decode(polyline);
+          coordinates = decoded.map(pt => [pt[1], pt[0]]);
+          console.log(`[AreaDetailsPanel] Using polyline fallback for walk ${selectedWalkId}: ${coordinates.length} points`);
+        }
+      }
+
+      if (!coordinates || coordinates.length < 2) {
+        setRouteSegments(null);
+        return;
+      }
+
+      // Prepare route segments with deviation coloring
+      // WHY: Convert geometry to Feature for prepareDeviationColoredRoute
+      const boundaryFeature: Feature<Polygon | MultiPolygon> = {
+        type: 'Feature',
+        properties: {},
+        geometry: details.geometry as Polygon | MultiPolygon,
+      };
+
+      const segments = prepareDeviationColoredRoute(coordinates, boundaryFeature);
+      console.log(`[AreaDetailsPanel] Prepared ${segments.length} route segments from ${coordinates.length} coordinates`);
+      const totalPoints = segments.reduce((sum, seg) => sum + seg.positions.length, 0);
+      console.log(`[AreaDetailsPanel] Total points in segments: ${totalPoints}, first segment: ${segments[0]?.positions.length} points, last segment: ${segments[segments.length - 1]?.positions.length} points`);
+      setRouteSegments(segments);
+    } catch (e) {
+      console.error('[AreaDetailsPanel] Failed to load route data:', e);
+      setRouteSegments(null);
+    }
+  }, [selectedWalkId, details?.geometry, db, dbLoading]);
 
   // Close on escape key
   useEffect(() => {
@@ -248,10 +381,38 @@ export default function AreaDetailsPanel({
           {/* Mini-Map (ADR 012) - shows subarea boundary for route planning */}
           {details.geometry && (
             <section>
+              {/* WHY: Route toggle control per Ticket 011 - routes hidden by default */}
+              {details.walks.length > 0 && (
+                <button
+                  onClick={() => setShowRoute(!showRoute)}
+                  className="w-full mb-3 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-3 cursor-pointer transition-colors"
+                  role="switch"
+                  aria-checked={showRoute}
+                >
+                  {/* Route/Path icon */}
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  <span className="flex-1">Show Walk Route</span>
+                  {/* WHY: Visual toggle indicator */}
+                  <div 
+                    className={`w-8 h-5 rounded-full transition-colors ${
+                      showRoute ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <div 
+                      className={`w-4 h-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${
+                        showRoute ? 'translate-x-3.5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </div>
+                </button>
+              )}
               <AreaMiniMap
                 geometry={details.geometry}
                 tier={details.tier}
                 panelState={panelState}
+                routeSegments={showRoute ? routeSegments || undefined : undefined}
               />
             </section>
           )}
@@ -436,10 +597,17 @@ export default function AreaDetailsPanel({
                 Walk History ({details.walks.length})
               </h3>
               <div className="space-y-2">
-                {details.walks.map(walk => (
+                {details.walks.map(walk => {
+                  const isSelected = selectedWalkId === walk.id;
+                  return (
                   <div 
                     key={walk.id} 
-                    className={`bg-gray-50 rounded-lg p-3 ${walk.isBest ? 'ring-2 ring-orange-200' : ''}`}
+                    onClick={() => setSelectedWalkId(walk.id)}
+                    className={`bg-gray-50 rounded-lg p-3 cursor-pointer transition-colors hover:bg-gray-100 ${
+                      walk.isBest ? 'ring-2 ring-orange-200' : ''
+                    } ${
+                      isSelected ? 'ring-2 ring-blue-500' : ''
+                    }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
@@ -451,6 +619,7 @@ export default function AreaDetailsPanel({
                           href={`https://www.strava.com/activities/${walk.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                           className="text-sm font-medium hover:underline"
                           style={{ color: '#FC5200' }}
                         >
@@ -479,7 +648,10 @@ export default function AreaDetailsPanel({
                               </div>
                             ) : (
                               <button
-                                onClick={() => setOpenWalkMenuId(openWalkMenuId === walk.id ? null : walk.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenWalkMenuId(openWalkMenuId === walk.id ? null : walk.id);
+                                }}
                                 className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded hover:bg-gray-200 transition-colors"
                                 aria-label="Re-analyze walk"
                               >
@@ -489,7 +661,10 @@ export default function AreaDetailsPanel({
                               </button>
                             )}
                             {openWalkMenuId === walk.id && (
-                              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[140px]">
+                              <div 
+                                className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[140px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <button
                                   onClick={() => handleReAnalyzeWalk(walk.id, 'rescore')}
                                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
@@ -517,7 +692,8 @@ export default function AreaDetailsPanel({
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}

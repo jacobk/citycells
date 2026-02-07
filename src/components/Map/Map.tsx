@@ -592,7 +592,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       // Now run full analysis only for assigned activity-area pairs
       // and aggregate results per area, saving to database
-      const areaActivityScores = new Map<number, Array<{ activityId: number; name: string; score: number; metrics: AnalysisMetrics; result: FullAnalysisResult }>>();
+      const areaActivityScores = new Map<number, Array<{ activityId: number; name: string; score: number; metrics: AnalysisMetrics; result: FullAnalysisResult; summaryPolyline?: string }>>();
 
       // WHY: Save each analysis result to database as we compute it
       for (const [activityId, { areaId, score }] of activityBestArea.entries()) {
@@ -643,7 +643,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           name: activity.original.name,
           score: result.metrics.rawQualityScore,
           metrics: result.metrics,
-          result
+          result,
+          // WHY: Include summary_polyline for route visualization fallback (Ticket 011)
+          summaryPolyline: activity.original.map?.summary_polyline
         });
       }
 
@@ -673,7 +675,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             name: score.name,
             distanceMeters: score.metrics.totalWalkLengthMeters,
             qualityScore: score.metrics.rawQualityScore,
-            isBest: score.activityId === bestWalk.activityId
+            isBest: score.activityId === bestWalk.activityId,
+            // WHY: Include summary_polyline for route visualization fallback (Ticket 011)
+            summaryPolyline: score.summaryPolyline
           }));
           // WHY: Deviations require database IDs and exemption state.
           // Populate from persistence when details are loaded from the database.

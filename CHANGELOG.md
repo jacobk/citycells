@@ -18,6 +18,16 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Mini-map walk route visualization: toggle control to show/hide routes, walk selection in Walk History, deviation-based coloring matching main map. (PRD 001 §3.6, ADR 010 §3, ADR 012, TICKET-011)
+  - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/Map/Map.tsx`, `src/app/page.tsx`
+  - Toggle control above mini-map to show/hide routes (default: OFF)
+  - Walk selection in Walk History section (clickable items with visual highlight)
+  - Default selection: best walk (`isBest: true`) or first walk if only one exists
+  - Route visualization uses same deviation-based coloring as main map (green = within 25m, red = deviation)
+  - Routes render above area boundary polygon (correct z-order)
+  - Prefers stream data for full paths, falls back to `summary_polyline` from activities array (matches main map pattern)
+  - FitBounds includes route segments to ensure full route is visible
+  - Independent toggle state from main map route toggle
 - Strava API brand guidelines compliance: official Connect with Strava button, standardized "View on Strava" links, and "Powered by Strava" branding. (TICKET-010)
   - Key files: `src/components/ProfileCard/ProfileCard.tsx`, `src/components/AreaTooltip/AreaTooltip.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/app/privacy/page.tsx`, `src/app/terms/page.tsx`, `src/lib/strava.ts`, `public/strava/`
   - Replaced custom "Connect with Strava" button with official Strava button assets (48px height per guidelines)
