@@ -224,3 +224,33 @@ The `read,activity:read_all,read_all` scopes are required to:
 1. **Single user assumption**: No multi-user support. Data is per-browser session.
 
 2. **No cross-device sync**: Tokens are per-browser (consistent with ADR 004 local-first philosophy).
+
+## Production Access & Athlete Limits
+
+### Athlete Limit
+
+Strava OAuth apps have a connected athlete limit:
+- **Default limit**: 1 athlete (for new/development apps)
+- **Development limit**: Up to 100 athletes (requires request)
+- **Production limit**: Unlimited athletes (requires production access approval)
+
+### Production Access Request
+
+To support multiple users, CityCells requires production access from Strava. The production access request process:
+
+1. **Prerequisites**:
+   - App settings must be complete (name, description, website URL, callback domain)
+   - Privacy policy must be publicly accessible (see `/privacy` page)
+   - Terms of service may be required (check Strava settings)
+
+2. **Submission**:
+   - Submit request via [Strava Developer Program form](https://share.hsforms.com/1VXSwPUYqSH6IxK0y51FjHwcnkd8)
+   - Response time: Typically 1-3 weeks
+   - If approved, athlete limit is automatically increased in Strava settings
+
+3. **Documentation**:
+   - See [TICKET-010: Strava Production Access Request](../tickets/010-strava-production-access.md) for full process
+
+### Error Handling
+
+If the athlete limit is exceeded, users will receive "Error 403: limit of connected athletes exceeded". This indicates the app needs production access approval from Strava.

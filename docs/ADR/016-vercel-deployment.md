@@ -87,6 +87,14 @@ We will deploy CityCells to **Vercel** as a unified Next.js application (fronten
 **Strava OAuth App Settings**:
 - Update "Authorization Callback Domain" to Vercel domain (e.g., `citycells.vercel.app`)
 - Or add full redirect URI: `https://citycells.vercel.app/api/auth/callback`
+- **Privacy Policy URL**: Required for production access - set to `https://citycells.vercel.app/privacy`
+- **Terms of Service URL**: May be required - check Strava settings
+- **App Description**: Must be clear and professional for production access approval
+
+**Production Access**:
+- Default athlete limit: 1 athlete (development apps)
+- Production access required for unlimited athletes
+- See [TICKET-010: Strava Production Access Request](../tickets/010-strava-production-access.md) for request process
 
 **Next.js Configuration**:
 - No changes required to `next.config.ts` (already compatible)
@@ -160,3 +168,4 @@ We will deploy CityCells to **Vercel** as a unified Next.js application (fronten
 - **Analytics**: Leverage Vercel Analytics for user behavior tracking
 - **Edge functions**: Consider moving some API routes to Edge Runtime for lower latency
 - **Multi-region**: Vercel supports multi-region deployment if needed for global scale
+- **Strava production access**: Request production access to increase athlete limit beyond default (see TICKET-010)

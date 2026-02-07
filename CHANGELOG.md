@@ -17,6 +17,18 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Added
+- Privacy policy and terms pages for Strava production access. (TICKET-010, ADR 016)
+  - Key files: `docs/privacy-policy.md`, `src/app/privacy/page.tsx`, `src/app/terms/page.tsx`, `src/components/HamburgerMenu/HamburgerMenu.tsx`
+  - Privacy policy page at `/privacy` covering data collection, storage, usage, user rights, and GDPR compliance
+  - Terms of service page template at `/terms` (ready if Strava requires it)
+  - Privacy Policy link added to hamburger menu for easy access
+  - Required for Strava production access request to increase athlete limit beyond default
+- Strava production access documentation and preparation. (TICKET-010, ADR 016)
+  - Key files: `docs/tickets/010-strava-production-access.md`, `docs/features/authentication.md`, `docs/ADR/016-vercel-deployment.md`
+  - Comprehensive ticket documenting production access request process
+  - Updated authentication feature docs with athlete limit information
+  - Updated ADR 016 with privacy policy requirement and production access notes
 ### Fixed
 - Vercel deployment build failure: added missing `src/lib/requestOrigin.ts` file to repository. (TICKET-009, ADR 016)
   - Key files: `src/lib/requestOrigin.ts`
