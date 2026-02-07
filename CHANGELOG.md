@@ -23,6 +23,12 @@ Each entry should reference:
   - File was created locally but not committed, causing module resolution errors in Vercel builds
   - Handles Vercel proxy headers (`x-forwarded-host`, `x-forwarded-proto`) for correct OAuth redirects
 ### Added
+- Vercel deployment documentation: ADR, feature docs, and implementation ticket. (TICKET-009, ADR 016)
+  - Key files: `docs/ADR/016-vercel-deployment.md`, `docs/features/deployment.md`, `docs/tickets/009-vercel-deployment.md`
+  - ADR 016 documents platform selection (Vercel) and deployment architecture
+  - Feature documentation covers deployment process and rationale
+  - Implementation ticket provides step-by-step deployment checklist
+### Added
 - Expandable bottom panel with multi-state slide behavior: four states (closed, collapsed ~40vh, expanded ~85vh, full-screen ~95vh) with touch gestures for mobile and click-to-toggle for desktop. (PRD 001 §3.6, ADR 015, TICKET-008)
   - Key files: `src/hooks/useExpandablePanel.ts`, `src/lib/panel-state.ts`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/AreaMiniMap/AreaMiniMap.tsx`
   - Touch devices can slide panel up/down to transition between states
