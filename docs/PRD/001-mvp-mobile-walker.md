@@ -52,6 +52,12 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want a re-analyze control in my profile popup so I can refresh all my walk scores in one place.
 *   **As a user,** I want to choose between re-scoring only (fast) and full re-fetch plus re-score when source data may have changed.
 
+### Offline Support Stories (Added: 2026-02-07)
+*   **As a user,** I want the app to work well offline so I can check my progress and plan walks when I have no connection (e.g. in the field).
+*   **As a user,** I want to open the app when offline (after I have used it at least once) so I can view the map, sub-areas, and my progress without internet.
+*   **As a user,** I want to navigate the app and view area details when offline, so I can browse which areas I have completed and their scores without connectivity.
+*   **As a user,** I want a clear indication when I am offline so I understand why syncing or external links are unavailable.
+
 ## 3. Functional Requirements
 
 ### 3.1 Map Interface
@@ -290,6 +296,19 @@ All visualizations are **mobile-first** (touch-optimized) and use **static examp
 *   Export database feature for backup (downloads `.db` file).
 *   Import database feature to restore from backup.
 
+### 3.11 Offline Support (Added: 2026-02-07)
+
+*Reference: ADR 014 (Offline Support Strategy)*
+
+Once the map, sub-areas, and user progress have been loaded at least once (with network), the app shall work offline for read-only use.
+
+*   **App shell:** Service Worker caches HTML, JS, CSS, and WASM so the app can load when offline.
+*   **Map:** Map tiles are cached on use (Cache API via Service Worker); GeoJSON/sub-area boundaries available from DB or cached static file.
+*   **Navigation:** User can open the app, view the map, open the sub-area list, open area details, and view progress/stats without network.
+*   **Offline indicator:** Show a clear indicator (e.g. banner or icon) when the app is offline.
+*   **Graceful degradation:** When offline, do not attempt Strava API calls; disable or hide sync/re-fetch actions; external links (e.g. Strava activity) may be shown with a note that they require connectivity.
+*   **Out of scope for MVP:** Full tile precache for Malmö; offline write queue; background sync on reconnect.
+
 ### 3.10 Sub-Area List View (Added: 2026-02-04, Updated: 2026-02-04)
 
 *Reference: ADR 009 (UI Navigation Layout)*
@@ -383,7 +402,7 @@ Provide a browsable list of all sub-areas with sorting and filtering capabilitie
 *   **Mobile First:** UI controls (buttons, drawers, panels) must be touch-friendly and positioned for thumb usage.
 *   **Performance:** Map interactions should remain 60fps even with 136 polygons rendered.
 *   **Privacy:** Only access read permissions for Strava activities. All data stays on user's device.
-*   **Offline Capable:** After initial sync, app should work offline (viewing progress, not syncing new walks).
+*   **Offline Capable:** After initial load, app works offline for viewing map, sub-areas, progress, and area details; sync and external APIs require network (see ADR 014, Section 3.11).
 *   **Responsive:** Details panel adapts to screen size (full sheet on mobile, side panel on desktop).
 
 ## 5. Future Considerations (Post-MVP)
