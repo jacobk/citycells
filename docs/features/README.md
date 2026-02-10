@@ -16,6 +16,7 @@ Enable any developer (human or AI agent) to:
 |---------|------|--------|----------|
 | Authentication | [authentication.md](./authentication.md) | Implemented | [ADR 001](../ADR/001-tech-stack.md), [ADR 004](../ADR/004-sqlite-storage.md), [ADR 013](../ADR/013-persistent-strava-authentication.md) |
 | Map Visualization | [map-visualization.md](./map-visualization.md) | Implemented | [ADR 001](../ADR/001-tech-stack.md), [ADR 002](../ADR/002-exclusive-activity-matching.md), [ADR 003](../ADR/003-multi-metric-completion-scoring.md), [ADR 006](../ADR/006-strava-activity-streams.md), [ADR 010](../ADR/010-map-visual-design-system.md), [ADR 012](../ADR/012-details-panel-mini-map.md) |
+| Mini-Map Walk Routes | [map-visualization.md](./map-visualization.md) | Planned | [ADR 010](../ADR/010-map-visual-design-system.md), [ADR 012](../ADR/012-details-panel-mini-map.md) |
 | Analysis Engine | [analysis-engine.md](./analysis-engine.md) | Implemented | [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |
 | Data Persistence | [data-persistence.md](./data-persistence.md) | Implemented | [ADR 004](../ADR/004-sqlite-storage.md) |
 | Exemption System | [exemption-system.md](./exemption-system.md) | Implemented | [ADR 003](../ADR/003-multi-metric-completion-scoring.md) |
@@ -23,6 +24,7 @@ Enable any developer (human or AI agent) to:
 | Sub-Area List | [sub-area-list.md](./sub-area-list.md) | Implemented | [ADR 008](../ADR/008-panel-navigation-architecture.md) |
 | Re-Analysis | [re-analysis.md](./re-analysis.md) | Planned | [ADR 011](../ADR/011-re-analysis-strategy.md), [ADR 004](../ADR/004-sqlite-storage.md) |
 | Offline Support | [offline-support.md](./offline-support.md) | Planned | [ADR 014](../ADR/014-offline-support-strategy.md), [ADR 004](../ADR/004-sqlite-storage.md) |
+| Distance Progress Tracking | [distance-progress-tracking.md](./distance-progress-tracking.md) | Implemented | [ADR 004](../ADR/004-sqlite-storage.md), [ADR 005](../ADR/005-strava-privacy-zones.md) |
 | Deployment | [deployment.md](./deployment.md) | Planned | [ADR 016](../ADR/016-vercel-deployment.md), [ADR 001](../ADR/001-tech-stack.md), [ADR 013](../ADR/013-persistent-strava-authentication.md) |
 
 ## Document Template

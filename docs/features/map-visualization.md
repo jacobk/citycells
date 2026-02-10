@@ -313,3 +313,47 @@ Route visualization with deviation-based coloring to show walk quality at a glan
 - Stream data cached in IndexedDB (no additional API calls for visualization)
 
 **Reference:** [ADR 010](../ADR/010-map-visual-design-system.md) Section 3 | [Ticket 007](../tickets/007-walk-route-visualization.md)
+
+### Mini-Map Walk Route Visualization (Planned - 2026-02-07)
+
+Extension of route visualization to the area details panel mini-map, enabling users to view matched walk routes in context:
+
+1. **Toggle Control Above Mini-Map**
+   - Toggle button/switch positioned above the mini-map (within AreaDetailsPanel)
+   - Label: "Show Walk Route" or icon-only
+   - Default state: OFF (routes hidden)
+   - Independent state from main map route toggle
+
+2. **Route Rendering on Mini-Map**
+   - Uses same deviation-based coloring as main map (green/red segments)
+   - Reuses `prepareDeviationColoredRoute()` from `route-visualization.ts`
+   - Routes render above area boundary polygon (same z-order as main map)
+   - Uses cached stream data from database (no additional API calls)
+
+3. **Multiple Walk Selection**
+   - When multiple walks match an area, Walk History section shows all walks
+   - Each walk item in Walk History is selectable (click/tap)
+   - Selected walk highlighted visually (border or background color)
+   - Selected walk's route displayed on mini-map when toggle is ON
+   - Default selection: Best walk (highest quality score, `isBest: true`)
+
+4. **Single Walk Behavior**
+   - When only one walk matches, it displays automatically when toggle is ON
+   - No selection UI needed (Walk History still shows the single walk)
+
+**Key Implementation Files:**
+
+| File | Purpose |
+|------|---------|
+| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Add route rendering with Polyline components |
+| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Add toggle control, walk selection state, pass route data to mini-map |
+| `src/lib/route-visualization.ts` | Reuse existing route preparation utilities |
+| `src/lib/db.ts` | Retrieve walk stream data for selected walk ID |
+
+**Design Rationale:**
+- Reuses existing route visualization patterns for consistency
+- Independent toggle allows users to focus on boundary or route as needed
+- Walk selection enables comparison of multiple attempts
+- Stream data already cached, so no performance impact
+
+**Reference:** [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 3.6 (Mini-Map) | [Ticket 011](../tickets/011-mini-map-walk-routes.md)

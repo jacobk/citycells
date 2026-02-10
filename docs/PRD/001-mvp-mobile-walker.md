@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-07)  
+**Date:** 2026-02-02 (Updated: 2026-02-09)  
 **Status:** In Progress
 
-*Latest update: Persistent Strava Authentication (ADR 013) - tokens stored in SQLite for seamless returning user experience*
+*Latest update: Distance Progress Tracking (Section 3.9.1) - theoretical vs actual distance metrics with efficient calculation*
 
 ## 1. Overview
 
@@ -18,6 +18,9 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want the app to automatically find my walks tagged with `#malmödelområde` and match them to the areas.
 *   **As a user,** I want to clearly see which areas I have completed and their quality tier (Platinum/Gold/Silver/Bronze).
 *   **As a user,** I want to see a progress bar indicating how many total areas I have conquered.
+*   **As a user,** I want to see my total walked distance displayed in the status view, so I can track how much I've walked overall.
+*   **As a user,** I want to see the total distance of all area perimeters combined, so I know the total challenge distance.
+*   **As a user,** I want to see a progress bar showing walked distance vs total perimeter distance (e.g., "walked X km of Y km"), so I can track my distance-based progress.
 
 ### Quality & Scoring Stories
 *   **As a user,** I want to see a detailed score breakdown for each area, so I understand how to improve.
@@ -45,6 +48,9 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want to pan and zoom the mini-map, so I can explore different parts of the boundary in detail.
 *   **As a user,** I want to see the circumference distance when hovering over an area, so I can quickly estimate how long a walk would take.
 *   **As a user,** I want to see an estimated walk time alongside the circumference, so I can plan my walks around my available time.
+*   **As a user,** I want to see my matched walk route overlaid on the mini-map in the details panel, so I can compare my actual path to the area boundary.
+*   **As a user,** I want to toggle walk route visibility on the mini-map, so I can choose when to see the route overlay.
+*   **As a user,** I want to select which walk to view when multiple walks match an area, so I can compare different attempts.
 
 ### Re-Analysis Stories (Added: 2026-02-06)
 *   **As a user,** I want to re-analyze my cached walks so that scores stay correct when the app's scoring formula changes.
@@ -151,7 +157,7 @@ Display completed areas using a **sequential heat map color gradient** for impro
 *   Visible at zoom level 13+, scale with zoom
 *   Custom SVG icons preferred for cross-platform consistency
 
-### 3.5 Hover Interaction (Updated: 2026-02-07)
+### 3.6 Hover Interaction (Updated: 2026-02-07)
 
 **Desktop:** Mouse hover over area.  
 **Mobile:** Long-press (500ms) on area.
@@ -168,7 +174,7 @@ Display floating tooltip with:
 
 Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 
-### 3.6 Area Details Panel (Updated: 2026-02-07)
+### 3.7 Area Details Panel (Updated: 2026-02-07)
 
 **Trigger:** Click/tap on any area (completed or not).
 
@@ -181,7 +187,7 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 *   Tier badge and quality score (if completed)
 *   "Not yet walked" indicator (if incomplete)
 
-#### Mini-Map (Added: 2026-02-07)
+#### Mini-Map (Added: 2026-02-07, Updated: 2026-02-07)
 
 *Reference: ADR 012 (Details Panel Mini-Map)*
 
@@ -192,6 +198,17 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 *   **Boundary Overlay:** Subarea polygon with prominent stroke and low-opacity tier-colored fill (streets visible through fill)
 *   **Interactivity:** Pan and zoom enabled for detailed exploration
 *   **Bounds:** Auto-fit to polygon with padding on initial load
+
+**Walk Route Visualization (Added: 2026-02-07):**
+*   **Toggle Control:** Toggle button above mini-map to show/hide matched walk routes
+*   **Default State:** Routes hidden (toggle OFF)
+*   **Route Styling:** Same deviation-based coloring as main map (green = within 25m of boundary, red = deviation)
+*   **Multiple Walks:** When multiple walks match the area:
+    *   All matched walks listed at bottom of card in Walk History section
+    *   Walk selection control allows choosing which walk to display on mini-map
+    *   Selected walk highlighted in Walk History list
+    *   Default selection: Best walk (highest quality score)
+*   **Single Walk:** When only one walk matches, it displays automatically when toggle is ON
 
 #### Score Breakdown (if completed)
 
@@ -216,13 +233,15 @@ Each metric name is a clickable link to its documentation page (see Section 3.9)
     *   Negative values shown as "-X.XX km (efficient)" - indicates efficient route
 *   Loop status: ✓ Closed / ⚠ Open (Xm gap)
 
-#### Walk History
+#### Walk History (Updated: 2026-02-07)
 List of all matched walks for this area:
 *   Walk name / date
 *   Distance walked
 *   Individual quality score
 *   Link to Strava activity
 *   Indicator if this is the current "best" walk
+*   **Walk Selection (Added: 2026-02-07):** When multiple walks exist, each walk item is selectable to display its route on the mini-map
+*   **Visual Indicator:** Selected walk highlighted (e.g., border or background color) to show which route is currently displayed
 
 #### Deviations Section (if any detected)
 *   List of detected deviations for best walk
@@ -235,7 +254,7 @@ List of all matched walks for this area:
 *   "Mark as Exempt" button for non-exempt deviations
 *   "Remove Exemption" button for exempt deviations
 
-### 3.7 Exemption Management
+### 3.8 Exemption Management
 
 **Mark as Exempt Flow:**
 1.  User taps "Mark as Exempt" on a deviation.
@@ -262,7 +281,7 @@ List of all matched walks for this area:
 *   Exempted detour distance is excluded from efficiency calculation.
 *   Users can view all exemptions in the details panel.
 
-### 3.9 Metrics Documentation (Updated: 2026-02-03)
+### 3.10 Metrics Documentation (Updated: 2026-02-03)
 
 *Reference: ADR 007 (Interactive Metrics Documentation)*
 
@@ -300,7 +319,7 @@ All visualizations are **mobile-first** (touch-optimized) and use **static examp
 | Path Precision | Heat map of distance from border with RMSE animation |
 | Route Efficiency | Side-by-side efficient vs. inefficient path comparison |
 
-### 3.8 Data Persistence
+### 3.9 Data Persistence
 
 *Reference: ADR 004 (SQLite Storage)*
 
@@ -310,7 +329,53 @@ All visualizations are **mobile-first** (touch-optimized) and use **static examp
 *   Export database feature for backup (downloads `.db` file).
 *   Import database feature to restore from backup.
 
-### 3.11 Offline Support (Added: 2026-02-07)
+### 3.9.1 Progress Dashboard & Distance Tracking (Added: 2026-02-09, Updated: 2026-02-09)
+
+*Reference: ADR 004 (SQLite Storage), ADR 005 (Strava Privacy Zones)*
+
+The Progress Dashboard displays overall progress statistics including area completion and distance metrics.
+
+#### Distance Metrics Display
+
+**Theoretical Distance (Primary Metric):**
+*   Sum of `perimeter_meters` from `areas` table for all **completed** areas (joined via `area_completions`)
+*   Represents the "ideal" distance if walking exactly the perimeter of each completed area
+*   Display format: "X.XX km" (kilometers with 2 decimal places)
+*   Used for progress bar and main distance display
+
+**Total Perimeter Distance (Challenge Target):**
+*   Sum of all `perimeter_meters` from `areas` table (all 136 sub-areas)
+*   Display format: "X.XX km" (kilometers with 2 decimal places)
+*   Represents the total challenge distance if walking every area perimeter
+
+**Actual Walked Distance (Additional Stat):**
+*   Sum of all `total_distance_meters` from `walks` table for the authenticated user
+*   Display format: "X.XX km" (kilometers with 2 decimal places)
+*   Uses Strava's `distance` field (not polyline-calculated) to account for privacy zone truncation (see ADR 005)
+*   Includes all walks, including detours, multiple walks per area, and inefficient routes
+*   Displayed as secondary metric with difference from theoretical distance
+
+**Distance Difference:**
+*   Calculated as: `actualWalkedDistance - theoreticalDistance`
+*   Display format: "+X.XX km" (if actual > theoretical) or "-X.XX km" (if actual < theoretical)
+*   Shows how much more or less distance was walked compared to the theoretical minimum
+
+**Distance Progress Display:**
+*   Primary progress bar uses theoretical distance: `(theoreticalDistance / totalPerimeterDistance) * 100%`
+*   Format: "Walked X.XX km of Y.YY km" (theoretical distance vs total perimeter)
+*   Separate progress bar showing theoretical distance completion percentage
+*   Actual distance and difference displayed as additional statistics below the progress bar
+*   Displayed prominently in the Progress Dashboard alongside area completion progress
+
+**Performance Considerations:**
+*   Theoretical distance calculated efficiently via SQL JOIN: `SELECT SUM(a.perimeter_meters) FROM areas a INNER JOIN area_completions ac ON a.id = ac.area_id WHERE ac.user_id = ?`
+*   Total perimeter distance is static (sum of 136 areas) and should be cached or calculated once
+*   Actual distance query uses indexed `user_id` column for efficiency
+*   Distance metrics should be calculated when progress changes, not on every render
+
+**Location:** Progress Dashboard (right drawer accessible via hamburger menu → Stats)
+
+### 3.12 Offline Support (Added: 2026-02-07)
 
 *Reference: ADR 014 (Offline Support Strategy)*
 
@@ -323,7 +388,7 @@ Once the map, sub-areas, and user progress have been loaded at least once (with 
 *   **Graceful degradation:** When offline, do not attempt Strava API calls; disable or hide sync/re-fetch actions; external links (e.g. Strava activity) may be shown with a note that they require connectivity.
 *   **Out of scope for MVP:** Full tile precache for Malmö; offline write queue; background sync on reconnect.
 
-### 3.10 Sub-Area List View (Added: 2026-02-04, Updated: 2026-02-04)
+### 3.11 Sub-Area List View (Added: 2026-02-04, Updated: 2026-02-04)
 
 *Reference: ADR 009 (UI Navigation Layout)*
 
