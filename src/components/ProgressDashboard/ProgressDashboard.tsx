@@ -1,6 +1,7 @@
 'use client';
 
 import { getTierColor } from '@/lib/analysis';
+import { formatDistance } from '@/lib/format-utils';
 
 interface TierStats {
   platinum: number;
@@ -17,6 +18,11 @@ interface ProgressDashboardProps {
   tierCounts: TierStats;
   athleteName?: string;
   athleteProfile?: string;
+  // WHY: Distance metrics for progress tracking (Ticket 012)
+  // Undefined means metrics haven't been loaded yet, 0 means no distance
+  theoreticalDistance?: number;
+  totalPerimeterDistance?: number;
+  actualWalkedDistance?: number;
 }
 
 /**
@@ -38,9 +44,29 @@ export default function ProgressDashboard({
   tierCounts,
   athleteName,
   athleteProfile,
+  theoreticalDistance,
+  totalPerimeterDistance,
+  actualWalkedDistance,
 }: ProgressDashboardProps) {
   const percentage = totalAreas > 0 ? (completedCount / totalAreas) * 100 : 0;
   const remainingAreas = totalAreas - completedCount;
+
+  // WHY: Check if distance metrics are available (not undefined)
+  const hasDistanceMetrics = theoreticalDistance !== undefined && 
+                              totalPerimeterDistance !== undefined && 
+                              actualWalkedDistance !== undefined;
+
+  // WHY: Calculate distance progress percentage (theoretical vs total perimeter)
+  // Cap at 100% to handle edge case where theoretical equals total
+  const distanceProgressPercentage = hasDistanceMetrics && totalPerimeterDistance > 0
+    ? Math.min((theoreticalDistance! / totalPerimeterDistance!) * 100, 100)
+    : 0;
+
+  // WHY: Calculate difference between actual and theoretical distance
+  // Positive = detours/multiple walks, negative = rare GPS errors
+  const distanceDifference = hasDistanceMetrics 
+    ? actualWalkedDistance! - theoreticalDistance!
+    : 0;
 
   // WHY: Explicit non-null tier keys for iteration
   type NonNullTier = 'platinum' | 'gold' | 'silver' | 'bronze';
@@ -125,6 +151,40 @@ export default function ProgressDashboard({
               </div>
             )}
           </div>
+
+          {/* Distance Progress (Ticket 012) */}
+          {hasDistanceMetrics && (
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
+              <div className="text-sm text-gray-500 mb-1">Distance Progress</div>
+              <div className="text-sm text-gray-600 mb-3">
+                Walked {formatDistance(theoreticalDistance!)} of {formatDistance(totalPerimeterDistance!)}
+              </div>
+              
+              {/* Distance progress bar */}
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-1000"
+                  style={{ width: `${distanceProgressPercentage}%` }}
+                />
+              </div>
+
+              {/* Secondary stats */}
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between text-gray-600">
+                  <span>Actual walked:</span>
+                  <span className="font-medium">{formatDistance(actualWalkedDistance!)}</span>
+                </div>
+                {distanceDifference !== 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Difference:</span>
+                    <span className={`font-medium ${distanceDifference > 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                      {distanceDifference > 0 ? '+' : ''}{formatDistance(Math.abs(distanceDifference))}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Tier Breakdown */}
           <div>

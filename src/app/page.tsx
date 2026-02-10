@@ -2,7 +2,7 @@
 
 import CityMap, { type AreaClickData, type ProgressInfo } from '@/components/Map';
 import { useStrava } from '@/hooks/useStrava';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { type AnalysisMetrics } from '@/lib/analysis';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AreaDetailsPanel, type AreaDetails } from '@/components/AreaDetailsPanel';
@@ -13,6 +13,7 @@ import { PanelBreadcrumbs } from '@/components/PanelBreadcrumbs';
 import { ProfileCard } from '@/components/ProfileCard';
 import type { ExemptionReason } from '@/lib/exemption-types';
 import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
+import { useDatabase } from '@/hooks/useDatabase';
 
 // ============================================
 // Types - Panel Navigation State (ADR 008)
@@ -88,6 +89,16 @@ export default function Home() {
   const [reAnalysisProgress, setReAnalysisProgress] = useState<ReAnalysisProgress | null>(null);
   // WHY: Ref to trigger map refresh after re-analysis
   const refreshMapRef = useRef<(() => void) | null>(null);
+
+  // WHY: Database hook for distance queries (Ticket 012)
+  const { db, loading: dbLoading } = useDatabase();
+
+  // WHY: State for distance metrics (Ticket 012)
+  const [distanceMetrics, setDistanceMetrics] = useState<{
+    theoreticalDistance: number;
+    totalPerimeterDistance: number;
+    actualWalkedDistance: number;
+  } | null>(null);
 
   const handleProgress = useCallback((progressInfo: ProgressInfo) => {
     setProgress(progressInfo);
@@ -320,6 +331,42 @@ export default function Home() {
     refreshMapRef.current = refreshFn;
   }, []);
 
+  // WHY: Query distance metrics when dashboard opens (Ticket 012)
+  // Only calculate when dashboard is open and user is authenticated
+  useEffect(() => {
+    if (!isDashboardOpen || !athlete?.id || dbLoading || !db) {
+      return;
+    }
+
+    // WHY: Dynamic import to avoid bundling sql.js at build time
+    const queryDistanceMetrics = async () => {
+      try {
+        const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
+        const { 
+          getTheoreticalDistance, 
+          getTotalPerimeterDistance, 
+          getActualWalkedDistance 
+        } = await import('@/lib/db');
+
+        const userId = getOrCreateUserId(athlete.id);
+        const theoreticalDistance = getTheoreticalDistance(userId);
+        const totalPerimeterDistance = getTotalPerimeterDistance();
+        const actualWalkedDistance = getActualWalkedDistance(userId);
+
+        setDistanceMetrics({
+          theoreticalDistance,
+          totalPerimeterDistance,
+          actualWalkedDistance,
+        });
+      } catch (error) {
+        console.error('[DistanceMetrics] Failed to query distance metrics:', error);
+        setDistanceMetrics(null);
+      }
+    };
+
+    queryDistanceMetrics();
+  }, [isDashboardOpen, athlete?.id, dbLoading, db]);
+
   /**
    * Handle per-walk re-analysis from area details panel.
    * WHY: Allows users to re-analyze a single walk (ADR 011).
@@ -411,6 +458,9 @@ export default function Home() {
         tierCounts={progress.tierCounts}
         athleteName={athlete ? `${athlete.firstname} ${athlete.lastname}` : undefined}
         athleteProfile={athlete?.profile}
+        theoreticalDistance={distanceMetrics?.theoreticalDistance}
+        totalPerimeterDistance={distanceMetrics?.totalPerimeterDistance}
+        actualWalkedDistance={distanceMetrics?.actualWalkedDistance}
       />
 
       {/* Sub-Area List Panel (ADR 008) */}

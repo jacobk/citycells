@@ -741,6 +741,100 @@ export function getUserProgress(userId: number): UserProgressRow | null {
 }
 
 // ============================================
+// Distance Metrics Queries (Ticket 012)
+// ============================================
+
+/**
+ * Get theoretical distance (sum of perimeters for completed areas).
+ * WHY: Represents the "ideal" distance if walking exactly the perimeter of each completed area.
+ * Uses perimeter_meters from areas table joined with area_completions.
+ * See ADR 005 for rationale on using perimeter_meters.
+ * 
+ * @param userId - User ID to get completed areas for
+ * @returns Sum of perimeter_meters for all completed areas, or 0 if none
+ */
+export function getTheoreticalDistance(userId: number): number {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    `SELECT SUM(a.perimeter_meters) 
+     FROM areas a 
+     INNER JOIN area_completions ac ON a.id = ac.area_id 
+     WHERE ac.user_id = ?`,
+    [userId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return 0;
+  }
+
+  const value = result[0].values[0][0];
+  // WHY: SUM() returns null if no rows match, handle gracefully
+  return value !== null ? (value as number) : 0;
+}
+
+// WHY: Cache total perimeter distance since it's static (sum of all 136 areas)
+// This value never changes, so we calculate once and reuse
+let cachedTotalPerimeterDistance: number | null = null;
+
+/**
+ * Get total perimeter distance (sum of all area perimeters).
+ * WHY: This is a static value representing the total challenge distance if walking
+ * every area perimeter (all 136 sub-areas). Cached at module level since it never changes.
+ * See PRD 001 Section 3.9.1 for distance tracking requirements.
+ * 
+ * @returns Sum of perimeter_meters for all areas, or 0 if no areas found
+ */
+export function getTotalPerimeterDistance(): number {
+  // WHY: Return cached value if available to avoid repeated calculation
+  if (cachedTotalPerimeterDistance !== null) {
+    return cachedTotalPerimeterDistance;
+  }
+
+  const database = getDatabase();
+  
+  const result = database.exec('SELECT SUM(perimeter_meters) FROM areas');
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    cachedTotalPerimeterDistance = 0;
+    return 0;
+  }
+
+  const value = result[0].values[0][0];
+  // WHY: SUM() returns null if no rows match, handle gracefully
+  const total = value !== null ? (value as number) : 0;
+  cachedTotalPerimeterDistance = total;
+  return total;
+}
+
+/**
+ * Get actual walked distance (sum of all walk distances for user).
+ * WHY: Uses total_distance_meters from walks table, which stores Strava's distance field.
+ * This accounts for privacy zone truncation in the polyline (see ADR 005) and provides
+ * accurate total distance even when GPS points are missing.
+ * Uses indexed user_id column for efficiency.
+ * 
+ * @param userId - User ID to get walk distances for
+ * @returns Sum of total_distance_meters for all walks, or 0 if none
+ */
+export function getActualWalkedDistance(userId: number): number {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    'SELECT SUM(total_distance_meters) FROM walks WHERE user_id = ?',
+    [userId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return 0;
+  }
+
+  const value = result[0].values[0][0];
+  // WHY: SUM() returns null if no rows match, handle gracefully
+  return value !== null ? (value as number) : 0;
+}
+
+// ============================================
 // User Token Operations (ADR 013)
 // ============================================
 

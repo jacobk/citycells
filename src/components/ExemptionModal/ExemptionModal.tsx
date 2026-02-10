@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { EXEMPTION_REASONS, type ExemptionReason } from '@/lib/exemption-types';
+import { formatDistance } from '@/lib/format-utils';
 
 interface ExemptionModalProps {
   isOpen: boolean;
@@ -74,13 +75,6 @@ export default function ExemptionModal({
   };
 
   if (!isOpen) return null;
-
-  const formatDistance = (meters: number): string => {
-    if (meters >= 1000) {
-      return `${(meters / 1000).toFixed(2)} km`;
-    }
-    return `${Math.round(meters)} m`;
-  };
 
   return (
     <>

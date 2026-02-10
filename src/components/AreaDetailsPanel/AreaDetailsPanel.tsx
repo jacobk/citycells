@@ -17,6 +17,7 @@ import { useDatabase } from '@/hooks/useDatabase';
 import type { RouteSegment } from '@/lib/route-visualization';
 import { prepareDeviationColoredRoute } from '@/lib/route-visualization';
 import { getWalkStreams, getDatabase } from '@/lib/db';
+import { formatDistance } from '@/lib/format-utils';
 import mapboxPolyline from '@mapbox/polyline';
 import type { Feature, Polygon, MultiPolygon, Position } from 'geojson';
 
@@ -297,13 +298,6 @@ export default function AreaDetailsPanel({
     return `${Math.round(sqm).toLocaleString()} m²`;
   };
 
-  // Format distance for display
-  const formatDistance = (meters: number): string => {
-    if (meters >= 1000) {
-      return `${(meters / 1000).toFixed(2)} km`;
-    }
-    return `${Math.round(meters)} m`;
-  };
 
   // WHY: Calculate backdrop opacity based on panel state (more opaque when expanded)
   const backdropOpacity = panelState === 'fullscreen' ? 'bg-black/40' : 
