@@ -1,6 +1,6 @@
 # ADR 012: Details Panel Mini-Map Component
 
-**Date:** 2026-02-07  
+**Date:** 2026-02-07 (Updated: 2026-02-13)  
 **Status:** Accepted
 
 ## Context
@@ -28,13 +28,15 @@ Add a **functional planning map** to the Area Details Panel that displays:
 4. **Interactive** - users can pan and zoom to explore the area in detail
 
 **Implementation approach:** Create an `AreaMiniMap` component using React-Leaflet with:
-- Fixed dimensions (responsive: full-width, ~200px height on mobile, expandable)
+- **Dynamic height:** Fill available viewport height above the fold (min ~200px, grows to fill space)
 - Full base map tiles (same provider as main map, or higher detail variant)
 - Boundary polygon overlay with prominent stroke
 - Pan and zoom enabled for route exploration
-- Optional: tap-to-expand to larger view for detailed planning
+- Other panel content (stats, score breakdown, walk history) scrollable below the map
 
 **Why a real map with streets?** The primary goal is route planning - users need to see where streets run relative to the boundary to find optimal walking paths. A boundary-only view would not serve this purpose.
+
+**Why dynamic height?** (Updated: 2026-02-13) The details panel is optimized for boundary inspection. A larger map provides better context for planning walks and inspecting area boundaries. The dynamic height ensures maximum map visibility while keeping other details accessible via scrolling.
 
 ### Circumference in Hover Tooltip
 
@@ -42,6 +44,13 @@ Add circumference distance with estimated walk time to the `AreaTooltip` compone
 - Display format: "2.3 km (~28 min)"
 - Walk time estimate: 5 km/h average walking pace (12 minutes per km)
 - Shown for all areas (completed and not started)
+
+### Stats in Details Panel (Updated: 2026-02-13)
+
+Display the same quick-reference stats from the hover tooltip in the details panel:
+- **Location:** Below the mini-map, above the score breakdown
+- **Content:** Circumference distance with estimated walk time (e.g., "2.3 km (~28 min)")
+- **Rationale:** Users opening the details panel should see these stats without needing to close the panel and hover over the area
 
 ## Consequences
 
@@ -57,7 +66,7 @@ Add circumference distance with estimated walk time to the `AreaTooltip` compone
 
 - **Mobile bandwidth**: Additional tile requests for street-level detail (acceptable trade-off for planning utility)
 - **Performance consideration**: Creating Leaflet instances has overhead; ensure cleanup on panel close
-- **Panel height**: Functional map needs more vertical space (~200px vs original ~150px)
+- **Layout complexity**: (Updated: 2026-02-13) Dynamic height calculation requires awareness of viewport and panel constraints; CSS `calc()` or flex-grow patterns needed
 
 ### Neutral
 
@@ -73,6 +82,14 @@ Add circumference distance with estimated walk time to the `AreaTooltip` compone
 - Boundary polygon: prominent stroke (3-4px), tier-colored fill at ~0.2 opacity so streets remain visible
 - Respect existing design tokens from `src/lib/design-tokens.ts` for colors
 - Walk time formula: `Math.round(circumference_km * 12)` minutes
+
+### Height Behavior (Updated: 2026-02-13)
+
+- **Default:** Fill available viewport height (above the fold)
+- **Minimum:** ~200px to ensure usability
+- **Implementation:** Use CSS flex-grow or `calc(100vh - header - stats - padding)` pattern
+- **Panel scroll:** Content below the map (score breakdown, walk history) scrolls within the panel
+- **Rationale:** Maximize map for boundary inspection while keeping details accessible
 
 ## References
 

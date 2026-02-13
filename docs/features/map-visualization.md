@@ -245,34 +245,62 @@ See [PROJECT_PLAN.md](../../PROJECT_PLAN.md) Phase 4-5 for:
 - Area details panel
 - Progress dashboard with tier breakdown
 
-### Subarea Visual Context (Implemented - ADR 012)
+### Subarea Visual Context (Implemented - ADR 012, Updated: 2026-02-13)
 
-Two enhancements for spatial awareness and route planning:
+Enhancements for spatial awareness and route planning:
 
-1. **Mini-Map in Details Panel**
-   - Interactive React-Leaflet map inside AreaDetailsPanel (below header, above score breakdown)
+1. **Mini-Map in Details Panel** (Updated: 2026-02-13)
+   - Interactive React-Leaflet map inside AreaDetailsPanel (below header)
    - Full street-level base map (same tiles as main map)
    - Boundary polygon with prominent stroke (3px), low-opacity tier fill (0.2)
    - Pan and zoom enabled for route exploration; zoom controls hidden (gesture-only)
    - Auto-fits to polygon bounds on initial load with padding
-   - 200px height, full panel width
+   - **Dynamic height via flex-grow:** Mini-map fills available viewport space above the fold
+   - **Minimum height:** 200px ensures usability even in collapsed panel state
+   - **Layout structure:** Mini-map is **outside** the scrollable content area, using CSS flex-grow
+   - **Purpose:** Optimized for boundary inspection - maximize map visibility
+   - Panel content below the stats section scrolls within the panel
 
 2. **Circumference in Hover Tooltip**
    - Shows distance with estimated walk time (e.g., "2.3 km (~28 min)")
    - Walk time calculated at 5 km/h (12 min/km) via shared `formatCircumferenceWithTime()`
    - Displayed for all areas (completed and not started)
 
+3. **Area Stats in Details Panel** (Added: 2026-02-13)
+   - **Location:** Fixed section between mini-map and scrollable content
+   - **Content:** Circumference with estimated walk time (e.g., "2.3 km (~28 min)")
+   - **Rationale:** Users should see these quick-reference stats without closing the panel to hover
+   - Uses `formatCircumferenceWithTime()` from `geo-utils.ts` for consistency with hover tooltip
+
+**Panel Layout Structure:**
+```
+Panel Container (flex column)
+├── Drag Handle (fixed height)
+├── Breadcrumbs (optional)
+├── Header (fixed height)
+├── Mini-Map Section (flex-grow, min-height: 200px)
+│   ├── Route Toggle (if walks exist)
+│   └── AreaMiniMap component
+├── Area Stats (fixed height, border-top)
+└── Scrollable Content (overflow-y: auto)
+    ├── Score Breakdown
+    ├── Area Information
+    ├── Walk History
+    └── Deviations
+```
+
 **Key Implementation Files:**
 
 | File | Purpose |
 |------|---------|
 | `src/lib/geo-utils.ts` | Shared perimeter calculation and walk time formatting (single source of truth) |
-| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Interactive mini-map component |
+| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Interactive mini-map component with flex-grow height |
 | `src/components/AreaMiniMap/index.tsx` | Dynamic import wrapper (SSR) |
+| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Panel with flex layout, stats section, scrollable content |
 
-**Refactoring Note:** Perimeter calculation was previously duplicated in `Map.tsx` and `db.ts`. Both now use `calculatePerimeterMeters()` from `geo-utils.ts` to ensure a single source of truth.
+**Refactoring Note:** Perimeter calculation was previously duplicated in Map.tsx and db.ts. Both now use `calculatePerimeterMeters()` from `geo-utils.ts` to ensure a single source of truth.
 
-**Reference:** [ADR 012](../ADR/012-details-panel-mini-map.md) | [Ticket 004](../tickets/004-subarea-visual-context.md)
+**Reference:** [ADR 012](../ADR/012-details-panel-mini-map.md) | [Ticket 015](../tickets/015-details-panel-boundary-view.md)
 
 ### Walk Route Visualization (Implemented - ADR 010)
 

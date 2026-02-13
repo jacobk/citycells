@@ -17,6 +17,15 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Changed
+- Details panel mini-map now fills available viewport height using CSS flex-grow layout. (PRD 001 §3.7, ADR 012, TICKET-015)
+  - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `docs/features/map-visualization.md`
+  - Mini-map uses `flex-grow` with minimum height of 200px to fill available space above the fold
+  - Mini-map section moved outside scrollable content area for proper flex behavior
+  - New "Area Stats" section below mini-map displays circumference with estimated walk time (e.g., "2.3 km (~28 min)")
+  - Stats section uses `formatCircumferenceWithTime()` from geo-utils.ts for consistency with hover tooltip
+  - Panel content below stats scrolls independently
+
 ### Added
 - Bulk export of all 11 real Strava activity fixtures with high-fidelity GPS streams and matching area polygons. (ADR 003, ADR 006)
   - Key files: `scripts/export-all-fixtures.mjs`, `src/__tests__/fixtures/activities/`, `src/__tests__/fixtures/areas/`, `src/__tests__/analysis/real-activity.test.ts`

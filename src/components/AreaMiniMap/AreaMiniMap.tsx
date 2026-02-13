@@ -12,7 +12,7 @@
  * covered by the bottom sheet on mobile.
  * 
  * @see docs/ADR/012-details-panel-mini-map.md
- * @see docs/PRD/001-mvp-mobile-walker.md Section 3.6 (Mini-Map)
+ * @see docs/PRD/001-mvp-mobile-walker.md Section 3.7 (Mini-Map)
  */
 
 import { useEffect, useMemo } from 'react';
@@ -25,18 +25,20 @@ import {
   TIER_BORDER_COLORS,
   UNWALKED_AREA_STYLE,
 } from '@/lib/design-tokens';
-// WHY: Panel state for dynamic height adaptation (ADR 015)
+// WHY: Panel state for triggering map resize (ADR 015)
 import type { PanelState } from '@/lib/panel-state';
-import { getMiniMapHeight } from '@/lib/panel-state';
 // WHY: Route visualization for walk routes on mini-map (Ticket 011)
 import type { RouteSegment } from '@/lib/route-visualization';
 import { getRoutePathOptions } from '@/lib/route-visualization';
+
+// WHY: Minimum height ensures map remains usable even in collapsed panel state (ADR 012, Ticket 015)
+const MIN_MAP_HEIGHT_PX = 200;
 
 interface AreaMiniMapProps {
   geometry: GeoJSON.Geometry;
   tier?: Tier;
   className?: string;
-  // WHY: Panel state determines mini-map height (ADR 015)
+  // WHY: Panel state triggers resize invalidation when panel expands/collapses (ADR 015)
   panelState?: PanelState;
   // WHY: Optional route segments to display walk routes with deviation coloring (Ticket 011)
   routeSegments?: RouteSegment[];
@@ -139,16 +141,15 @@ export default function AreaMiniMap({ geometry, tier, className, panelState, rou
     fillOpacity: MINI_MAP_FILL_OPACITY,
   }), [fillColor, borderColor]);
 
-  // WHY: Calculate dynamic height based on panel state (ADR 015)
-  const miniMapHeight = getMiniMapHeight(panelState ?? 'expanded');
-
   // WHY: Default center is Malmö - will be overridden by fitBounds
   const defaultCenter: [number, number] = [55.59, 13.00];
 
+  // WHY: Use flex-grow with min-height instead of fixed pixel heights (Ticket 015)
+  // Parent container controls available space; map fills it with min 200px
   return (
     <div 
-      className={`w-full rounded-lg overflow-hidden transition-[height] duration-300 ease-out ${className ?? ''}`}
-      style={{ height: `${miniMapHeight}px` }}
+      className={`w-full rounded-lg overflow-hidden flex-grow ${className ?? ''}`}
+      style={{ minHeight: `${MIN_MAP_HEIGHT_PX}px` }}
     >
       <MapContainer
         center={defaultCenter}

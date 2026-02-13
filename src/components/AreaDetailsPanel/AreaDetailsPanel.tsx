@@ -18,6 +18,8 @@ import type { RouteSegment } from '@/lib/route-visualization';
 import { prepareDeviationColoredRoute } from '@/lib/route-visualization';
 import { getWalkStreams, getDatabase } from '@/lib/db';
 import { formatDistance } from '@/lib/format-utils';
+// WHY: Reuse shared perimeter/walk time formatting per ADR 012 and Ticket 015
+import { formatCircumferenceWithTime } from '@/lib/geo-utils';
 import mapboxPolyline from '@mapbox/polyline';
 import type { Feature, Polygon, MultiPolygon, Position } from 'geojson';
 
@@ -337,7 +339,7 @@ export default function AreaDetailsPanel({
         {breadcrumbs}
 
         {/* Header */}
-        <div className="px-4 pb-3 border-b border-gray-100">
+        <div className="px-4 pb-3 border-b border-gray-100 shrink-0">
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">{details.areaName}</h2>
@@ -369,47 +371,61 @@ export default function AreaDetailsPanel({
           </div>
         </div>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-
-          {/* Mini-Map (ADR 012) - shows subarea boundary for route planning */}
-          {details.geometry && (
-            <section>
-              {/* WHY: Route toggle control per Ticket 011 - routes hidden by default */}
-              {details.walks.length > 0 && (
-                <button
-                  onClick={() => setShowRoute(!showRoute)}
-                  className="w-full mb-3 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-3 cursor-pointer transition-colors"
-                  role="switch"
-                  aria-checked={showRoute}
+        {/* Mini-Map Section (ADR 012, Ticket 015) - fills available viewport height above the fold */}
+        {/* WHY: Moved outside scrollable content so it fills available space via flex-grow */}
+        {details.geometry && (
+          <section className="px-4 py-2 flex flex-col flex-grow min-h-0 shrink-0">
+            {/* WHY: Route toggle control per Ticket 011 - routes hidden by default */}
+            {details.walks.length > 0 && (
+              <button
+                onClick={() => setShowRoute(!showRoute)}
+                className="w-full mb-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-3 cursor-pointer transition-colors shrink-0"
+                role="switch"
+                aria-checked={showRoute}
+              >
+                {/* Route/Path icon */}
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                <span className="flex-1">Show Walk Route</span>
+                {/* WHY: Visual toggle indicator */}
+                <div 
+                  className={`w-8 h-5 rounded-full transition-colors ${
+                    showRoute ? 'bg-green-500' : 'bg-gray-300'
+                  }`}
                 >
-                  {/* Route/Path icon */}
-                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                  </svg>
-                  <span className="flex-1">Show Walk Route</span>
-                  {/* WHY: Visual toggle indicator */}
                   <div 
-                    className={`w-8 h-5 rounded-full transition-colors ${
-                      showRoute ? 'bg-green-500' : 'bg-gray-300'
+                    className={`w-4 h-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${
+                      showRoute ? 'translate-x-3.5' : 'translate-x-0.5'
                     }`}
-                  >
-                    <div 
-                      className={`w-4 h-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${
-                        showRoute ? 'translate-x-3.5' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </div>
-                </button>
-              )}
-              <AreaMiniMap
-                geometry={details.geometry}
-                tier={details.tier}
-                panelState={panelState}
-                routeSegments={showRoute ? routeSegments || undefined : undefined}
-              />
-            </section>
-          )}
+                  />
+                </div>
+              </button>
+            )}
+            <AreaMiniMap
+              geometry={details.geometry}
+              tier={details.tier}
+              panelState={panelState}
+              routeSegments={showRoute ? routeSegments || undefined : undefined}
+            />
+          </section>
+        )}
+
+        {/* Area Stats Section (Ticket 015) - circumference with walk time, below mini-map */}
+        {/* WHY: Shows same quick-reference stats from hover tooltip so users don't need to close panel to see them */}
+        <div className="px-4 py-3 border-t border-gray-100 shrink-0">
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            <span className="text-gray-600 font-medium">
+              {formatCircumferenceWithTime(details.totalPerimeterMeters)}
+            </span>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 min-h-0">
           
           {/* Score Breakdown (if completed) */}
           {details.tier && (

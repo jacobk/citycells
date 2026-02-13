@@ -3,7 +3,7 @@
 **Date:** 2026-02-02 (Updated: 2026-02-13)  
 **Status:** In Progress
 
-*Latest update: Added Potato tier below Bronze (Section 3.4) for low-quality walks that still count toward progress*
+*Latest update: Details panel mini-map now fills available viewport height for boundary inspection; area stats added below map (Section 3.7)*
 
 ## 1. Overview
 
@@ -177,7 +177,7 @@ Display floating tooltip with:
 
 Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 
-### 3.7 Area Details Panel (Updated: 2026-02-07)
+### 3.7 Area Details Panel (Updated: 2026-02-13)
 
 **Trigger:** Click/tap on any area (completed or not).
 
@@ -190,17 +190,25 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 *   Tier badge and quality score (if completed)
 *   "Not yet walked" indicator (if incomplete)
 
-#### Mini-Map (Added: 2026-02-07, Updated: 2026-02-07)
+#### Mini-Map (Added: 2026-02-07, Updated: 2026-02-13)
 
 *Reference: ADR 012 (Details Panel Mini-Map)*
 
-*   **Location:** Below header, above score breakdown
-*   **Dimensions:** Full panel width, ~200px height (responsive)
-*   **Purpose:** Enable users to study the area and plan walking routes
+*   **Location:** Below header, optimized to fill available viewport height
+*   **Dimensions:** Full panel width, **dynamic height** filling available space above the fold (minimum ~200px)
+*   **Purpose:** Enable users to inspect area boundaries and plan walking routes - **maximize map visibility**
 *   **Base Map:** Full street-level tiles (same provider as main map) showing streets, paths, landmarks
 *   **Boundary Overlay:** Subarea polygon with prominent stroke and low-opacity tier-colored fill (streets visible through fill)
 *   **Interactivity:** Pan and zoom enabled for detailed exploration
 *   **Bounds:** Auto-fit to polygon with padding on initial load
+*   **Panel Scrolling:** Content below the map (stats, score breakdown, walk history) is scrollable within the panel
+
+#### Area Stats (Added: 2026-02-13)
+
+*   **Location:** Below mini-map, above score breakdown
+*   **Content:** Same quick-reference stats from hover tooltip:
+    *   Circumference with estimated walk time (e.g., "2.3 km (~28 min)")
+*   **Rationale:** Users should see these stats without closing the panel to hover
 
 **Walk Route Visualization (Added: 2026-02-07):**
 *   **Toggle Control:** Toggle button above mini-map to show/hide matched walk routes
