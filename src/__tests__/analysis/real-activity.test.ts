@@ -1,279 +1,484 @@
 /**
- * Real Activity Test
- * 
- * Tests using actual Strava activity data to verify analysis works correctly.
- * This specifically tests the fix for truncated polylines where Strava metadata
- * should be used for loop detection instead of the coordinates array.
+ * Real Activity Tests
+ *
+ * Tests using actual Strava activity data to verify the analysis engine works
+ * correctly against real delområde polygons. Each activity was a walk tracing
+ * the border of a specific Malmö sub-area.
+ *
+ * Test structure:
+ * 1. Polyline truncation regression tests (Johanneslust) — demonstrates why
+ *    Strava metadata is needed for loop detection (see ADR 006).
+ * 2. Per-activity analysis tests — verifies analyzeWalk() produces correct
+ *    metrics when run against the real area polygon with stream coordinates.
+ *
+ * To add a new activity:
+ * 1. Export the fixture: node scripts/export-all-fixtures.mjs
+ * 2. Add the import and config entry to ALL_ACTIVITIES below
+ * 3. Run tests to calibrate assertions
+ * 4. Review SVGs in src/__tests__/output/ to validate
  */
 
 import { describe, it, expect } from 'vitest';
-import { detectLoop, analyzeWalk, type StravaMetadata } from '@/lib/analysis';
+import { detectLoop, analyzeWalk, type StravaMetadata, type FullAnalysisResult, type Tier } from '@/lib/analysis';
 import { visualizeAreaCoverage, saveSVG } from '../utils/visualization';
 import * as turf from '@turf/turf';
 import type { Feature, Polygon, Position } from 'geojson';
-import activityFixture from '../fixtures/activities/activity-17259240639.json';
-import truncatedFixture from '../fixtures/activities/activity-17270700773.json';
-import hakanstorpFixture from '../fixtures/areas/hakanstorp.json';
 
-describe('Real Activity: activity-17259240639 (Johanneslust)', () => {
-  // Extract data from fixture
-  const coordinates = activityFixture.coordinates as Position[];
+// ============================================
+// Activity Fixtures
+// ============================================
+import katrinelundActivity from '../fixtures/activities/activity-17383157001.json';
+import ellstorpActivity from '../fixtures/activities/activity-17382890625.json';
+import videdalActivity from '../fixtures/activities/activity-17319372012.json';
+import fagelbackenActivity from '../fixtures/activities/activity-17314063662.json';
+import hasthagenActivity from '../fixtures/activities/activity-17313893053.json';
+import kronprinsenActivity from '../fixtures/activities/activity-17313729488.json';
+import radmansvangenActivity from '../fixtures/activities/activity-17308205375.json';
+import malmohusActivity from '../fixtures/activities/activity-17307746665.json';
+import emilstorpActivity from '../fixtures/activities/activity-17282448985.json';
+import hakanstorpActivity from '../fixtures/activities/activity-17270700773.json';
+import johanneslustActivity from '../fixtures/activities/activity-17259240639.json';
+
+// ============================================
+// Area Fixtures
+// ============================================
+import katrinelundArea from '../fixtures/areas/katrinelund.json';
+import ellstorpArea from '../fixtures/areas/ellstorp.json';
+import videdalArea from '../fixtures/areas/videdal.json';
+import fagelbackenArea from '../fixtures/areas/fagelbacken.json';
+import hasthagenArea from '../fixtures/areas/hasthagen.json';
+import kronprinsenArea from '../fixtures/areas/kronprinsen.json';
+import radmansvangenArea from '../fixtures/areas/radmansvangen.json';
+import malmohusArea from '../fixtures/areas/malmohus.json';
+import emilstorpArea from '../fixtures/areas/emilstorp.json';
+import hakanstorpArea from '../fixtures/areas/hakanstorp.json';
+import johanneslustArea from '../fixtures/areas/johanneslust.json';
+
+// ============================================
+// Test Configuration
+// ============================================
+
+/**
+ * Expected analysis results for each activity.
+ *
+ * WHY: These thresholds are calibrated from actual analysis runs, rounded down
+ * to account for minor floating-point variance across environments. They serve
+ * as regression guards — if a code change causes scores to drop below these
+ * minimums, the test fails.
+ *
+ * See ADR 003 for tier thresholds: platinum >= 0.95, gold >= 0.85,
+ * silver >= 0.70, bronze >= 0.50.
+ */
+interface ActivityTestConfig {
+  name: string;
+  id: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  activity: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  area: any;
+  expected: {
+    isClosedLoop: boolean;
+    maxLoopGap: number;
+    minPerimeterCoverage: number;
+    minAreaCoverage: number;
+    minAlignment: number;
+    minEfficiency: number;
+    minQuality: number;
+    tier: Tier;
+    maxDeviations: number;
+  };
+}
+
+const ALL_ACTIVITIES: ActivityTestConfig[] = [
+  {
+    name: 'Håkanstorp',
+    id: 17270700773,
+    activity: hakanstorpActivity,
+    area: hakanstorpArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 10,
+      minPerimeterCoverage: 0.99,
+      minAreaCoverage: 0.97,
+      minAlignment: 0.85,
+      minEfficiency: 0.99,
+      minQuality: 0.95,
+      tier: 'platinum',
+      maxDeviations: 0,
+    },
+  },
+  {
+    name: 'Fågelbacken',
+    id: 17314063662,
+    activity: fagelbackenActivity,
+    area: fagelbackenArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 10,
+      minPerimeterCoverage: 0.99,
+      minAreaCoverage: 0.93,
+      minAlignment: 0.79,
+      minEfficiency: 0.99,
+      minQuality: 0.94,
+      tier: 'gold',
+      maxDeviations: 0,
+    },
+  },
+  {
+    name: 'Hästhagen',
+    id: 17313893053,
+    activity: hasthagenActivity,
+    area: hasthagenArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 10,
+      minPerimeterCoverage: 0.99,
+      minAreaCoverage: 0.92,
+      minAlignment: 0.75,
+      minEfficiency: 0.99,
+      minQuality: 0.93,
+      tier: 'gold',
+      maxDeviations: 0,
+    },
+  },
+  {
+    name: 'Rådmansvången',
+    id: 17308205375,
+    activity: radmansvangenActivity,
+    area: radmansvangenArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 20,
+      minPerimeterCoverage: 0.98,
+      minAreaCoverage: 0.93,
+      minAlignment: 0.74,
+      minEfficiency: 0.99,
+      minQuality: 0.93,
+      tier: 'gold',
+      maxDeviations: 0,
+    },
+  },
+  {
+    name: 'Kronprinsen',
+    id: 17313729488,
+    activity: kronprinsenActivity,
+    area: kronprinsenArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 10,
+      minPerimeterCoverage: 0.93,
+      minAreaCoverage: 0.87,
+      minAlignment: 0.73,
+      minEfficiency: 0.96,
+      minQuality: 0.88,
+      tier: 'gold',
+      maxDeviations: 0,
+    },
+  },
+  {
+    name: 'Malmöhus',
+    id: 17307746665,
+    activity: malmohusActivity,
+    area: malmohusArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 15,
+      minPerimeterCoverage: 0.96,
+      minAreaCoverage: 0.90,
+      minAlignment: 0.62,
+      minEfficiency: 0.95,
+      minQuality: 0.88,
+      tier: 'gold',
+      maxDeviations: 3,
+    },
+  },
+  {
+    name: 'Katrinelund',
+    id: 17383157001,
+    activity: katrinelundActivity,
+    area: katrinelundArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 10,
+      minPerimeterCoverage: 0.89,
+      minAreaCoverage: 0.80,
+      minAlignment: 0.19,
+      minEfficiency: 0.80,
+      minQuality: 0.72,
+      tier: 'silver',
+      maxDeviations: 2,
+    },
+  },
+  {
+    name: 'Johanneslust',
+    id: 17259240639,
+    activity: johanneslustActivity,
+    area: johanneslustArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 5,
+      minPerimeterCoverage: 0.83,
+      minAreaCoverage: 0.88,
+      minAlignment: 0.49,
+      minEfficiency: 0.82,
+      minQuality: 0.77,
+      tier: 'silver',
+      maxDeviations: 4,
+    },
+  },
+  {
+    name: 'Emilstorp',
+    id: 17282448985,
+    activity: emilstorpActivity,
+    area: emilstorpArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 30,
+      minPerimeterCoverage: 0.83,
+      minAreaCoverage: 0.85,
+      minAlignment: 0.47,
+      minEfficiency: 0.78,
+      minQuality: 0.76,
+      tier: 'silver',
+      maxDeviations: 4,
+    },
+  },
+  {
+    name: 'Videdal',
+    id: 17319372012,
+    activity: videdalActivity,
+    area: videdalArea,
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 5,
+      minPerimeterCoverage: 0.65,
+      minAreaCoverage: 0.90,
+      minAlignment: 0.38,
+      minEfficiency: 0.67,
+      minQuality: 0.66,
+      tier: 'bronze',
+      maxDeviations: 4,
+    },
+  },
+  {
+    name: 'Ellstorp',
+    id: 17382890625,
+    activity: ellstorpActivity,
+    area: ellstorpArea,
+    // WHY: Ellstorp scores below bronze (37.7%). The walk only covers ~43%
+    // of the perimeter and has poor alignment. This tests the "no tier" case.
+    expected: {
+      isClosedLoop: true,
+      maxLoopGap: 15,
+      minPerimeterCoverage: 0.42,
+      minAreaCoverage: 0.48,
+      minAlignment: 0.0,
+      minEfficiency: 0.52,
+      minQuality: 0.36,
+      tier: null,
+      maxDeviations: 2,
+    },
+  },
+];
+
+// ============================================
+// Helper
+// ============================================
+
+function runAnalysis(config: ActivityTestConfig): {
+  result: FullAnalysisResult;
+  areaSqm: number;
+  perimeterMeters: number;
+} {
+  const areaPolygon = config.area as Feature<Polygon>;
+  const areaSqm = turf.area(areaPolygon);
+  const perimeterLine = turf.polygonToLine(areaPolygon);
+  const perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
+
+  const coordinates = config.activity.coordinates as Position[];
+  const streamCoordinates = config.activity.streamCoordinates as Position[] | undefined;
   const stravaMetadata: StravaMetadata = {
-    startLatLng: activityFixture.start_latlng as [number, number],
-    endLatLng: activityFixture.end_latlng as [number, number],
+    startLatLng: config.activity.start_latlng as [number, number],
+    endLatLng: config.activity.end_latlng as [number, number],
+    distance: config.activity.distance as number,
   };
 
-  describe('Loop Detection Issue', () => {
-    it('should show large gap when using coordinates only (the bug)', () => {
-      // This demonstrates the original bug - coordinates array is truncated
-      const result = detectLoop(coordinates);
-      
-      console.log('Coordinates-only loop detection:');
-      console.log(`  First coordinate: [${coordinates[0].join(', ')}]`);
-      console.log(`  Last coordinate: [${coordinates[coordinates.length - 1].join(', ')}]`);
-      console.log(`  Gap: ${result.gapMeters.toFixed(1)}m`);
-      console.log(`  isClosedLoop: ${result.isClosedLoop}`);
-      
-      // Without Strava metadata, the gap is ~338m (exceeds 100m threshold)
-      expect(result.gapMeters).toBeGreaterThan(300);
-      expect(result.isClosedLoop).toBe(false);
-    });
+  const result = analyzeWalk(
+    coordinates,
+    areaPolygon,
+    perimeterMeters,
+    areaSqm,
+    stravaMetadata,
+    streamCoordinates,
+  );
 
-    it('should show small gap when using Strava metadata (the fix)', () => {
-      // This demonstrates the fix - using Strava metadata
-      const result = detectLoop(coordinates, stravaMetadata);
-      
-      console.log('Strava metadata loop detection:');
-      console.log(`  start_latlng: [${stravaMetadata.startLatLng?.join(', ')}]`);
-      console.log(`  end_latlng: [${stravaMetadata.endLatLng?.join(', ')}]`);
-      console.log(`  Gap: ${result.gapMeters.toFixed(1)}m`);
-      console.log(`  isClosedLoop: ${result.isClosedLoop}`);
-      
-      // With Strava metadata, the gap is ~1.79m (well within 100m threshold)
-      expect(result.gapMeters).toBeLessThan(10);
-      expect(result.isClosedLoop).toBe(true);
-    });
+  return { result, areaSqm, perimeterMeters };
+}
 
-    it('should correctly identify the polyline truncation', () => {
-      // Calculate distance from polyline endpoints to Strava metadata endpoints
-      const polylineStart = coordinates[0];
-      const polylineEnd = coordinates[coordinates.length - 1];
-      
-      // Strava uses [lat, lng], we need [lng, lat] for turf
-      const stravaStart: Position = [stravaMetadata.startLatLng![1], stravaMetadata.startLatLng![0]];
-      const stravaEnd: Position = [stravaMetadata.endLatLng![1], stravaMetadata.endLatLng![0]];
-      
-      const startTruncation = turf.distance(
-        turf.point(polylineStart),
-        turf.point(stravaStart),
-        { units: 'meters' }
-      );
-      
-      const endTruncation = turf.distance(
-        turf.point(polylineEnd),
-        turf.point(stravaEnd),
-        { units: 'meters' }
-      );
-      
-      console.log('Polyline truncation analysis:');
-      console.log(`  Start truncation: ${startTruncation.toFixed(1)}m`);
-      console.log(`  End truncation: ${endTruncation.toFixed(1)}m`);
-      console.log(`  Total GPS points: ${coordinates.length}`);
-      
-      // Both endpoints are significantly truncated
-      expect(startTruncation).toBeGreaterThan(100);
-      expect(endTruncation).toBeGreaterThan(100);
-    });
+// ============================================
+// Polyline Truncation Regression Tests
+// ============================================
+
+describe('Polyline Truncation Bug (Johanneslust)', () => {
+  // WHY: This tests the specific bug where summary_polyline is truncated by
+  // Strava privacy zones, causing loop detection to fail. Strava metadata
+  // (start_latlng/end_latlng) gives the real GPS endpoints. See ADR 005/006.
+
+  const coordinates = johanneslustActivity.coordinates as Position[];
+  const stravaMetadata: StravaMetadata = {
+    startLatLng: johanneslustActivity.start_latlng as [number, number],
+    endLatLng: johanneslustActivity.end_latlng as [number, number],
+  };
+
+  it('should show large gap when using coordinates only (the bug)', () => {
+    const result = detectLoop(coordinates);
+
+    // Without Strava metadata, the gap is ~338m (exceeds 100m threshold)
+    expect(result.gapMeters).toBeGreaterThan(300);
+    expect(result.isClosedLoop).toBe(false);
   });
 
-  describe('Full Analysis with Fix', () => {
-    // Create a simple test area polygon around the walk
+  it('should show small gap when using Strava metadata (the fix)', () => {
+    const result = detectLoop(coordinates, stravaMetadata);
+
+    // With Strava metadata, the gap is ~1.8m (well within 100m threshold)
+    expect(result.gapMeters).toBeLessThan(10);
+    expect(result.isClosedLoop).toBe(true);
+  });
+
+  it('should correctly identify the polyline truncation', () => {
+    const polylineStart = coordinates[0];
+    const polylineEnd = coordinates[coordinates.length - 1];
+
+    // Strava uses [lat, lng], we need [lng, lat] for turf
+    const stravaStart: Position = [stravaMetadata.startLatLng![1], stravaMetadata.startLatLng![0]];
+    const stravaEnd: Position = [stravaMetadata.endLatLng![1], stravaMetadata.endLatLng![0]];
+
+    const startTruncation = turf.distance(
+      turf.point(polylineStart),
+      turf.point(stravaStart),
+      { units: 'meters' },
+    );
+
+    const endTruncation = turf.distance(
+      turf.point(polylineEnd),
+      turf.point(stravaEnd),
+      { units: 'meters' },
+    );
+
+    // Both endpoints are significantly truncated
+    expect(startTruncation).toBeGreaterThan(100);
+    expect(endTruncation).toBeGreaterThan(100);
+  });
+
+  it('should report 0% area coverage WITHOUT Strava metadata (demonstrating bug)', () => {
+    // WHY: Using a synthetic bounding box here since this test is specifically
+    // about the truncation bug, not area scoring accuracy.
     const testArea: Feature<Polygon> = {
       type: 'Feature',
       properties: { name: 'Test Area for Johanneslust Walk' },
       geometry: {
         type: 'Polygon',
         coordinates: [[
-          [13.035, 55.595],  // SW
-          [13.055, 55.595],  // SE
-          [13.055, 55.610],  // NE
-          [13.035, 55.610],  // NW
-          [13.035, 55.595],  // Close
+          [13.035, 55.595],
+          [13.055, 55.595],
+          [13.055, 55.610],
+          [13.035, 55.610],
+          [13.035, 55.595],
         ]],
       },
     };
-    
+
     const areaSqm = turf.area(testArea);
     const perimeterLine = turf.polygonToLine(testArea);
     const perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
 
-    it('should report area coverage > 0% with Strava metadata', () => {
-      const result = analyzeWalk(
-        coordinates,
-        testArea,
-        perimeterMeters,
-        areaSqm,
-        stravaMetadata  // THE FIX: pass Strava metadata
-      );
-      
-      console.log('Full analysis with Strava metadata:');
-      console.log(`  isClosedLoop: ${result.metrics.isClosedLoop}`);
-      console.log(`  loopGapMeters: ${result.metrics.loopGapMeters.toFixed(1)}m`);
-      console.log(`  areaCoverage: ${(result.metrics.areaCoveragePercent * 100).toFixed(1)}%`);
-      console.log(`  perimeterCoverage: ${(result.metrics.perimeterCoveragePercent * 100).toFixed(1)}%`);
-      console.log(`  qualityScore: ${(result.metrics.rawQualityScore * 100).toFixed(1)}%`);
-      console.log(`  tier: ${result.metrics.tier}`);
-      
-      // With the fix, we should now get proper area coverage
-      expect(result.metrics.isClosedLoop).toBe(true);
-      expect(result.metrics.areaCoveragePercent).toBeGreaterThan(0);
-      
-      // Generate visualization
-      saveSVG('activity-17259240639-area.svg', visualizeAreaCoverage(
-        coordinates,
-        testArea,
-        result.metrics.enclosedAreaSqm,
-        areaSqm,
-        result.metrics.isClosedLoop,
-        result.metrics.loopGapMeters,
-        { title: 'Johanneslust Walk - Area Coverage (Fixed)' }
-      ));
-    });
+    const result = analyzeWalk(coordinates, testArea, perimeterMeters, areaSqm);
 
-    it('should report 0% area coverage WITHOUT Strava metadata (demonstrating bug)', () => {
-      const result = analyzeWalk(
-        coordinates,
-        testArea,
-        perimeterMeters,
-        areaSqm
-        // NO stravaMetadata - this demonstrates the bug
-      );
-      
-      console.log('Full analysis WITHOUT Strava metadata (the bug):');
-      console.log(`  isClosedLoop: ${result.metrics.isClosedLoop}`);
-      console.log(`  areaCoverage: ${(result.metrics.areaCoveragePercent * 100).toFixed(1)}%`);
-      
-      // Without the fix, area coverage is 0%
-      expect(result.metrics.isClosedLoop).toBe(false);
-      expect(result.metrics.areaCoveragePercent).toBe(0);
-    });
+    expect(result.metrics.isClosedLoop).toBe(false);
+    expect(result.metrics.areaCoveragePercent).toBe(0);
   });
 });
 
-describe('Real Activity: activity-17270700773 (Håkanstorp)', () => {
-  // WHY: Use the actual Håkanstorp polygon from the GeoJSON data rather than a
-  // synthetic bounding box. The walk traces the real Håkanstorp border, so analysis
-  // must use the real polygon to produce meaningful scores.
-  const hakanstorpPolygon = hakanstorpFixture as Feature<Polygon>;
-  const areaSqm = turf.area(hakanstorpPolygon);
-  const perimeterLine = turf.polygonToLine(hakanstorpPolygon);
-  const perimeterMeters = turf.length(perimeterLine, { units: 'meters' });
+// ============================================
+// Per-Activity Analysis Tests
+// ============================================
 
-  const coordinates = truncatedFixture.coordinates as Position[];
-  const streamCoordinates = truncatedFixture.streamCoordinates as Position[];
-  const stravaMetadata: StravaMetadata = {
-    startLatLng: truncatedFixture.start_latlng as [number, number],
-    endLatLng: truncatedFixture.end_latlng as [number, number],
-    distance: truncatedFixture.distance as number,
-  };
+for (const config of ALL_ACTIVITIES) {
+  describe(`Real Activity: ${config.name} (${config.id})`, () => {
+    // WHY: Pre-compute once per activity. analyzeWalk is deterministic so
+    // running it once and asserting multiple properties is safe.
+    const { result, areaSqm, perimeterMeters } = runAnalysis(config);
+    const m = result.metrics;
+    const e = config.expected;
 
-  // Pre-calculate full analysis result for use across tests
-  const result = analyzeWalk(
-    coordinates,
-    hakanstorpPolygon,
-    perimeterMeters,
-    areaSqm,
-    stravaMetadata,
-    streamCoordinates
-  );
+    it('should detect loop status correctly', () => {
+      expect(m.isClosedLoop).toBe(e.isClosedLoop);
+      if (e.isClosedLoop) {
+        expect(m.loopGapMeters).toBeLessThan(e.maxLoopGap);
+      }
+    });
 
-  it('should use Strava distance for total walk length', () => {
-    const walkLine = turf.lineString(coordinates);
-    const polylineLength = turf.length(walkLine, { units: 'meters' });
+    it('should use Strava distance for total walk length', () => {
+      // WHY: Strava distance is the ground truth. Polyline distance is
+      // truncated by privacy zones. See ADR 006.
+      expect(m.totalWalkLengthMeters).toBeCloseTo(config.activity.distance, 0);
+    });
 
-    // WHY: Strava's full GPS stream records 2050m, but the summary_polyline
-    // is truncated. The analysis should prefer Strava's distance metadata.
-    expect(result.metrics.totalWalkLengthMeters).toBeCloseTo(truncatedFixture.distance, 1);
-    expect(result.metrics.totalWalkLengthMeters).toBeGreaterThan(polylineLength);
+    it(`should achieve >= ${(e.minPerimeterCoverage * 100).toFixed(0)}% perimeter coverage`, () => {
+      expect(m.perimeterCoveragePercent).toBeGreaterThanOrEqual(e.minPerimeterCoverage);
+
+      console.log(`${config.name} Perimeter: ${(m.perimeterCoveragePercent * 100).toFixed(1)}% ` +
+        `(${m.coveredDistanceMeters.toFixed(0)}m / ${perimeterMeters.toFixed(0)}m)`);
+    });
+
+    it(`should achieve >= ${(e.minAreaCoverage * 100).toFixed(0)}% area coverage`, () => {
+      expect(m.areaCoveragePercent).toBeGreaterThanOrEqual(e.minAreaCoverage);
+
+      console.log(`${config.name} Area: ${(m.areaCoveragePercent * 100).toFixed(1)}% ` +
+        `(${m.enclosedAreaSqm.toFixed(0)} / ${areaSqm.toFixed(0)} sqm)`);
+    });
+
+    it(`should achieve >= ${(e.minAlignment * 100).toFixed(0)}% alignment`, () => {
+      expect(m.alignmentScore).toBeGreaterThanOrEqual(e.minAlignment);
+
+      console.log(`${config.name} Alignment: ${(m.alignmentScore * 100).toFixed(1)}% ` +
+        `(RMSE: ${m.rmseMeters.toFixed(1)}m, max: ${m.maxDeviationMeters.toFixed(1)}m)`);
+    });
+
+    it(`should achieve >= ${(e.minEfficiency * 100).toFixed(0)}% efficiency`, () => {
+      expect(m.efficiency).toBeGreaterThanOrEqual(e.minEfficiency);
+
+      console.log(`${config.name} Efficiency: ${(m.efficiency * 100).toFixed(1)}% ` +
+        `(${m.borderAlignedLengthMeters.toFixed(0)}m / ${m.totalWalkLengthMeters.toFixed(0)}m)`);
+    });
+
+    it(`should achieve ${e.tier ?? 'no'} tier (quality >= ${(e.minQuality * 100).toFixed(0)}%)`, () => {
+      expect(m.rawQualityScore).toBeGreaterThanOrEqual(e.minQuality);
+      expect(m.tier).toBe(e.tier);
+
+      console.log(`${config.name} Quality: ${(m.rawQualityScore * 100).toFixed(1)}% → ${m.tier}`);
+    });
+
+    it(`should have <= ${e.maxDeviations} deviation segments`, () => {
+      expect(result.deviations.length).toBeLessThanOrEqual(e.maxDeviations);
+    });
+
+    it('should generate visualization', () => {
+      const coords = (config.activity.streamCoordinates || config.activity.coordinates) as Position[];
+      const areaPolygon = config.area as Feature<Polygon>;
+      saveSVG(
+        `activity-${config.id}-area.svg`,
+        visualizeAreaCoverage(
+          coords,
+          areaPolygon,
+          m.enclosedAreaSqm,
+          areaSqm,
+          m.isClosedLoop,
+          m.loopGapMeters,
+          { title: `${config.name} Walk - ${m.tier ? m.tier.charAt(0).toUpperCase() + m.tier.slice(1) : 'No Tier'} (${(m.rawQualityScore * 100).toFixed(0)}%)` },
+        ),
+      );
+    });
   });
-
-  it('should detect a closed loop via Strava metadata', () => {
-    // WHY: The walk starts and ends at effectively the same point (~4m gap).
-    // Strava metadata is needed because the polyline is truncated.
-    expect(result.metrics.isClosedLoop).toBe(true);
-    expect(result.metrics.loopGapMeters).toBeLessThan(10);
-  });
-
-  it('should score high on border traced (perimeter coverage)', () => {
-    // WHY: This walk closely traces the actual Håkanstorp border.
-    // With all 1173 stream GPS points within the 25m buffer, coverage should be ~100%.
-    expect(result.metrics.perimeterCoveragePercent).toBeGreaterThan(0.95);
-    expect(result.metrics.coveredDistanceMeters).toBeGreaterThan(perimeterMeters * 0.95);
-
-    console.log('Håkanstorp Border Traced:');
-    console.log(`  perimeterCoverage: ${(result.metrics.perimeterCoveragePercent * 100).toFixed(1)}%`);
-    console.log(`  coveredDistance: ${result.metrics.coveredDistanceMeters.toFixed(0)}m / ${perimeterMeters.toFixed(0)}m perimeter`);
-  });
-
-  it('should score high on area coverage', () => {
-    // WHY: The walk forms a closed loop that encloses nearly all of Håkanstorp.
-    expect(result.metrics.areaCoveragePercent).toBeGreaterThan(0.90);
-    expect(result.metrics.enclosedAreaSqm).toBeGreaterThan(areaSqm * 0.90);
-
-    console.log('Håkanstorp Area Coverage:');
-    console.log(`  areaCoverage: ${(result.metrics.areaCoveragePercent * 100).toFixed(1)}%`);
-    console.log(`  enclosedArea: ${result.metrics.enclosedAreaSqm.toFixed(0)} / ${areaSqm.toFixed(0)} sqm`);
-  });
-
-  it('should score well on alignment', () => {
-    // WHY: Average distance from walk to perimeter is ~5m (well within 25m buffer).
-    // RMSE of ~7m gives alignment score of ~86%.
-    expect(result.metrics.alignmentScore).toBeGreaterThan(0.80);
-    expect(result.metrics.rmseMeters).toBeLessThan(15);
-    expect(result.metrics.maxDeviationMeters).toBeLessThan(30);
-
-    console.log('Håkanstorp Alignment:');
-    console.log(`  alignmentScore: ${(result.metrics.alignmentScore * 100).toFixed(1)}%`);
-    console.log(`  RMSE: ${result.metrics.rmseMeters.toFixed(1)}m`);
-    console.log(`  maxDeviation: ${result.metrics.maxDeviationMeters.toFixed(1)}m`);
-    console.log(`  P90 deviation: ${result.metrics.p90DeviationMeters.toFixed(1)}m`);
-  });
-
-  it('should score high on efficiency', () => {
-    // WHY: The entire walk stays near the border with no significant detours.
-    expect(result.metrics.efficiency).toBeGreaterThan(0.95);
-
-    console.log('Håkanstorp Efficiency:');
-    console.log(`  efficiency: ${(result.metrics.efficiency * 100).toFixed(1)}%`);
-    console.log(`  borderAligned: ${result.metrics.borderAlignedLengthMeters.toFixed(0)}m / ${result.metrics.totalWalkLengthMeters.toFixed(0)}m total`);
-  });
-
-  it('should achieve platinum tier', () => {
-    // WHY: This is a near-perfect border trace walk. All metrics are excellent,
-    // so the composite quality score should comfortably exceed 95% (platinum).
-    expect(result.metrics.rawQualityScore).toBeGreaterThan(0.95);
-    expect(result.metrics.tier).toBe('platinum');
-
-    console.log('Håkanstorp Overall:');
-    console.log(`  qualityScore: ${(result.metrics.rawQualityScore * 100).toFixed(1)}%`);
-    console.log(`  tier: ${result.metrics.tier}`);
-  });
-
-  it('should have no deviation segments', () => {
-    // WHY: The walk stays consistently close to the border throughout.
-    // No GPS points exceed the 30m deviation threshold.
-    expect(result.deviations).toHaveLength(0);
-  });
-
-  it('should generate visualization', () => {
-    saveSVG('activity-17270700773-area.svg', visualizeAreaCoverage(
-      streamCoordinates,
-      hakanstorpPolygon,
-      result.metrics.enclosedAreaSqm,
-      areaSqm,
-      result.metrics.isClosedLoop,
-      result.metrics.loopGapMeters,
-      { title: 'Håkanstorp Walk - Area Coverage (Platinum)' }
-    ));
-  });
-});
+}

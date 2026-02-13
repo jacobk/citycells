@@ -247,8 +247,17 @@ if (detour_ratio >= 2.0 && return_accuracy < 50m) {
 
 A comprehensive test suite exists for the analysis engine in `src/__tests__/analysis/`:
 
-- `loop-detection.test.ts` - Tests for the 100m loop closure threshold
-- `area-coverage.test.ts` - Tests for area coverage calculation with various scenarios
+- `real-activity.test.ts` - **103 tests** using all 11 real Strava activities against real area polygons. Covers loop detection, perimeter coverage, area coverage, alignment, efficiency, tier assignment, and deviations. Includes polyline truncation regression tests.
+- `loop-detection.test.ts` - Unit tests for the 100m loop closure threshold
+- `area-coverage.test.ts` - Unit tests for area coverage calculation with various scenarios
+
+### Test Fixtures
+
+All 11 `#malmödelområde` activities are exported as fixtures in `src/__tests__/fixtures/`:
+- Activity fixtures contain base data (polyline, coordinates) plus high-fidelity GPS streams
+- Area fixtures are GeoJSON `Feature<Polygon>` objects from `malmo_delomraden.geojson`
+- Use `node scripts/export-all-fixtures.mjs` to re-export all fixtures (requires Strava token)
+- See `src/__tests__/fixtures/README.md` for fixture format docs and current test results
 
 ### Running Tests
 

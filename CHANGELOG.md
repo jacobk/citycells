@@ -18,6 +18,16 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- Bulk export of all 11 real Strava activity fixtures with high-fidelity GPS streams and matching area polygons. (ADR 003, ADR 006)
+  - Key files: `scripts/export-all-fixtures.mjs`, `src/__tests__/fixtures/activities/`, `src/__tests__/fixtures/areas/`, `src/__tests__/analysis/real-activity.test.ts`
+  - New bulk export script combines activity data + streams + area polygon extraction in one operation
+  - 9 new activity fixtures: Katrinelund, Ellstorp, Videdal, Fågelbacken, Hästhagen, Kronprinsen, Rådmansvången, Malmöhus, Emilstorp
+  - 10 new area polygon fixtures extracted from `malmo_delomraden.geojson` (Johanneslust was missing)
+  - 103 regression tests covering all 11 activities across all metrics (perimeter, area, alignment, efficiency, tier, deviations)
+  - Full tier coverage in tests: platinum (Håkanstorp), gold (5 areas), silver (3 areas), bronze (Videdal), no tier (Ellstorp)
+  - SVG visualizations generated for all 11 activities during test runs
+  - Updated fixtures README with bulk export docs and current test results table
+### Added
 - Mini-map walk route visualization: toggle control to show/hide routes, walk selection in Walk History, deviation-based coloring matching main map. (PRD 001 §3.6, ADR 010 §3, ADR 012, TICKET-011)
   - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/Map/Map.tsx`, `src/app/page.tsx`
   - Toggle control above mini-map to show/hide routes (default: OFF)

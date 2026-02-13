@@ -223,9 +223,12 @@
 - [x] Add test fixtures from real activity data
 - [x] Fix 0% area coverage bug (use Strava metadata for loop detection)
 - [x] Use Strava distance for walk length to avoid polyline truncation
-- [ ] Add perimeter coverage tests
-- [ ] Add alignment tests
-- [ ] Add efficiency tests
+- [x] Bulk export all 11 activities as test fixtures (with streams + area polygons)
+- [x] Add perimeter coverage tests (all 11 activities)
+- [x] Add alignment tests (all 11 activities)
+- [x] Add efficiency tests (all 11 activities)
+- [x] Add area coverage tests (all 11 activities)
+- [x] Add tier assignment tests (platinum, gold, silver, bronze, null)
 - [ ] Final Testing
 - [ ] Deployment Instructions (Vercel)
 - [ ] README updates
