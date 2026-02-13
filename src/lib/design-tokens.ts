@@ -21,6 +21,7 @@ export const TIER_FILL_COLORS = {
   gold: '#a855f7',     // Vibrant Purple
   silver: '#d946ef',   // Magenta Pink
   bronze: '#f0abfc',   // Soft Pink
+  potato: '#d4b896',   // Light Tan (potato-colored)
 } as const;
 
 // =============================================================================
@@ -34,6 +35,7 @@ export const TIER_OPACITIES = {
   gold: 0.60,
   silver: 0.55,
   bronze: 0.50,
+  potato: 0.40,  // Per PRD 3.4
 } as const;
 
 // =============================================================================
@@ -46,6 +48,7 @@ export const TIER_BORDER_COLORS = {
   gold: '#9333ea',     // Medium Purple
   silver: '#c026d3',   // Hot Pink
   bronze: '#e879f9',   // Light Pink
+  potato: '#b8936d',   // Medium Brown
 } as const;
 
 // =============================================================================
@@ -130,6 +133,7 @@ export const TIER_ICONS = {
   gold: { emoji: '🥇', size: 18 },
   silver: { emoji: '🥈', size: 16 },
   bronze: { emoji: '🥉', size: 14 },
+  potato: { emoji: '🥔', size: 12 },  // Smallest for lowest tier
 } as const;
 
 // WHY: Icons only visible at zoom 13+ to avoid clutter at lower zoom levels

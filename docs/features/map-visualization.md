@@ -90,6 +90,7 @@ The map uses a **heat map style visual design** as specified in ADR 010 and PRD 
 | Gold | Vibrant Purple | `#a855f7` | 0.60 | ≥ 85% |
 | Silver | Magenta Pink | `#d946ef` | 0.55 | ≥ 70% |
 | Bronze | Soft Pink | `#f0abfc` | 0.50 | ≥ 50% |
+| Potato | Light Tan | `#d4b896` | 0.40 | < 50% |
 | Not Started | None | — | — | No qualifying walks |
 
 **Design Rationale:** Bold purple-to-pink gradient creates visual excitement and aligns with modern design trends. High saturation colors pop dramatically against the grayscale base map while maintaining accessibility.
@@ -127,6 +128,7 @@ The map uses a **heat map style visual design** as specified in ADR 010 and PRD 
 | Gold | Gold Medal | 18px |
 | Silver | Silver Medal | 16px |
 | Bronze | Bronze Medal | 14px |
+| Potato | Potato | 12px |
 
 ### Key Functions
 

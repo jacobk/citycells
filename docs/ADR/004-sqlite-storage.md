@@ -223,7 +223,8 @@ SELECT
   SUM(CASE WHEN ac.tier = 'platinum' THEN 1 ELSE 0 END) as platinum_count,
   SUM(CASE WHEN ac.tier = 'gold' THEN 1 ELSE 0 END) as gold_count,
   SUM(CASE WHEN ac.tier = 'silver' THEN 1 ELSE 0 END) as silver_count,
-  SUM(CASE WHEN ac.tier = 'bronze' THEN 1 ELSE 0 END) as bronze_count
+  SUM(CASE WHEN ac.tier = 'bronze' THEN 1 ELSE 0 END) as bronze_count,
+  SUM(CASE WHEN ac.tier = 'potato' THEN 1 ELSE 0 END) as potato_count
 FROM users u
 LEFT JOIN area_completions ac ON u.id = ac.user_id
 GROUP BY u.id;

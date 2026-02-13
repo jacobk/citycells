@@ -266,7 +266,8 @@ const ALL_ACTIVITIES: ActivityTestConfig[] = [
     activity: ellstorpActivity,
     area: ellstorpArea,
     // WHY: Ellstorp scores below bronze (37.7%). The walk only covers ~43%
-    // of the perimeter and has poor alignment. This tests the "no tier" case.
+    // of the perimeter and has poor alignment. This tests the Potato tier case
+    // for low-quality walks that still count toward progress (ADR 003, updated 2026-02-13).
     expected: {
       isClosedLoop: true,
       maxLoopGap: 15,
@@ -275,7 +276,7 @@ const ALL_ACTIVITIES: ActivityTestConfig[] = [
       minAlignment: 0.0,
       minEfficiency: 0.52,
       minQuality: 0.36,
-      tier: null,
+      tier: 'potato',
       maxDeviations: 2,
     },
   },

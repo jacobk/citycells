@@ -20,7 +20,7 @@ const INDEXEDDB_NAME = 'citycells-db';
 const INDEXEDDB_STORE = 'database';
 
 // WHY: Schema version for migrations - increment when schema changes
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // ============================================
 // Types
@@ -45,9 +45,10 @@ export interface UserProgressRow {
   gold_count: number;
   silver_count: number;
   bronze_count: number;
+  potato_count: number;
 }
 
-export type Tier = 'platinum' | 'gold' | 'silver' | 'bronze';
+export type Tier = 'platinum' | 'gold' | 'silver' | 'bronze' | 'potato';
 
 // WHY: UserRow includes token fields for persistent authentication (ADR 013)
 export interface UserRow {
@@ -239,7 +240,7 @@ CREATE TABLE IF NOT EXISTS walk_analyses (
   -- Computed scores
   raw_quality_score REAL,
   quality_score REAL,
-  tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze')),
+  tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze', 'potato')),
   
   -- Exclusive assignment (from ADR 002)
   is_primary_match INTEGER DEFAULT 0,
@@ -404,6 +405,92 @@ export async function initDatabase(): Promise<Database> {
       }
       if (!columnNames.has('end_lng')) {
         db.run('ALTER TABLE walks ADD COLUMN end_lng REAL');
+      }
+    }
+
+    // WHY: Schema version 4 adds 'potato' tier to CHECK constraint (Ticket 013)
+    // SQLite doesn't support modifying CHECK constraints, so we need to:
+    // 1. Create new table with updated constraint
+    // 2. Copy data
+    // 3. Drop old table
+    // 4. Rename new table
+    if (currentVersion < 4) {
+      console.log('[DB Migration] Adding potato tier support...');
+      
+      // Check if we need to migrate (table exists and has old constraint)
+      const tableExists = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='walk_analyses'");
+      if (tableExists.length > 0) {
+        // Create temporary table with new constraint (must match full schema)
+        db.run(`
+          CREATE TABLE walk_analyses_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            walk_id INTEGER NOT NULL REFERENCES walks(id),
+            area_id INTEGER NOT NULL REFERENCES areas(id),
+            
+            -- Perimeter metrics
+            perimeter_coverage_percent REAL NOT NULL,
+            covered_distance_meters REAL NOT NULL,
+            rmse_meters REAL,
+            max_deviation_meters REAL,
+            p90_deviation_meters REAL,
+            efficiency REAL,
+            
+            -- Area metrics
+            area_coverage_percent REAL,
+            enclosed_area_sqm REAL,
+            is_closed_loop INTEGER DEFAULT 0,
+            loop_gap_meters REAL,
+            
+            -- Computed scores
+            raw_quality_score REAL,
+            quality_score REAL,
+            tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze', 'potato')),
+            
+            -- Exclusive assignment (from ADR 002)
+            is_primary_match INTEGER DEFAULT 0,
+            
+            analyzed_at TEXT DEFAULT (datetime('now')),
+            
+            UNIQUE(walk_id, area_id)
+          )
+        `);
+        
+        // Copy data from old table to new table (explicitly list all columns)
+        db.run(`
+          INSERT INTO walk_analyses_new 
+          SELECT 
+            id,
+            walk_id,
+            area_id,
+            perimeter_coverage_percent,
+            covered_distance_meters,
+            rmse_meters,
+            max_deviation_meters,
+            p90_deviation_meters,
+            efficiency,
+            area_coverage_percent,
+            enclosed_area_sqm,
+            is_closed_loop,
+            loop_gap_meters,
+            raw_quality_score,
+            quality_score,
+            tier,
+            is_primary_match,
+            analyzed_at
+          FROM walk_analyses
+        `);
+        
+        // Drop old table
+        db.run('DROP TABLE walk_analyses');
+        
+        // Rename new table
+        db.run('ALTER TABLE walk_analyses_new RENAME TO walk_analyses');
+        
+        // Recreate indexes
+        db.run('CREATE INDEX IF NOT EXISTS idx_analyses_area ON walk_analyses(area_id)');
+        db.run('CREATE INDEX IF NOT EXISTS idx_analyses_walk ON walk_analyses(walk_id)');
+        
+        console.log('[DB Migration] Potato tier support added successfully');
       }
     }
 
@@ -715,7 +802,8 @@ export function getUserProgress(userId: number): UserProgressRow | null {
       SUM(CASE WHEN ac.tier = 'platinum' THEN 1 ELSE 0 END) as platinum_count,
       SUM(CASE WHEN ac.tier = 'gold' THEN 1 ELSE 0 END) as gold_count,
       SUM(CASE WHEN ac.tier = 'silver' THEN 1 ELSE 0 END) as silver_count,
-      SUM(CASE WHEN ac.tier = 'bronze' THEN 1 ELSE 0 END) as bronze_count
+      SUM(CASE WHEN ac.tier = 'bronze' THEN 1 ELSE 0 END) as bronze_count,
+      SUM(CASE WHEN ac.tier = 'potato' THEN 1 ELSE 0 END) as potato_count
     FROM users u
     LEFT JOIN area_completions ac ON u.id = ac.user_id
     WHERE u.id = ?
@@ -737,6 +825,7 @@ export function getUserProgress(userId: number): UserProgressRow | null {
     gold_count: row[6] as number,
     silver_count: row[7] as number,
     bronze_count: row[8] as number,
+    potato_count: row[9] as number,
   };
 }
 

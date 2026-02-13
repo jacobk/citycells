@@ -1,8 +1,12 @@
 # ADR 003: Multi-Metric Completion Scoring
 
-**Date:** 2026-02-03
+**Date:** 2026-02-03 (Updated: 2026-02-13)
 **Status:** Accepted
 **Supersedes:** Partial update to ADR 002 (completion threshold changes from 75% to 50%)
+
+## Updates
+
+**2026-02-13:** Added "Potato" tier below Bronze for activities with scores < 0.50. This ensures all activities tagged with `#malmödelområde` count toward map progress, even with minimal coverage/quality.
 
 ## Context
 
@@ -115,14 +119,23 @@ quality_score = (
 | Gold     | ≥ 0.85      | Gold    | `#eab308` |
 | Silver   | ≥ 0.70      | Silver  | `#9ca3af` |
 | Bronze   | ≥ 0.50      | Bronze  | `#cd7f32` |
+| Potato   | < 0.50      | Brown   | `#b8936d` |
 
 > **Note:** The colors above are for non-map contexts (badges, text labels). For **map visualization**, see [ADR 010: Map Visual Design System](./010-map-visual-design-system.md) which defines a heat map gradient color scheme for improved accessibility and visibility.
+
+**Potato Tier Rationale (Added 2026-02-13):**
+- Activities tagged with `#malmödelområde` that receive very low scores (< 0.50) still represent user effort and should count toward map progress
+- The "Potato" tier visually distinguishes these low-quality walks from legitimate Bronze efforts
+- Icon: 🥔 (potato emoji)
+- Color: Light tan/brown (#d4b896 fill, #b8936d border) to match potato theme and provide warm contrast against purple-pink gradient
+- Purpose: Ensures all tagged activities contribute to the big map completion view, even with minimal coverage
 
 ### 4. Completion Threshold Change
 
 - **Old (ADR 002)**: >75% perimeter coverage required for "Completed"
-- **New**: >50% perimeter coverage marks area as "Completed" (Bronze tier)
-- **Rationale**: Real-world obstacles may prevent high coverage; any serious attempt should count
+- **New**: Any walk tagged with `#malmödelområde` that matches a sub-area marks it as "Completed" (minimum Potato tier)
+- **Bronze Threshold**: ≥50% perimeter coverage earns Bronze or higher tier
+- **Rationale**: Real-world obstacles may prevent high coverage; any serious attempt should count. Even low-quality walks (Potato tier) contribute to the overall progress view.
 
 ### 5. Deviation Detection Algorithm
 

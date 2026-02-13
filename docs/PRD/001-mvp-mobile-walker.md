@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-09)  
+**Date:** 2026-02-02 (Updated: 2026-02-13)  
 **Status:** In Progress
 
-*Latest update: Distance Progress Tracking (Section 3.9.1) - theoretical vs actual distance metrics with efficient calculation*
+*Latest update: Added Potato tier below Bronze (Section 3.4) for low-quality walks that still count toward progress*
 
 ## 1. Overview
 
@@ -16,7 +16,7 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want to log in with my Strava account, so the app can access my walks.
 *   **As a user,** I want my Strava connection to persist across browser sessions, so I don't have to re-authenticate every time I open the app.
 *   **As a user,** I want the app to automatically find my walks tagged with `#malmödelområde` and match them to the areas.
-*   **As a user,** I want to clearly see which areas I have completed and their quality tier (Platinum/Gold/Silver/Bronze).
+*   **As a user,** I want to clearly see which areas I have completed and their quality tier (Platinum/Gold/Silver/Bronze/Potato).
 *   **As a user,** I want to see a progress bar indicating how many total areas I have conquered.
 *   **As a user,** I want to see my total walked distance displayed in the status view, so I can track how much I've walked overall.
 *   **As a user,** I want to see the total distance of all area perimeters combined, so I know the total challenge distance.
@@ -99,10 +99,10 @@ For each eligible activity:
     *   Efficiency (%)
 5.  **Deviation Detection**: Identify segments where walker deviated >30m from border.
 6.  **Quality Score**: Compute composite score (0.0 - 1.0).
-7.  **Tier Assignment**: Assign tier based on score (Platinum ≥0.95, Gold ≥0.85, Silver ≥0.70, Bronze ≥0.50).
+7.  **Tier Assignment**: Assign tier based on score (Platinum ≥0.95, Gold ≥0.85, Silver ≥0.70, Bronze ≥0.50, Potato <0.50).
 8.  **Persistence**: Store analysis results in SQLite.
 
-### 3.4 Area Status Visualization (Updated: 2026-02-04)
+### 3.4 Area Status Visualization (Updated: 2026-02-13)
 
 *Reference: ADR 010 (Map Visual Design System)*
 
@@ -119,9 +119,12 @@ Display completed areas using a **sequential heat map color gradient** for impro
 | Gold        | Vibrant Purple | `#a855f7` | 0.60    | `#9333ea`  |
 | Silver      | Magenta Pink   | `#d946ef` | 0.55    | `#c026d3`  |
 | Bronze      | Soft Pink      | `#f0abfc` | 0.50    | `#e879f9`  |
+| Potato      | Light Tan      | `#d4b896` | 0.40    | `#b8936d`  |
 | Not Started | None           | —         | —       | `#64748b`  |
 
 *   Bold purple-to-pink gradient: higher scores = richer, deeper violet
+*   Potato tier uses warm tan/brown color to match potato theme and provide clear visual distinction from Not Started (no fill)
+*   Warm brown contrasts well with cool purple-pink gradient
 *   High saturation colors that pop against grayscale base map
 *   Meets WCAG 2.1 3:1+ contrast ratio between adjacent tiers
 
@@ -153,7 +156,7 @@ Display completed areas using a **sequential heat map color gradient** for impro
 #### Tier Medal Icons
 
 *   Display tier medal icons at the centroid of each completed area
-*   Icons: 🏆 (Platinum), 🥇 (Gold), 🥈 (Silver), 🥉 (Bronze)
+*   Icons: 🏆 (Platinum), 🥇 (Gold), 🥈 (Silver), 🥉 (Bronze), 🥔 (Potato)
 *   Visible at zoom level 13+, scale with zoom
 *   Custom SVG icons preferred for cross-platform consistency
 

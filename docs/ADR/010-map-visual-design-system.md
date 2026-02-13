@@ -166,6 +166,7 @@ const routeSegment = {
 | Gold     | 🥇   | 18px | Gold medal emoji or custom SVG |
 | Silver   | 🥈   | 16px | Silver medal emoji or custom SVG |
 | Bronze   | 🥉   | 14px | Bronze medal emoji or custom SVG |
+| Potato   | 🥔   | 12px | Potato emoji or custom SVG |
 
 **Implementation:**
 - Use `L.DivIcon` or `L.Icon` placed at polygon centroid

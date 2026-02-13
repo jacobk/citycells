@@ -58,7 +58,7 @@ export default function Home() {
   const [progress, setProgress] = useState<ProgressInfo>({ 
     completedCount: 0, 
     totalAreas: 0,
-    tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0 }
+    tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0, potato: 0 }
   });
   
   // WHY: State for all areas data from Map (ADR 008)

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The analysis engine calculates multi-metric scores for walks around Malmö's sub-areas. It evaluates how well a walk traces the border of an area and assigns quality tiers (Platinum/Gold/Silver/Bronze). The same pipeline can be re-run on cached walks via the [Re-Analysis](../features/re-analysis.md) feature (user-initiated), so scores stay correct when the algorithm or source data changes.
+The analysis engine calculates multi-metric scores for walks around Malmö's sub-areas. It evaluates how well a walk traces the border of an area and assigns quality tiers (Platinum/Gold/Silver/Bronze/Potato). The same pipeline can be re-run on cached walks via the [Re-Analysis](../features/re-analysis.md) feature (user-initiated), so scores stay correct when the algorithm or source data changes.
 
 ## User Stories
 
@@ -173,8 +173,16 @@ quality_score = (
 | Gold | ≥ 0.85 | Gold | `#eab308` |
 | Silver | ≥ 0.70 | Silver | `#9ca3af` |
 | Bronze | ≥ 0.50 | Bronze | `#cd7f32` |
+| Potato | < 0.50 | Brown | `#b8936d` |
 
-**Completion Threshold:** Score ≥ 0.50 (Bronze) marks area as "completed".
+**Completion Threshold:** Any matched walk marks area as "completed" (minimum Potato tier).
+
+**Potato Tier (Added 2026-02-13):**
+- Activities tagged with `#malmödelområde` that match a sub-area but receive very low scores (< 0.50)
+- Ensures all user efforts count toward map progress, even with minimal coverage/quality
+- Icon: 🥔 (potato emoji)
+- Color: Light tan/brown to match potato theme and visually distinguish on map
+- **WHY:** Example: The Ellstorp test walk has minimal perimeter coverage but should still appear as completed on the map to acknowledge user effort
 
 ## Deviation Detection
 
@@ -233,7 +241,8 @@ if (detour_ratio >= 2.0 && return_accuracy < 50m) {
 | 50m | RMSE normalization | ADR 003 |
 | 30m | Deviation threshold | ADR 003 |
 | 0.40/0.25/0.20/0.15 | Score weights | ADR 003 |
-| 0.95/0.85/0.70/0.50 | Tier thresholds | ADR 003 |
+| 0.95/0.85/0.70/0.50 | Tier thresholds (Bronze+) | ADR 003 |
+| < 0.50 | Potato tier threshold | ADR 003 (Updated 2026-02-13) |
 
 ## ADR References
 

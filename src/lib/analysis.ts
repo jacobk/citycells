@@ -54,7 +54,7 @@ export const TIER_THRESHOLDS = {
 // Types
 // ============================================
 
-export type Tier = 'platinum' | 'gold' | 'silver' | 'bronze' | null;
+export type Tier = 'platinum' | 'gold' | 'silver' | 'bronze' | 'potato' | null;
 
 export interface AnalysisMetrics {
   // Perimeter metrics
@@ -451,6 +451,10 @@ export function calculateQualityScore(
     tier = 'silver';
   } else if (score >= TIER_THRESHOLDS.bronze) {
     tier = 'bronze';
+  } else if (score > 0) {
+    // WHY: Potato tier for any positive score < 0.50
+    // Ensures all matched walks count toward progress per ADR 003 (Updated 2026-02-13)
+    tier = 'potato';
   }
   
   return { score, tier };
@@ -670,6 +674,7 @@ export function getTierColor(tier: Tier): string {
     case 'gold': return '#eab308';     // Gold
     case 'silver': return '#9ca3af';   // Gray
     case 'bronze': return '#cd7f32';   // Bronze
+    case 'potato': return '#b8936d';   // Brown (potato color) per ADR 003
     default: return '#6b7280';         // Default gray
   }
 }
@@ -679,5 +684,6 @@ export function getTierColor(tier: Tier): string {
  */
 export function getTierDisplayName(tier: Tier): string {
   if (!tier) return 'Not Completed';
+  if (tier === 'potato') return 'Potato';
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
