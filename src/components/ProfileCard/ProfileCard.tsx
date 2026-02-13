@@ -217,6 +217,15 @@ export default function ProfileCard({
                     }}
                   />
                 )}
+                {progress.tierCounts.potato > 0 && (
+                  <div 
+                    className="h-2 transition-all duration-1000"
+                    style={{ 
+                      width: `${(progress.tierCounts.potato / progress.totalAreas) * 100}%`,
+                      backgroundColor: getTierColor('potato')
+                    }}
+                  />
+                )}
               </div>
 
               {/* Tier Legend */}
@@ -244,6 +253,12 @@ export default function ProfileCard({
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('bronze') }} />
                       <span className="text-gray-600">{progress.tierCounts.bronze}</span>
+                    </div>
+                  )}
+                  {progress.tierCounts.potato > 0 && (
+                    <div className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('potato') }} />
+                      <span className="text-gray-600">{progress.tierCounts.potato}</span>
                     </div>
                   )}
                 </div>

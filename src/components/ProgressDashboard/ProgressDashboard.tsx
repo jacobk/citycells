@@ -2,20 +2,14 @@
 
 import { getTierColor } from '@/lib/analysis';
 import { formatDistance } from '@/lib/format-utils';
-
-interface TierStats {
-  platinum: number;
-  gold: number;
-  silver: number;
-  bronze: number;
-}
+import { TIER_ORDER, TIER_LABELS, type TierCounts, type TierKey } from '@/lib/types/tiers';
 
 interface ProgressDashboardProps {
   isOpen: boolean;
   onClose: () => void;
   completedCount: number;
   totalAreas: number;
-  tierCounts: TierStats;
+  tierCounts: TierCounts;
   athleteName?: string;
   athleteProfile?: string;
   // WHY: Distance metrics for progress tracking (Ticket 012)
@@ -68,14 +62,12 @@ export default function ProgressDashboard({
     ? actualWalkedDistance! - theoreticalDistance!
     : 0;
 
-  // WHY: Explicit non-null tier keys for iteration
-  type NonNullTier = 'platinum' | 'gold' | 'silver' | 'bronze';
-  const tiers: Array<{ key: NonNullTier; label: string }> = [
-    { key: 'platinum', label: 'Platinum' },
-    { key: 'gold', label: 'Gold' },
-    { key: 'silver', label: 'Silver' },
-    { key: 'bronze', label: 'Bronze' },
-  ];
+  // WHY: Use shared TIER_ORDER for consistent tier iteration across components
+  // Maps tier keys to objects with key and label for rendering
+  const tiers: Array<{ key: TierKey; label: string }> = TIER_ORDER.map(key => ({
+    key,
+    label: TIER_LABELS[key],
+  }));
 
   return (
     <>
@@ -107,8 +99,9 @@ export default function ProgressDashboard({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-5 space-y-6">
+        {/* Content - scrollable on small displays */}
+        {/* WHY: max-h-[calc(100vh-65px)] accounts for header height (~57px) plus padding */}
+        <div className="p-5 space-y-6 overflow-y-auto max-h-[calc(100vh-65px)]">
           
           {/* User Info */}
           {athleteName && (

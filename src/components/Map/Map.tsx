@@ -13,8 +13,7 @@ import {
   type Tier,
   type AnalysisMetrics,
   type StravaMetadata,
-  type FullAnalysisResult,
-  TIER_THRESHOLDS
+  type FullAnalysisResult
 } from '@/lib/analysis';
 import {
   getMapTierFillColor,
@@ -48,6 +47,7 @@ import {
 } from '@/lib/db';
 import type { DeviationWithExemption } from '@/lib/exemption-types';
 import type { CachedStreams } from '@/lib/types/strava-streams';
+import type { TierCounts } from '@/lib/types/tiers';
 
 // Fix for default marker icon in Next.js
 // @ts-expect-error - overriding private method
@@ -64,12 +64,7 @@ const MALMO_CENTER: [number, number] = [55.5900, 13.0038];
 export interface ProgressInfo {
   completedCount: number;
   totalAreas: number;
-  tierCounts: {
-    platinum: number;
-    gold: number;
-    silver: number;
-    bronze: number;
-  };
+  tierCounts: TierCounts;
 }
 
 interface MapProps {
@@ -317,7 +312,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         onProgressChange({
           completedCount: 0,
           totalAreas: geoData.features.length,
-          tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0 }
+          tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0, potato: 0 }
         });
       }
       return;
@@ -384,7 +379,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         onAreasLoaded?.(new Map(newAreaDetailsData));
 
         // Update progress with cached tier counts
-        const cachedTierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
+        const cachedTierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0, potato: 0 };
         newAreaAnalyses.forEach(a => { if (a.tier) cachedTierCounts[a.tier]++; });
         onProgressChange({
           completedCount: newAreaAnalyses.size,
@@ -569,10 +564,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               pAct.streamCoordinates ?? undefined
             );
 
-            // WHY: Only consider if meets minimum threshold (Bronze = 50%)
-            // See ADR 003 for completion threshold rationale
+            // WHY: Any positive score qualifies (includes Potato tier for scores < 0.50)
+            // See ADR 003 (Updated 2026-02-13) - all matched walks count toward progress
             console.log(`[Map] Activity ${activityId} vs Area ${areaId}: score=${(result.metrics.rawQualityScore * 100).toFixed(1)}%, perimeter=${(result.metrics.perimeterCoveragePercent * 100).toFixed(1)}%, area=${(result.metrics.areaCoveragePercent * 100).toFixed(1)}%`);
-            if (result.metrics.rawQualityScore >= TIER_THRESHOLDS.bronze) {
+            if (result.metrics.rawQualityScore > 0) {
               console.log(`[Map] Activity ${activityId} QUALIFIES for area ${areaId} with score ${(result.metrics.rawQualityScore * 100).toFixed(1)}%`);
               if (result.metrics.rawQualityScore > bestScore) {
                 bestScore = result.metrics.rawQualityScore;
@@ -711,7 +706,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       onAreasLoaded?.(newAreaDetailsData);
 
       // Calculate tier counts for progress
-      const tierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
+      const tierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0, potato: 0 };
       newAreaAnalyses.forEach(analysis => {
         if (analysis.tier) {
           tierCounts[analysis.tier]++;
