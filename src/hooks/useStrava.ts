@@ -46,10 +46,20 @@ export function useStrava() {
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [authState, setAuthState] = useState<AuthState>('loading');
 
-  // Fetch activities from API
-  const fetchActivities = useCallback(async () => {
+  /**
+   * Fetch activities from API.
+   * @param afterTimestamp - Optional Unix epoch timestamp (seconds) for incremental sync (TICKET-016)
+   *                         If provided, only fetches activities after this time.
+   */
+  const fetchActivities = useCallback(async (afterTimestamp?: number) => {
     try {
-      const res = await fetch('/api/activities');
+      // WHY: Build URL with optional 'after' parameter for incremental sync (TICKET-016)
+      // The API route passes this to Strava's listActivities endpoint
+      const url = afterTimestamp 
+        ? `/api/activities?after=${afterTimestamp}`
+        : '/api/activities';
+      
+      const res = await fetch(url);
       if (!res.ok) {
         // WHY: 401 means session expired - try to restore or clear
         if (res.status === 401) {
@@ -64,12 +74,26 @@ export function useStrava() {
       
       const data = await res.json();
       if (Array.isArray(data)) {
-        setActivities(data);
+        // WHY: For incremental sync, merge new activities with existing ones
+        // New activities should appear at the beginning (most recent first from Strava)
+        if (afterTimestamp && activities.length > 0) {
+          // Merge: new activities + existing, avoiding duplicates
+          const existingIds = new Set(activities.map(a => a.id));
+          const newActivities = data.filter((a: StravaActivity) => !existingIds.has(a.id));
+          if (newActivities.length > 0) {
+            console.log(`[useStrava] Incremental sync: ${newActivities.length} new activities`);
+            setActivities([...newActivities, ...activities]);
+          } else {
+            console.log('[useStrava] Incremental sync: no new activities');
+          }
+        } else {
+          setActivities(data);
+        }
       }
     } catch (err) {
       console.error('[useStrava] Failed to fetch activities:', err);
     }
-  }, []);
+  }, [activities]);
 
   useEffect(() => {
     let mounted = true;

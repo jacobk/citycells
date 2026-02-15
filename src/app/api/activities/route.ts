@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStravaClient, getValidAccessToken } from '@/lib/strava';
 
@@ -7,9 +7,21 @@ import { getStravaClient, getValidAccessToken } from '@/lib/strava';
  * 
  * Fetches Strava activities for the authenticated user.
  * WHY: Uses getValidAccessToken() for automatic token refresh (ADR 013).
+ * 
+ * Query parameters:
+ * - after: Unix epoch timestamp (seconds) to only fetch activities after this time
+ *          Used for incremental sync (TICKET-016)
+ * 
+ * @example GET /api/activities?after=1707955200
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
+  
+  // WHY: Read 'after' query param for incremental sync (TICKET-016)
+  // Strava API accepts 'after' as epoch timestamp in seconds
+  const { searchParams } = new URL(request.url);
+  const afterParam = searchParams.get('after');
+  const afterTimestamp = afterParam ? parseInt(afterParam, 10) : undefined;
   
   // WHY: Use centralized token validation with automatic refresh
   const tokenResult = await getValidAccessToken({
@@ -48,9 +60,18 @@ export async function GET() {
   const strava = getStravaClient(tokenResult.accessToken);
   
   try {
+    // WHY: Build params object for Strava API
+    // 'after' parameter enables incremental sync - only fetches activities after the given timestamp
+    // See ADR 004 "Incremental Activity Sync" section for rationale (TICKET-016)
+    const params: { per_page: number; after?: number } = { per_page: 200 };
+    if (afterTimestamp && !isNaN(afterTimestamp)) {
+      params.after = afterTimestamp;
+      console.log(`[API] Fetching activities after ${new Date(afterTimestamp * 1000).toISOString()}`);
+    }
+    
     // Fetch user activities
-    // 200 items should be enough for MVP history
-    const activities = await strava.athlete.listActivities({ per_page: 200 });
+    // 200 items should be enough for MVP history (or incremental batch)
+    const activities = await strava.athlete.listActivities(params);
     
     // Filter by keyword
     const KEYWORD = '#malmödelområde';
@@ -59,6 +80,11 @@ export async function GET() {
       (act.name && act.name.toLowerCase().includes(KEYWORD)) ||
       (act.description && act.description.toLowerCase().includes(KEYWORD))
     );
+
+    // WHY: Log for debugging incremental sync behavior
+    if (afterTimestamp) {
+      console.log(`[API] Incremental sync: ${activities.length} total activities, ${filtered.length} matching keyword`);
+    }
 
     return NextResponse.json(filtered);
   } catch (error) {

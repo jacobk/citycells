@@ -11,10 +11,8 @@ import { getDatabase, executeWrite, persistDatabase } from './db';
 import { 
   SCORE_WEIGHTS, 
   RMSE_NORMALIZATION_METERS,
-  TIER_THRESHOLDS,
-  type Tier,
-  type AnalysisMetrics 
 } from './analysis';
+import { assignTier, type Tier } from './tiers';
 
 // Re-export types from exemption-types.ts for convenience
 export { 
@@ -270,17 +268,9 @@ export async function recalculateScoreWithExemptions(walkAnalysisId: number): Pr
     SCORE_WEIGHTS.alignment * effectiveAlignmentScore +
     SCORE_WEIGHTS.efficiency * effectiveEfficiency;
 
-  // Determine adjusted tier
-  let adjustedTier: Tier = null;
-  if (adjustedQualityScore >= TIER_THRESHOLDS.platinum) {
-    adjustedTier = 'platinum';
-  } else if (adjustedQualityScore >= TIER_THRESHOLDS.gold) {
-    adjustedTier = 'gold';
-  } else if (adjustedQualityScore >= TIER_THRESHOLDS.silver) {
-    adjustedTier = 'silver';
-  } else if (adjustedQualityScore >= TIER_THRESHOLDS.bronze) {
-    adjustedTier = 'bronze';
-  }
+  // WHY: Use centralized assignTier() to ensure consistency
+  // FIX: This previously missed potato tier assignment (TICKET-016)
+  const adjustedTier = assignTier(adjustedQualityScore);
 
   // Update the database with adjusted score
   db.run(`
@@ -404,13 +394,10 @@ export function getAdjustedMetrics(walkAnalysisId: number): AdjustedMetrics | nu
   const deviations = getDeviationsForAnalysis(walkAnalysisId);
   const exemptDeviations = deviations.filter(d => d.isExempt);
 
-  // Get original tier from raw score
+  // WHY: Use centralized assignTier() to ensure consistency
+  // FIX: This previously missed potato tier assignment (TICKET-016)
   const rawScore = row[3] as number;
-  let originalTier: Tier = null;
-  if (rawScore >= TIER_THRESHOLDS.platinum) originalTier = 'platinum';
-  else if (rawScore >= TIER_THRESHOLDS.gold) originalTier = 'gold';
-  else if (rawScore >= TIER_THRESHOLDS.silver) originalTier = 'silver';
-  else if (rawScore >= TIER_THRESHOLDS.bronze) originalTier = 'bronze';
+  const originalTier = assignTier(rawScore);
 
   return {
     originalPerimeterCoverage: row[0] as number,

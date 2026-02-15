@@ -1,5 +1,7 @@
 # Data Persistence
 
+*Updated: 2026-02-15*
+
 ## Overview
 
 CityCells uses SQLite running in the browser via sql.js (WebAssembly) with IndexedDB for persistence. This allows all user data to remain on their device while providing powerful SQL query capabilities.
@@ -182,6 +184,99 @@ Every write immediately persists to IndexedDB rather than batching:
 | `citycells-db` | IndexedDB database name | Chosen for clarity |
 | `SCHEMA_VERSION = 2` | Schema migration version | Increment for migrations |
 
+## Database Reset (Added: 2026-02-15, Implemented: 2026-02-15)
+
+*Reference: [ADR 004](../ADR/004-sqlite-storage.md) section "Database Reset"*
+
+Users can clear all synced activities and analysis results to resolve data issues.
+
+**Purpose:**
+- Fix persistence bugs causing stale data or tier inconsistencies
+- Clear corrupted data without manually clearing browser storage
+- Start fresh while preserving authentication
+
+**What is cleared:**
+- All synced walks (`walks` table)
+- All analysis results (`walk_analyses`, `deviations`, `area_completions`)
+- Sync timestamp (forces full re-sync on next load)
+
+**What is preserved:**
+- User authentication tokens (`users` table)
+- Area definitions (`areas` table - seeded from GeoJSON)
+
+**UI Location:** Profile card (expanded) → "Clear All Data" button
+
+### Implementation
+
+**Key Files:**
+- `src/lib/db.ts` - `clearUserData(userId)` function
+- `src/components/ProfileCard/ProfileCard.tsx` - UI button with confirmation dialog
+- `src/app/page.tsx` - `handleClearData()` handler
+
+**Deletion Order (respecting foreign keys):**
+1. `deviations` (references `walk_analyses`)
+2. `walk_analyses` (references `walks`)
+3. `area_completions` (references `walks`)
+4. `walks` (main data)
+
+**User Flow:**
+1. User clicks "Clear All Data" in expanded profile card
+2. Confirmation dialog appears with warning about data loss
+3. User confirms by clicking "Yes, Delete All"
+4. Data is cleared and page reloads for fresh state
+
+## Incremental Activity Sync (Added: 2026-02-15, Implemented: 2026-02-15)
+
+*Reference: [ADR 004](../ADR/004-sqlite-storage.md) section "Incremental Activity Sync"*
+
+To provide instant page loads for returning users, the app uses incremental sync instead of fetching all activities on every load.
+
+**Problem Solved:**
+- Previously, all 200 activities were fetched from Strava on every page load
+- This caused slow "empty map → loading → display" experience
+- Unnecessary API calls even when user has no new activities
+
+**Solution:**
+- Track last sync timestamp per user in `users` table
+- Use Strava's `after` parameter to only fetch new activities
+- Cache provides instant display, sync adds new data in background
+
+**User Experience:**
+
+| Scenario | Behavior |
+|----------|----------|
+| First visit | Full sync (all activities fetched and analyzed) |
+| Return visit (no new) | Instant load from cache, quick API check returns 0 new |
+| Return visit (new activities) | Instant cache display, then sync and analyze only new activities |
+| Force refresh | User-triggered full re-sync (resets sync timestamp) |
+
+### Implementation
+
+**Schema Changes (Migration v5):**
+```sql
+ALTER TABLE users ADD COLUMN last_activity_sync_at TEXT;
+ALTER TABLE users ADD COLUMN last_synced_activity_id INTEGER;
+```
+
+**Key Files:**
+- `src/lib/db.ts` - Schema migration, `getLastSyncTimestamp()`, `updateLastSync()`
+- `src/app/api/activities/route.ts` - Accepts `?after=<timestamp>` query param
+- `src/hooks/useStrava.ts` - `fetchActivities(afterTimestamp?)` supports incremental fetch
+- `src/components/ProfileCard/ProfileCard.tsx` - "Force Refresh All Activities" button
+- `src/app/page.tsx` - `handleForceRefresh()` resets sync timestamp
+
+**Sync Flow:**
+1. Page loads → cached analyses displayed instantly
+2. Check `last_activity_sync_at` from `users` table
+3. If exists: call API with `?after=<epoch_seconds>`
+4. If null: full sync (first visit or after force refresh)
+5. After successful fetch: update `last_activity_sync_at`
+
+**Force Refresh:**
+- Button in expanded ProfileCard under "Sync Activities"
+- Resets `last_activity_sync_at` to epoch (1970-01-01)
+- Triggers page reload for full re-sync
+
 ## Current Limitations
 
 1. **No cross-device sync**: Data stays on one browser. Future: cloud storage option.
@@ -191,6 +286,14 @@ Every write immediately persists to IndexedDB rather than batching:
 3. **Storage limits**: IndexedDB typically allows 50MB+, sufficient for this app.
 
 4. **No automatic backup**: User must manually export. Consider periodic reminder.
+
+## Known Issues (Updated: 2026-02-15)
+
+*No critical known issues at this time.*
+
+### Resolved Issues
+
+1. **Potato tier persistence bug** (Fixed in TICKET-016): Scores < 0.50 but > 0 were saved with `tier = null` instead of `'potato'`. Areas would disappear after page refresh. **Fix:** Centralized tier assignment logic in `src/lib/tiers.ts` with `assignTier()` function that correctly handles all tiers including potato.
 
 ## Planned Improvements
 

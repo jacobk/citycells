@@ -17,6 +17,23 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Fixed
+- **Potato tier persistence bug**: Areas with scores < 0.50 but > 0 now correctly persist with tier = 'potato' after page refresh. Previously saved with `tier = null` causing areas to disappear. (ADR 003, ADR 004, TICKET-016)
+  - Key files: `src/lib/tiers.ts` (NEW), `src/lib/analysis.ts`, `src/lib/analysis-persistence.ts`, `src/lib/exemptions.ts`
+  - Created centralized `assignTier(score)` function to prevent tier logic duplication
+  - Fixed 4 locations where potato tier was missing from tier assignment logic
+
+### Added
+- **Database reset capability**: "Clear All Data" button in ProfileCard to reset synced activities and analysis results while preserving authentication. (ADR 004, PRD 001 §3.9, TICKET-016)
+  - Key files: `src/lib/db.ts`, `src/components/ProfileCard/ProfileCard.tsx`, `src/app/page.tsx`
+  - Confirmation dialog with destructive action warning
+  - Respects foreign key constraints when deleting data
+- **Incremental activity sync**: Infrastructure for fetching only new activities from Strava using `after` timestamp parameter. (ADR 004, PRD 001 §3.9, TICKET-016)
+  - Key files: `src/lib/db.ts`, `src/app/api/activities/route.ts`, `src/hooks/useStrava.ts`
+  - Schema v5 migration adds `last_activity_sync_at` and `last_synced_activity_id` columns
+  - API route accepts `?after=<epoch_seconds>` query parameter
+  - "Force Refresh All Activities" button to override incremental sync
+
 ### Changed
 - Details panel mini-map now fills available viewport height using CSS flex-grow layout. (PRD 001 §3.7, ADR 012, TICKET-015)
   - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `docs/features/map-visualization.md`

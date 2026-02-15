@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-13)  
+**Date:** 2026-02-02 (Updated: 2026-02-15)  
 **Status:** In Progress
 
-*Latest update: Details panel mini-map now fills available viewport height for boundary inspection; area stats added below map (Section 3.7)*
+*Latest update: Data persistence improvements - incremental activity sync, database reset capability (Section 3.9)*
 
 ## 1. Overview
 
@@ -330,7 +330,7 @@ All visualizations are **mobile-first** (touch-optimized) and use **static examp
 | Path Precision | Heat map of distance from border with RMSE animation |
 | Route Efficiency | Side-by-side efficient vs. inefficient path comparison |
 
-### 3.9 Data Persistence
+### 3.9 Data Persistence (Updated: 2026-02-15)
 
 *Reference: ADR 004 (SQLite Storage)*
 
@@ -339,6 +339,8 @@ All visualizations are **mobile-first** (touch-optimized) and use **static examp
 *   Analysis results cached—no re-analysis on page reload.
 *   Export database feature for backup (downloads `.db` file).
 *   Import database feature to restore from backup.
+*   **Clear All Data** button to reset synced activities and analysis results (preserves auth and area definitions).
+*   **Incremental sync**: Only fetch new activities from Strava (using `after` timestamp), providing instant page loads for returning users.
 
 ### 3.9.1 Progress Dashboard & Distance Tracking (Added: 2026-02-09, Updated: 2026-02-09)
 

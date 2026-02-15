@@ -367,6 +367,80 @@ export default function Home() {
     queryDistanceMetrics();
   }, [isDashboardOpen, athlete?.id, dbLoading, db]);
 
+  // ============================================
+  // Data Management Handlers (TICKET-016)
+  // ============================================
+
+  /**
+   * Handle clear all data from profile card.
+   * WHY: Allows users to reset their data when experiencing issues like
+   * stale data, tier inconsistencies, or data corruption.
+   * See ADR 004 "Database Reset" section.
+   */
+  const handleClearData = useCallback(async () => {
+    if (!athlete?.id || dbLoading || !db) {
+      console.error('[ClearData] Cannot clear data: database not ready or user not authenticated');
+      return;
+    }
+
+    try {
+      const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
+      const { clearUserData } = await import('@/lib/db');
+
+      const userId = getOrCreateUserId(athlete.id);
+      await clearUserData(userId);
+
+      console.log('[ClearData] Data cleared successfully, reloading page...');
+      // WHY: Small delay before reload to avoid Next.js Turbopack HMR race condition
+      // in development mode. The HMR system can get confused if we reload immediately
+      // after dynamic imports. This delay allows the module graph to stabilize.
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // WHY: Reload page to re-initialize app state cleanly
+      // This triggers a fresh sync from Strava and clears UI state
+      window.location.reload();
+    } catch (error) {
+      console.error('[ClearData] Failed to clear data:', error);
+      throw error;
+    }
+  }, [athlete?.id, dbLoading, db]);
+
+  /**
+   * Handle force refresh from profile card.
+   * WHY: Allows users to re-fetch all activities from Strava, ignoring
+   * the incremental sync timestamp. Use when activities may have been
+   * added outside the app's tracking window.
+   * See ADR 004 "Incremental Activity Sync" section.
+   */
+  const handleForceRefresh = useCallback(async () => {
+    if (!athlete?.id || dbLoading || !db) {
+      console.error('[ForceRefresh] Cannot force refresh: database not ready or user not authenticated');
+      return;
+    }
+
+    try {
+      const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
+      const { updateLastSync } = await import('@/lib/db');
+
+      const userId = getOrCreateUserId(athlete.id);
+      
+      // WHY: Clear the sync timestamp to force a full re-sync on next page load
+      // We use a far-past timestamp rather than null to be explicit
+      await updateLastSync(userId, '1970-01-01T00:00:00Z');
+
+      console.log('[ForceRefresh] Sync timestamp reset, reloading page...');
+      // WHY: Small delay before reload to avoid Next.js Turbopack HMR race condition
+      // in development mode (same as handleClearData)
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // WHY: Reload page to trigger fresh activity fetch
+      window.location.reload();
+    } catch (error) {
+      console.error('[ForceRefresh] Failed to reset sync:', error);
+      throw error;
+    }
+  }, [athlete?.id, dbLoading, db]);
+
   /**
    * Handle per-walk re-analysis from area details panel.
    * WHY: Allows users to re-analyze a single walk (ADR 011).
@@ -447,6 +521,8 @@ export default function Home() {
         activitiesCount={activities.length}
         onReAnalyze={handleReAnalyze}
         reAnalysisProgress={reAnalysisProgress}
+        onClearData={handleClearData}
+        onForceRefresh={handleForceRefresh}
       />
 
       {/* Progress Dashboard Drawer */}

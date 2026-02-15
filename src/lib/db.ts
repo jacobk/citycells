@@ -20,7 +20,8 @@ const INDEXEDDB_NAME = 'citycells-db';
 const INDEXEDDB_STORE = 'database';
 
 // WHY: Schema version for migrations - increment when schema changes
-const SCHEMA_VERSION = 4;
+// v5: Added last_activity_sync_at and last_synced_activity_id columns for incremental sync (TICKET-016)
+const SCHEMA_VERSION = 5;
 
 // ============================================
 // Types
@@ -492,6 +493,28 @@ export async function initDatabase(): Promise<Database> {
         
         console.log('[DB Migration] Potato tier support added successfully');
       }
+    }
+
+    // WHY: Schema version 5 adds incremental sync support (TICKET-016)
+    // Tracks when activities were last synced from Strava to avoid fetching all on every load
+    if (currentVersion < 5) {
+      console.log('[DB Migration] Adding incremental sync columns...');
+      
+      const columnsResult = db.exec("PRAGMA table_info(users)");
+      const columnNames = new Set(
+        columnsResult.length > 0
+          ? columnsResult[0].values.map(row => row[1] as string)
+          : []
+      );
+
+      if (!columnNames.has('last_activity_sync_at')) {
+        db.run('ALTER TABLE users ADD COLUMN last_activity_sync_at TEXT');
+      }
+      if (!columnNames.has('last_synced_activity_id')) {
+        db.run('ALTER TABLE users ADD COLUMN last_synced_activity_id INTEGER');
+      }
+      
+      console.log('[DB Migration] Incremental sync columns added successfully');
     }
 
     db.run('INSERT OR REPLACE INTO schema_version (version) VALUES (?)', [SCHEMA_VERSION]);
@@ -1018,6 +1041,144 @@ export async function clearUserTokens(stravaId: number): Promise<void> {
  */
 export function isDatabaseInitialized(): boolean {
   return isInitialized && db !== null;
+}
+
+// ============================================
+// Data Reset Operations (TICKET-016)
+// ============================================
+
+/**
+ * Clear all user data while preserving authentication and area definitions.
+ * 
+ * WHY: Users need a way to reset when experiencing data issues (stale data, 
+ * tier inconsistencies, corruption). This function clears synced activities 
+ * and analysis results but preserves:
+ * - User authentication tokens (users table - only clears activity data)
+ * - Area definitions (areas table - seeded from GeoJSON)
+ * 
+ * See ADR 004 "Database Reset" section for rationale.
+ * See TICKET-016 for implementation requirements.
+ * 
+ * @param userId - Database user ID (not Strava ID) to clear data for
+ */
+export async function clearUserData(userId: number): Promise<void> {
+  const database = getDatabase();
+  
+  database.run('BEGIN TRANSACTION');
+  try {
+    // WHY: Delete in order respecting foreign key constraints
+    // 1. deviations → references walk_analyses
+    // 2. walk_analyses → references walks and areas
+    // 3. area_completions → references walks and areas
+    // 4. walks → main activity data
+    
+    // Step 1: Delete deviations for this user's walk analyses
+    database.run(`
+      DELETE FROM deviations 
+      WHERE walk_analysis_id IN (
+        SELECT wa.id FROM walk_analyses wa
+        JOIN walks w ON wa.walk_id = w.id
+        WHERE w.user_id = ?
+      )
+    `, [userId]);
+    
+    // Step 2: Delete walk analyses for this user's walks
+    database.run(`
+      DELETE FROM walk_analyses 
+      WHERE walk_id IN (
+        SELECT id FROM walks WHERE user_id = ?
+      )
+    `, [userId]);
+    
+    // Step 3: Delete area completions for this user
+    database.run('DELETE FROM area_completions WHERE user_id = ?', [userId]);
+    
+    // Step 4: Delete walks for this user
+    database.run('DELETE FROM walks WHERE user_id = ?', [userId]);
+    
+    // Step 5: Reset sync timestamp so next load does a full sync
+    database.run(`
+      UPDATE users 
+      SET last_activity_sync_at = NULL, last_synced_activity_id = NULL
+      WHERE id = ?
+    `, [userId]);
+    
+    database.run('COMMIT');
+    await persistDatabase();
+    
+    console.log(`[DB] Cleared all data for user ${userId}`);
+  } catch (e) {
+    database.run('ROLLBACK');
+    console.error('[DB] Failed to clear user data:', e);
+    throw e;
+  }
+}
+
+// ============================================
+// Incremental Sync Operations (TICKET-016)
+// ============================================
+
+/**
+ * Sync timestamp data returned by getLastSyncTimestamp.
+ */
+export interface SyncTimestamp {
+  lastSyncAt: string | null;      // ISO timestamp of last successful sync
+  lastActivityId: number | null;  // Most recent activity ID synced
+}
+
+/**
+ * Get the last activity sync timestamp for a user.
+ * 
+ * WHY: Enables incremental sync - only fetch activities newer than this timestamp
+ * from Strava API using the 'after' parameter. This dramatically reduces API calls
+ * and provides instant page loads for returning users.
+ * 
+ * See ADR 004 "Incremental Activity Sync" section for rationale.
+ * 
+ * @param userId - Database user ID
+ * @returns Sync timestamp data, or null values if never synced
+ */
+export function getLastSyncTimestamp(userId: number): SyncTimestamp {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    'SELECT last_activity_sync_at, last_synced_activity_id FROM users WHERE id = ?',
+    [userId]
+  );
+  
+  if (result.length === 0 || result[0].values.length === 0) {
+    return { lastSyncAt: null, lastActivityId: null };
+  }
+  
+  const row = result[0].values[0];
+  return {
+    lastSyncAt: row[0] as string | null,
+    lastActivityId: row[1] as number | null,
+  };
+}
+
+/**
+ * Update the last sync timestamp after a successful activity fetch.
+ * 
+ * WHY: Called after successfully fetching activities from Strava API.
+ * The timestamp is used for the next incremental sync to only fetch new activities.
+ * 
+ * @param userId - Database user ID
+ * @param syncTimestamp - ISO timestamp of when sync completed
+ * @param newestActivityId - ID of the newest activity fetched (optional)
+ */
+export async function updateLastSync(
+  userId: number,
+  syncTimestamp: string,
+  newestActivityId?: number
+): Promise<void> {
+  await executeWrite(
+    `UPDATE users 
+     SET last_activity_sync_at = ?, last_synced_activity_id = ?
+     WHERE id = ?`,
+    [syncTimestamp, newestActivityId ?? null, userId]
+  );
+  console.log(`[DB] Updated sync timestamp for user ${userId}: ${syncTimestamp}`);
 }
 
 /**

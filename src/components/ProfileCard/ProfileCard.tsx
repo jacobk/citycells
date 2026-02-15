@@ -23,6 +23,10 @@ interface ProfileCardProps {
   onReAnalyze?: (mode: ReAnalysisMode) => Promise<void>;
   // WHY: Track re-analysis state for UI feedback
   reAnalysisProgress?: ReAnalysisProgress | null;
+  // WHY: Clear all data callback for database reset (TICKET-016)
+  onClearData?: () => Promise<void>;
+  // WHY: Force refresh callback for incremental sync override (TICKET-016)
+  onForceRefresh?: () => Promise<void>;
 }
 
 // ============================================
@@ -54,6 +58,8 @@ export default function ProfileCard({
   activitiesCount,
   onReAnalyze,
   reAnalysisProgress,
+  onClearData,
+  onForceRefresh,
 }: ProfileCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   // WHY: Track local loading state for re-analyze buttons (ADR 011)
@@ -61,6 +67,11 @@ export default function ProfileCard({
   const [reAnalyzeError, setReAnalyzeError] = useState<string | null>(null);
   // WHY: Disable re-analyze when offline per ADR 014 and TICKET-006
   const { isOnline } = useOnlineStatus();
+  // WHY: Track state for clear data confirmation dialog (TICKET-016)
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  // WHY: Track state for force refresh (TICKET-016)
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Handle re-analyze button click
   const handleReAnalyze = async (mode: ReAnalysisMode) => {
@@ -76,6 +87,36 @@ export default function ProfileCard({
       setReAnalyzeError(errorMessage);
     } finally {
       setIsReAnalyzing(false);
+    }
+  };
+
+  // Handle clear all data with confirmation (TICKET-016)
+  const handleClearData = async () => {
+    if (!onClearData || isClearing) return;
+
+    setIsClearing(true);
+    try {
+      await onClearData();
+      // WHY: Close confirmation dialog after successful clear
+      setShowClearConfirm(false);
+    } catch (e) {
+      console.error('[ProfileCard] Failed to clear data:', e);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  // Handle force refresh (TICKET-016)
+  const handleForceRefresh = async () => {
+    if (!onForceRefresh || isRefreshing) return;
+
+    setIsRefreshing(true);
+    try {
+      await onForceRefresh();
+    } catch (e) {
+      console.error('[ProfileCard] Force refresh failed:', e);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -336,6 +377,38 @@ export default function ProfileCard({
               </div>
             )}
 
+            {/* WHY: Data management section - force refresh and clear data (TICKET-016) */}
+            {onForceRefresh && (
+              <div className="mb-4 pt-3 border-t border-gray-100">
+                <div className="text-xs text-gray-500 mb-2">Sync Activities</div>
+                <button
+                  onClick={handleForceRefresh}
+                  disabled={isRefreshing || !isOnline}
+                  title={!isOnline ? 'Requires internet' : 'Re-fetch all activities from Strava'}
+                  className="w-full bg-blue-100 text-blue-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isRefreshing ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Refreshing...
+                    </>
+                  ) : (
+                    'Force Refresh All Activities'
+                  )}
+                </button>
+                <div className="text-[10px] text-gray-400 mt-1.5 leading-tight">
+                  {!isOnline ? (
+                    <span className="text-amber-600">Offline — sync unavailable</span>
+                  ) : (
+                    'Re-fetch all activities from Strava (ignores incremental sync)'
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button 
                 onClick={onLogout}
@@ -344,6 +417,57 @@ export default function ProfileCard({
                 Sign Out
               </button>
             </div>
+
+            {/* WHY: Clear all data button with confirmation (TICKET-016) 
+                Destructive action - requires confirmation to prevent accidental data loss */}
+            {onClearData && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                {!showClearConfirm ? (
+                  <button
+                    onClick={() => setShowClearConfirm(true)}
+                    className="w-full text-red-600 text-xs hover:text-red-700 transition-colors cursor-pointer py-1"
+                  >
+                    Clear All Data
+                  </button>
+                ) : (
+                  <div className="bg-red-50 rounded-lg p-3">
+                    <p className="text-xs text-red-800 font-medium mb-2">
+                      Delete all your walks and analysis data?
+                    </p>
+                    <p className="text-[10px] text-red-600 mb-3">
+                      This will remove all synced activities, scores, and progress. 
+                      Your Strava connection will be preserved.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowClearConfirm(false)}
+                        disabled={isClearing}
+                        className="flex-1 bg-white text-gray-600 py-1.5 px-3 rounded text-xs font-medium hover:bg-gray-100 transition-colors border border-gray-200 cursor-pointer disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleClearData}
+                        disabled={isClearing}
+                        className="flex-1 bg-red-600 text-white py-1.5 px-3 rounded text-xs font-medium hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
+                      >
+                        {isClearing ? (
+                          <>
+                            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Clearing...
+                          </>
+                        ) : (
+                          'Yes, Delete All'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div>

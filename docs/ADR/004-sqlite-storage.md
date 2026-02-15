@@ -1,6 +1,6 @@
 # ADR 004: SQLite Storage Architecture
 
-**Date:** 2026-02-03
+**Date:** 2026-02-03 (Updated: 2026-02-15)
 **Status:** Accepted
 
 ## Context
@@ -120,7 +120,7 @@ CREATE TABLE walk_analyses (
   -- The system prefers quality_score over raw_quality_score when loading cached results
   -- to ensure displayed scores match exemption-adjusted tiers.
   quality_score REAL,
-  tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze')),
+  tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze', 'potato')),
   
   -- Exclusive assignment (from ADR 002)
   is_primary_match INTEGER DEFAULT 0,
@@ -192,7 +192,7 @@ CREATE TABLE area_completions (
   -- Best walk info
   best_walk_analysis_id INTEGER REFERENCES walk_analyses(id),
   best_quality_score REAL,
-  tier TEXT,
+  tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze', 'potato')),
   
   -- Statistics
   total_walks INTEGER DEFAULT 1,
@@ -374,6 +374,80 @@ async function importDatabase(file: File): Promise<Database> {
   return new SQL.Database(new Uint8Array(buffer));
 }
 ```
+
+#### Database Reset (Added: 2026-02-15)
+
+Users need a way to clear all data when experiencing issues with stale or corrupted data.
+
+```typescript
+// Clear all user data (preserves areas table)
+async function clearUserData(db: Database, userId: number) {
+  db.run('BEGIN TRANSACTION');
+  try {
+    db.run('DELETE FROM deviations WHERE walk_analysis_id IN (SELECT id FROM walk_analyses WHERE walk_id IN (SELECT id FROM walks WHERE user_id = ?))', [userId]);
+    db.run('DELETE FROM walk_analyses WHERE walk_id IN (SELECT id FROM walks WHERE user_id = ?)', [userId]);
+    db.run('DELETE FROM area_completions WHERE user_id = ?', [userId]);
+    db.run('DELETE FROM walks WHERE user_id = ?', [userId]);
+    db.run('COMMIT');
+    await persistDatabase(db);
+  } catch (e) {
+    db.run('ROLLBACK');
+    throw e;
+  }
+}
+```
+
+**WHY:** When persistence bugs cause stale data or tier inconsistencies, users need a way to start fresh without manually clearing browser storage. This function preserves the `areas` table (seeded from GeoJSON) and `users` table (auth tokens) while clearing all synced activities and analysis results.
+
+#### Incremental Activity Sync (Added: 2026-02-15)
+
+To avoid fetching all activities from Strava on every page load, track sync state per user.
+
+**New Schema Addition:**
+
+```sql
+-- Add to users table
+ALTER TABLE users ADD COLUMN last_activity_sync_at TEXT;  -- ISO timestamp of last sync
+ALTER TABLE users ADD COLUMN last_synced_activity_id INTEGER;  -- Most recent activity ID synced
+```
+
+**Sync Strategy:**
+
+1. **First sync**: Fetch all activities (up to API limit), store newest activity ID and timestamp
+2. **Subsequent syncs**: Use Strava's `after` parameter with timestamp to only fetch activities newer than last sync
+3. **Force refresh**: User-triggered action to re-fetch all activities (ignores cursor)
+
+```typescript
+// Incremental sync flow
+async function syncActivities(userId: number, forceRefresh: boolean = false) {
+  const lastSync = forceRefresh ? null : getLastSyncTimestamp(userId);
+  
+  // Strava API accepts 'after' as epoch timestamp
+  const params = lastSync 
+    ? { per_page: 200, after: Math.floor(new Date(lastSync).getTime() / 1000) }
+    : { per_page: 200 };
+    
+  const activities = await fetchStravaActivities(params);
+  
+  if (activities.length > 0) {
+    // Store newest activity timestamp for next incremental sync
+    updateLastSync(userId, activities[0].start_date, activities[0].id);
+  }
+  
+  return activities;
+}
+```
+
+**Expected Behavior:**
+
+| Scenario | Strava API Call | User Experience |
+|----------|-----------------|-----------------|
+| First visit | Fetch all (up to 200) | Initial sync, may take a few seconds |
+| Return visit (no new activities) | Fetch with `after` param → 0 results | Instant load from cache |
+| Return visit (5 new activities) | Fetch with `after` param → 5 results | Quick sync, only analyze new |
+| Force refresh | Fetch all (up to 200) | Full re-sync, like first visit |
+
+**WHY:** The current implementation fetches all 200 activities from Strava on every page load, causing unnecessary API calls and slow page loads. Incremental sync reduces API usage and provides near-instant loading for returning users with cached data.
 
 ## Consequences
 

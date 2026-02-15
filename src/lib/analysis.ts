@@ -10,6 +10,12 @@
 import * as turf from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon, LineString, Point, Position } from 'geojson';
 
+// WHY: Re-export tier types and constants from centralized ./tiers module
+// This maintains backwards compatibility for existing imports from ./analysis
+// See TICKET-016 for the potato tier bug that led to this centralization
+export { assignTier, TIER_THRESHOLDS, type Tier } from './tiers';
+import { assignTier, TIER_THRESHOLDS, type Tier } from './tiers';
+
 // ============================================
 // Constants - See ADR 003 for rationale
 // ============================================
@@ -40,21 +46,9 @@ export const SCORE_WEIGHTS = {
   efficiency: 0.15,
 } as const;
 
-// WHY: Tier thresholds from ADR 003
-// Platinum is exceptional (95%+), Gold is excellent (85%+),
-// Silver is good (70%+), Bronze is completion (50%+)
-export const TIER_THRESHOLDS = {
-  platinum: 0.95,
-  gold: 0.85,
-  silver: 0.70,
-  bronze: 0.50,
-} as const;
-
 // ============================================
 // Types
 // ============================================
-
-export type Tier = 'platinum' | 'gold' | 'silver' | 'bronze' | 'potato' | null;
 
 export interface AnalysisMetrics {
   // Perimeter metrics
@@ -441,21 +435,9 @@ export function calculateQualityScore(
     SCORE_WEIGHTS.alignment * alignmentScore +
     SCORE_WEIGHTS.efficiency * efficiency;
   
-  // Assign tier based on thresholds
-  let tier: Tier = null;
-  if (score >= TIER_THRESHOLDS.platinum) {
-    tier = 'platinum';
-  } else if (score >= TIER_THRESHOLDS.gold) {
-    tier = 'gold';
-  } else if (score >= TIER_THRESHOLDS.silver) {
-    tier = 'silver';
-  } else if (score >= TIER_THRESHOLDS.bronze) {
-    tier = 'bronze';
-  } else if (score > 0) {
-    // WHY: Potato tier for any positive score < 0.50
-    // Ensures all matched walks count toward progress per ADR 003 (Updated 2026-02-13)
-    tier = 'potato';
-  }
+  // WHY: Use centralized assignTier() for consistent tier assignment
+  // See TICKET-016 for why this was centralized (potato tier bug)
+  const tier = assignTier(score);
   
   return { score, tier };
 }

@@ -9,8 +9,9 @@
  */
 
 import { getDatabase, executeWrite, getWalkStreams, saveWalkStreams } from './db';
-import type { FullAnalysisResult, StravaMetadata, Tier } from './analysis';
-import { analyzeWalk, TIER_THRESHOLDS } from './analysis';
+import type { FullAnalysisResult, StravaMetadata } from './analysis';
+import { analyzeWalk } from './analysis';
+import { assignTier, TIER_THRESHOLDS } from './tiers';
 import type { StravaActivity } from '@/hooks/useStrava';
 import type { Position, Feature, Polygon, MultiPolygon } from 'geojson';
 import type { CachedStreams } from '@/lib/types/strava-streams';
@@ -190,18 +191,10 @@ export async function saveWalkAnalysis(
     const bestId = bestAnalysis[0].values[0][0] as number;
     const bestScore = bestAnalysis[0].values[0][1] as number;
     
-    // WHY: Recalculate tier from adjusted score to ensure consistency
+    // WHY: Use centralized assignTier() to ensure consistency
     // Don't use stored tier as it might be from raw_quality_score
-    let bestTier: Tier = null;
-    if (bestScore >= TIER_THRESHOLDS.platinum) {
-      bestTier = 'platinum';
-    } else if (bestScore >= TIER_THRESHOLDS.gold) {
-      bestTier = 'gold';
-    } else if (bestScore >= TIER_THRESHOLDS.silver) {
-      bestTier = 'silver';
-    } else if (bestScore >= TIER_THRESHOLDS.bronze) {
-      bestTier = 'bronze';
-    }
+    // FIX: This previously missed potato tier assignment (TICKET-016)
+    const bestTier = assignTier(bestScore);
 
     const walkCount = db.exec(
       `SELECT COUNT(*) FROM walk_analyses wa
@@ -306,18 +299,10 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
       const activityIdsStr = row[15] as string;
       const activityIds = activityIdsStr ? activityIdsStr.split(',').map(Number) : [];
 
-      // WHY: Recalculate tier from adjusted score to ensure consistency
+      // WHY: Use centralized assignTier() to ensure consistency
       // The stored tier might be from raw_quality_score, but we're displaying adjusted score
-      let calculatedTier: Tier = null;
-      if (adjustedScore >= TIER_THRESHOLDS.platinum) {
-        calculatedTier = 'platinum';
-      } else if (adjustedScore >= TIER_THRESHOLDS.gold) {
-        calculatedTier = 'gold';
-      } else if (adjustedScore >= TIER_THRESHOLDS.silver) {
-        calculatedTier = 'silver';
-      } else if (adjustedScore >= TIER_THRESHOLDS.bronze) {
-        calculatedTier = 'bronze';
-      }
+      // FIX: This previously missed potato tier assignment (TICKET-016)
+      const calculatedTier = assignTier(adjustedScore);
       
       // WHY: Debug logging to help diagnose score instability
       // Log if stored tier doesn't match calculated tier (indicates mismatch)
@@ -769,8 +754,7 @@ export async function reAnalyzeWalk(
   let bestScore = 0;
   let bestResult: FullAnalysisResult | null = null;
 
-  // Import tier threshold for minimum score
-  const { TIER_THRESHOLDS } = await import('./analysis');
+  // WHY: TIER_THRESHOLDS imported at module level from ./tiers
 
   for (const area of areas) {
     try {
