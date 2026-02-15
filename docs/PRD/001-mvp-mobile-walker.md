@@ -3,7 +3,7 @@
 **Date:** 2026-02-02 (Updated: 2026-02-15)  
 **Status:** In Progress
 
-*Latest update: Data persistence improvements - incremental activity sync, database reset capability (Section 3.9)*
+*Latest update: Live Walking Mode - real-time GPS navigation for walking sub-area boundaries (Section 3.13)*
 
 ## 1. Overview
 
@@ -41,6 +41,14 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want to drill into an area from the list to see all registered walks for that area.
 *   **As a user,** I want breadcrumb navigation to return from area details to the list.
 *   **As a user,** I want a hamburger menu to access different app sections without cluttering the map interface.
+
+### Live Walking Mode Stories (Added: 2026-02-15)
+*   **As a user,** I want to start a live walking session for a selected sub-area, so I can see my real-time position relative to the boundary.
+*   **As a user,** I want to see a full-screen map showing the sub-area boundary while walking, so I know exactly where to go.
+*   **As a user,** I want my GPS position to update continuously on the map, so I can see how I move relative to the boundary.
+*   **As a user,** I want to trigger live walking mode from the area details panel, so I can start walking any area I'm viewing.
+*   **As a user,** I want the screen to stay on during active walking (where supported), so I don't have to keep waking my phone.
+*   **As a user,** I want to exit walking mode and return to the normal app view when I'm done, so I can review my progress.
 
 ### Subarea Visual Context Stories (Added: 2026-02-07)
 *   **As a user,** I want to see a mini-map of the selected subarea in the details panel, so I can study the area and plan my walking route.
@@ -488,6 +496,72 @@ Provide a browsable list of all sub-areas with sorting and filtering capabilitie
 *   "Areas" is a clickable link that returns to list view
 *   Current area name is plain text (not clickable)
 *   Only shown when navigated from list (not when clicking map directly)
+
+### 3.13 Live Walking Mode (Added: 2026-02-15)
+
+*Reference: ADR 017 (Live Walking Mode)*
+
+Provide a real-time navigation view for walking sub-area boundaries.
+
+#### Entry Point
+
+**Location:** Area Details Panel, above the fold (near mini-map section)
+
+**Trigger:** "Start Walking" button
+
+**Availability:** Shown for all sub-areas (completed and incomplete)
+
+#### Walking Mode UI
+
+**Display Type:** Full-screen overlay replacing normal app view
+
+**Map Components:**
+*   Full-screen Leaflet map with street tiles
+*   Sub-area boundary polygon with prominent stroke (same styling as mini-map)
+*   Live user position marker (blue dot with accuracy circle)
+*   Auto-center on user position (toggleable)
+
+**Controls:**
+*   Exit button (returns to area details panel)
+*   Center-on-me button (re-centers map on current position)
+*   Zoom controls
+*   Optional: Satellite/street toggle (nice-to-have)
+
+#### Geolocation Behavior
+
+**Permissions:**
+*   Request location permission on "Start Walking" tap
+*   Show explanatory prompt before native permission dialog
+*   Handle permission denied gracefully with clear messaging
+
+**Tracking Mode:**
+*   Use `watchPosition()` for continuous updates
+*   `enableHighAccuracy: true` for GPS precision
+*   `maximumAge: 0` for real-time positions (no cache)
+
+**Screen Wake Lock (Chrome/Android):**
+*   Request Wake Lock when entering walking mode
+*   Release Wake Lock when exiting
+*   Show indicator when Wake Lock is active
+
+**iOS Safari Limitation:**
+*   Wake Lock not supported
+*   Show one-time tip: "Tip: Increase screen timeout in Settings for continuous tracking"
+
+#### Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| Location permission denied | Show error message with instructions to enable in settings |
+| GPS unavailable | Show warning, allow map viewing without live position |
+| GPS signal lost | Show "Acquiring GPS..." indicator, keep last known position |
+| Wake Lock unavailable | Continue without it, no user-facing error |
+
+#### Exit Behavior
+
+*   Tap exit button → Confirm if tracking > 1 minute
+*   Return to Area Details Panel for the same sub-area
+*   Clear Watch and release Wake Lock on exit
 
 ## 4. Non-Functional Requirements
 

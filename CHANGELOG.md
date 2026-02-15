@@ -17,6 +17,18 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Added
+- **Live Walking Mode**: Real-time GPS navigation for walking sub-area boundaries. (PRD 001 §3.13, ADR 017, TICKET-017)
+  - Key files: `src/components/WalkingMode/` (NEW), `src/hooks/useGeolocationTracking.ts` (NEW), `src/hooks/useWakeLock.ts` (NEW), `src/lib/map-config.ts` (NEW)
+  - Full-screen overlay with boundary polygon and live position marker
+  - "Start Walking" button in Area Details Panel (green, above the fold)
+  - GPS tracking via `watchPosition()` with high accuracy options
+  - Screen Wake Lock on Chrome/Android to keep display on
+  - iOS Safari tip about screen timeout (one-time, dismissible)
+  - Exit confirmation if tracking > 1 minute, re-opens area details panel
+  - Controls: exit, center-on-me, zoom in/out, GPS accuracy display
+  - Shared map config extracted to `src/lib/map-config.ts` for DRY consistency
+
 ### Fixed
 - **Potato tier persistence bug**: Areas with scores < 0.50 but > 0 now correctly persist with tier = 'potato' after page refresh. Previously saved with `tier = null` causing areas to disappear. (ADR 003, ADR 004, TICKET-016)
   - Key files: `src/lib/tiers.ts` (NEW), `src/lib/analysis.ts`, `src/lib/analysis-persistence.ts`, `src/lib/exemptions.ts`

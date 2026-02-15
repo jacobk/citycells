@@ -48,6 +48,8 @@ import {
 import type { DeviationWithExemption } from '@/lib/exemption-types';
 import type { CachedStreams } from '@/lib/types/strava-streams';
 import type { TierCounts } from '@/lib/types/tiers';
+// WHY: Shared map config for consistency across Map, AreaMiniMap, WalkingMode (ADR 017)
+import { TILE_LAYER_URL, TILE_LAYER_ATTRIBUTION, MALMO_CENTER, DEFAULT_ZOOM } from '@/lib/map-config';
 
 // Fix for default marker icon in Next.js
 // @ts-expect-error - overriding private method
@@ -57,8 +59,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
-
-const MALMO_CENTER: [number, number] = [55.5900, 13.0038];
 
 // WHY: Extended progress info to include tier breakdown per ADR 003
 export interface ProgressInfo {
@@ -864,13 +864,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       )}
       <MapContainer 
         center={MALMO_CENTER} 
-        zoom={12} 
+        zoom={DEFAULT_ZOOM} 
         className="h-full w-full z-0"
         zoomControl={false} 
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={TILE_LAYER_ATTRIBUTION}
+          url={TILE_LAYER_URL}
         />
         <LocationMarker />
         <ZoomTracker onZoomChange={setCurrentZoom} />

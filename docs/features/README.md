@@ -26,6 +26,7 @@ Enable any developer (human or AI agent) to:
 | Offline Support | [offline-support.md](./offline-support.md) | Planned | [ADR 014](../ADR/014-offline-support-strategy.md), [ADR 004](../ADR/004-sqlite-storage.md) |
 | Distance Progress Tracking | [distance-progress-tracking.md](./distance-progress-tracking.md) | Implemented | [ADR 004](../ADR/004-sqlite-storage.md), [ADR 005](../ADR/005-strava-privacy-zones.md) |
 | Deployment | [deployment.md](./deployment.md) | Planned | [ADR 016](../ADR/016-vercel-deployment.md), [ADR 001](../ADR/001-tech-stack.md), [ADR 013](../ADR/013-persistent-strava-authentication.md) |
+| Live Walking Mode | [live-walking-mode.md](./live-walking-mode.md) | Implemented | [ADR 017](../ADR/017-live-walking-mode.md) |
 
 ## Document Template
 

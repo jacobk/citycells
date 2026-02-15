@@ -204,6 +204,21 @@
 - [x] Pass geometry through data flow (AreaClickData -> AreaDetails)
 - [x] Update feature docs and changelog
 
+## Phase 6.5: Live Walking Mode (ADR 017, TICKET-017)
+
+*Reference: [ADR 017](docs/ADR/017-live-walking-mode.md) | [PRD §3.13](docs/PRD/001-mvp-mobile-walker.md#313-live-walking-mode) | [Ticket](docs/tickets/017-live-walking-mode.md)*
+
+- [x] Create shared map config (`src/lib/map-config.ts`)
+- [x] Create `useGeolocationTracking` hook (watchPosition API)
+- [x] Create `useWakeLock` hook (Screen Wake Lock API)
+- [x] Create `WalkingMode` component (full-screen overlay)
+- [x] Create `LivePositionMarker` component (blue dot + accuracy circle)
+- [x] Create `WalkingControls` component (exit, center, zoom)
+- [x] Add "Start Walking" button to AreaDetailsPanel
+- [x] Wire up walking mode state in page.tsx
+- [x] Update Map and AreaMiniMap to use shared map config
+- [x] Update feature docs (`docs/features/live-walking-mode.md`)
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

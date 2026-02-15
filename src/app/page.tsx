@@ -11,6 +11,8 @@ import { HamburgerMenu } from '@/components/HamburgerMenu';
 import { SubAreaListPanel, type SortOption } from '@/components/SubAreaListPanel';
 import { PanelBreadcrumbs } from '@/components/PanelBreadcrumbs';
 import { ProfileCard } from '@/components/ProfileCard';
+// WHY: WalkingMode provides real-time GPS navigation for walking sub-area boundaries (ADR 017)
+import { WalkingMode } from '@/components/WalkingMode';
 import type { ExemptionReason } from '@/lib/exemption-types';
 import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
 import { useDatabase } from '@/hooks/useDatabase';
@@ -76,6 +78,15 @@ export default function Home() {
   
   // WHY: Route visibility toggle - hidden by default per ADR 010 Section 3
   const [showRoutes, setShowRoutes] = useState(false);
+  
+  // WHY: Walking mode state (ADR 017) - stores area info for live GPS navigation
+  const [walkingMode, setWalkingMode] = useState<{
+    isActive: boolean;
+    areaId: number;
+    geometry: GeoJSON.Geometry;
+    areaName: string;
+    tier?: import('@/lib/analysis').Tier;
+  } | null>(null);
   
   // WHY: State for exemption modal
   const [exemptionDeviationId, setExemptionDeviationId] = useState<number | null>(null);
@@ -166,6 +177,42 @@ export default function Home() {
       return prev;
     });
   }, []);
+
+  // ============================================
+  // Walking Mode Handlers (ADR 017)
+  // ============================================
+
+  // WHY: Start walking mode - opens full-screen GPS navigation view
+  const handleStartWalking = useCallback((areaId: number) => {
+    const areaData = allAreas.get(areaId);
+    if (!areaData?.geometry) {
+      console.warn('[WalkingMode] Cannot start walking: area geometry not found');
+      return;
+    }
+
+    setWalkingMode({
+      isActive: true,
+      areaId,
+      geometry: areaData.geometry,
+      areaName: areaData.areaName,
+      tier: areaData.tier,
+    });
+
+    // Close panels and overlays when entering walking mode
+    setPanelView({ type: 'closed' });
+    setOverlayState({ type: 'none' });
+  }, [allAreas]);
+
+  // WHY: Exit walking mode - re-opens area details panel per user preference
+  const handleExitWalking = useCallback(() => {
+    const areaId = walkingMode?.areaId;
+    setWalkingMode(null);
+
+    // Re-open the area details panel for the same area
+    if (areaId) {
+      setPanelView({ type: 'area-detail', areaId, fromList: false });
+    }
+  }, [walkingMode?.areaId]);
 
   // ============================================
   // Hamburger Menu Handlers (ADR 009)
@@ -558,6 +605,7 @@ export default function Home() {
         onExemptDeviation={handleExemptDeviation}
         onRemoveExemption={handleRemoveExemption}
         onReAnalyzeWalk={handleReAnalyzeWalk}
+        onStartWalking={handleStartWalking}
         // WHY: Show breadcrumbs only when navigated from list (ADR 008)
         breadcrumbs={
           panelView.type === 'area-detail' && panelView.fromList && selectedAreaDetails ? (
@@ -579,6 +627,17 @@ export default function Home() {
         onConfirm={handleConfirmExemption}
         deviationInfo={exemptionDeviationInfo ?? undefined}
       />
+
+      {/* Walking Mode Overlay (ADR 017) */}
+      {/* WHY: Full-screen GPS navigation for walking sub-area boundaries */}
+      {walkingMode?.isActive && walkingMode.geometry && (
+        <WalkingMode
+          geometry={walkingMode.geometry}
+          areaName={walkingMode.areaName}
+          tier={walkingMode.tier}
+          onExit={handleExitWalking}
+        />
+      )}
     </main>
   );
 }

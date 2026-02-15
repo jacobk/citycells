@@ -30,6 +30,8 @@ import type { PanelState } from '@/lib/panel-state';
 // WHY: Route visualization for walk routes on mini-map (Ticket 011)
 import type { RouteSegment } from '@/lib/route-visualization';
 import { getRoutePathOptions } from '@/lib/route-visualization';
+// WHY: Shared map config for consistency across Map, AreaMiniMap, WalkingMode (ADR 017)
+import { TILE_LAYER_URL, MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
 
 // WHY: Minimum height ensures map remains usable even in collapsed panel state (ADR 012, Ticket 015)
 const MIN_MAP_HEIGHT_PX = 200;
@@ -85,8 +87,8 @@ function FitBoundsUpdater({ geometry, routeSegments }: { geometry: GeoJSON.Geome
       }
       
       if (bounds.isValid()) {
-        // WHY: Padding ensures the boundary and route aren't clipped at edges
-        map.fitBounds(bounds, { padding: [20, 20] });
+        // WHY: Padding ensures the boundary and route aren't clipped at edges (ADR 017 shared config)
+        map.fitBounds(bounds, { padding: FIT_BOUNDS_PADDING });
       }
     } catch (e) {
       console.warn('[AreaMiniMap] Failed to fit bounds:', e);
@@ -141,8 +143,7 @@ export default function AreaMiniMap({ geometry, tier, className, panelState, rou
     fillOpacity: MINI_MAP_FILL_OPACITY,
   }), [fillColor, borderColor]);
 
-  // WHY: Default center is Malmö - will be overridden by fitBounds
-  const defaultCenter: [number, number] = [55.59, 13.00];
+  // WHY: Default center is Malmö - will be overridden by fitBounds (ADR 017 shared config)
 
   // WHY: Use flex-grow with min-height instead of fixed pixel heights (Ticket 015)
   // Parent container controls available space; map fills it with min 200px
@@ -152,7 +153,7 @@ export default function AreaMiniMap({ geometry, tier, className, panelState, rou
       style={{ minHeight: `${MIN_MAP_HEIGHT_PX}px` }}
     >
       <MapContainer
-        center={defaultCenter}
+        center={MALMO_CENTER}
         zoom={14}
         className="h-full w-full"
         // WHY: Hide zoom controls to save space - users gesture to zoom (ADR 012)
@@ -166,8 +167,8 @@ export default function AreaMiniMap({ geometry, tier, className, panelState, rou
         attributionControl={false}
       >
         <TileLayer
-          // WHY: Same tile provider as main map for visual consistency (ADR 012)
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          // WHY: Same tile provider as main map for visual consistency (ADR 012, 017)
+          url={TILE_LAYER_URL}
         />
         <GeoJSON
           key={JSON.stringify(geometry)}

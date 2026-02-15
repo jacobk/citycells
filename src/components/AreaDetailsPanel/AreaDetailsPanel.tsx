@@ -70,6 +70,8 @@ interface AreaDetailsPanelProps {
   onReAnalyzeWalk?: (walkId: number, mode: ReAnalysisMode) => Promise<void>;
   // WHY: Activities array for accessing summary_polyline from API (Ticket 011)
   activities?: Array<{ id: number; map?: { summary_polyline?: string } }>;
+  // WHY: Callback to start live walking mode for this area (ADR 017)
+  onStartWalking?: (areaId: number) => void;
 }
 
 // ============================================
@@ -98,6 +100,7 @@ export default function AreaDetailsPanel({
   breadcrumbs,
   onReAnalyzeWalk,
   activities = [],
+  onStartWalking,
 }: AreaDetailsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   // WHY: Track which walk's menu is open (ADR 011)
@@ -409,6 +412,23 @@ export default function AreaDetailsPanel({
               routeSegments={showRoute ? routeSegments || undefined : undefined}
             />
           </section>
+        )}
+
+        {/* Start Walking Button (ADR 017) - fixed position above scrollable content */}
+        {/* WHY: Prominent green button matches navigation app conventions (user preference) */}
+        {onStartWalking && details.geometry && (
+          <div className="px-4 py-3 border-t border-gray-100 shrink-0">
+            <button
+              onClick={() => onStartWalking(details.areaId)}
+              className="w-full bg-green-600 hover:bg-green-700 active:bg-green-800 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+            >
+              {/* Walking person icon */}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Start Walking
+            </button>
+          </div>
         )}
 
         {/* Area Stats Section (Ticket 015) - circumference with walk time, below mini-map */}
