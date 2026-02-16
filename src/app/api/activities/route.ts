@@ -88,7 +88,26 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(filtered);
   } catch (error) {
-    console.error('Failed to fetch activities', error);
-    return NextResponse.json({ error: 'Failed to fetch activities' }, { status: 500 });
+    console.error('Failed to fetch activities:', error);
+    
+    // WHY: Provide more useful error info for debugging
+    // Strava API errors often include statusCode and message
+    const stravaError = error as { statusCode?: number; message?: string; error?: string };
+    
+    if (stravaError.statusCode === 429) {
+      return NextResponse.json({ 
+        error: 'Strava rate limit exceeded. Please wait 15 minutes.' 
+      }, { status: 429 });
+    }
+    
+    if (stravaError.statusCode === 401) {
+      return NextResponse.json({ 
+        error: 'Strava authentication expired. Please re-login.' 
+      }, { status: 401 });
+    }
+    
+    return NextResponse.json({ 
+      error: stravaError.message || 'Failed to fetch activities' 
+    }, { status: stravaError.statusCode || 500 });
   }
 }

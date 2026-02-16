@@ -69,6 +69,12 @@ export function useStrava() {
           setAuthState('unauthenticated');
           return;
         }
+        // WHY: 429 means Strava rate limit - don't throw, just log and continue
+        // The app can still function with cached data from the local database
+        if (res.status === 429) {
+          console.warn('[useStrava] Strava rate limit hit (429). Using cached data. Wait 15 minutes.');
+          return;
+        }
         throw new Error(`Failed to fetch activities: ${res.status}`);
       }
       
@@ -76,16 +82,22 @@ export function useStrava() {
       if (Array.isArray(data)) {
         // WHY: For incremental sync, merge new activities with existing ones
         // New activities should appear at the beginning (most recent first from Strava)
-        if (afterTimestamp && activities.length > 0) {
-          // Merge: new activities + existing, avoiding duplicates
-          const existingIds = new Set(activities.map(a => a.id));
-          const newActivities = data.filter((a: StravaActivity) => !existingIds.has(a.id));
-          if (newActivities.length > 0) {
-            console.log(`[useStrava] Incremental sync: ${newActivities.length} new activities`);
-            setActivities([...newActivities, ...activities]);
-          } else {
+        // Using functional update to avoid stale closure and dependency on activities
+        if (afterTimestamp) {
+          setActivities(prevActivities => {
+            if (prevActivities.length === 0) {
+              return data;
+            }
+            // Merge: new activities + existing, avoiding duplicates
+            const existingIds = new Set(prevActivities.map(a => a.id));
+            const newActivities = data.filter((a: StravaActivity) => !existingIds.has(a.id));
+            if (newActivities.length > 0) {
+              console.log(`[useStrava] Incremental sync: ${newActivities.length} new activities`);
+              return [...newActivities, ...prevActivities];
+            }
             console.log('[useStrava] Incremental sync: no new activities');
-          }
+            return prevActivities;
+          });
         } else {
           setActivities(data);
         }
@@ -93,7 +105,7 @@ export function useStrava() {
     } catch (err) {
       console.error('[useStrava] Failed to fetch activities:', err);
     }
-  }, [activities]);
+  }, []); // WHY: Empty deps - uses functional update to avoid recreating on activities change
 
   useEffect(() => {
     let mounted = true;

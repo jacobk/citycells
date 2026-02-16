@@ -13,6 +13,10 @@ import { PanelBreadcrumbs } from '@/components/PanelBreadcrumbs';
 import { ProfileCard } from '@/components/ProfileCard';
 // WHY: WalkingMode provides real-time GPS navigation for walking sub-area boundaries (ADR 017)
 import { WalkingMode } from '@/components/WalkingMode';
+// WHY: Achievement system components per PRD Section 3.15 and TICKET-023
+import { AchievementBrowser } from '@/components/AchievementBrowser';
+import { AchievementModal } from '@/components/AchievementModal';
+import { useAchievements } from '@/hooks/useAchievements';
 import type { ExemptionReason } from '@/lib/exemption-types';
 import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
 import { useDatabase } from '@/hooks/useDatabase';
@@ -83,6 +87,9 @@ export default function Home() {
   // WHY: Route visibility toggle - hidden by default per ADR 010 Section 3
   const [showRoutes, setShowRoutes] = useState(false);
   
+  // WHY: Achievement browser panel state (TICKET-023)
+  const [isAchievementBrowserOpen, setIsAchievementBrowserOpen] = useState(false);
+  
   // WHY: Walking mode state (ADR 017) - stores area info for live GPS navigation
   const [walkingMode, setWalkingMode] = useState<{
     isActive: boolean;
@@ -115,9 +122,73 @@ export default function Home() {
     actualWalkedDistance: number;
   } | null>(null);
 
+  // WHY: Achievement system state (TICKET-023, ADR 019)
+  // We derive userId from athlete.id using a state + effect pattern to avoid
+  // calling async getOrCreateUserId directly in render
+  const [userId, setUserId] = useState<number | undefined>(undefined);
+  
+  // Derive userId when athlete changes
+  useEffect(() => {
+    if (!athlete?.id || dbLoading || !db) {
+      setUserId(undefined);
+      return;
+    }
+    
+    // WHY: Dynamic import to avoid bundling sql.js at build time
+    // Try-catch handles race condition where React state says db is ready
+    // but module-level db was reset (e.g., HMR, Strict Mode remount cycles)
+    const loadUserId = async () => {
+      try {
+        const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
+        setUserId(getOrCreateUserId(athlete.id));
+      } catch {
+        // WHY: Database may not be truly ready due to module reload timing
+        // Effect will re-run when db state changes, so this is safe to ignore
+        console.warn('[Achievements] Database not ready, will retry on next state change');
+        setUserId(undefined);
+      }
+    };
+    loadUserId();
+  }, [athlete?.id, dbLoading, db]);
+
+  // WHY: Achievement hook provides state and check/clear functions (TICKET-023)
+  const {
+    achievements: allAchievements,
+    achievementsByCategory,
+    newlyUnlocked,
+    unlockedCount,
+    totalCount: achievementTotalCount,
+    loading: achievementsLoading,
+    checkForNewAchievements,
+    clearNewlyUnlocked,
+  } = useAchievements(userId, !dbLoading && !!db);
+  
+  // WHY: Track previous progress to detect when analysis completes
+  const prevProgressRef = useRef<ProgressInfo | null>(null);
+
   const handleProgress = useCallback((progressInfo: ProgressInfo) => {
     setProgress(progressInfo);
   }, []);
+
+  // WHY: Check for new achievements after analysis completes (TICKET-023)
+  // Triggered when progress.completedCount increases from 0, indicating analysis finished
+  useEffect(() => {
+    const prevProgress = prevProgressRef.current;
+    prevProgressRef.current = progress;
+    
+    // Check if analysis just completed (completedCount went from 0 to >0)
+    const analysisJustCompleted = 
+      prevProgress !== null && 
+      prevProgress.completedCount === 0 && 
+      progress.completedCount > 0;
+    
+    if (analysisJustCompleted && userId && !dbLoading && db) {
+      // WHY: Small delay to ensure all database writes from analysis are complete
+      setTimeout(() => {
+        checkForNewAchievements();
+      }, 500);
+    }
+  }, [progress, userId, dbLoading, db, checkForNewAchievements]);
 
   // WHY: Handler for when Map loads all area data (ADR 008)
   const handleAreasLoaded = useCallback((areas: Map<number, AreaClickData>) => {
@@ -236,6 +307,13 @@ export default function Home() {
   const handleOpenStats = useCallback(() => {
     setIsDashboardOpen(true);
     // Close overlay when opening dashboard
+    setOverlayState({ type: 'none' });
+  }, []);
+
+  // WHY: Handler to open achievement browser panel (TICKET-023)
+  const handleOpenAchievements = useCallback(() => {
+    setIsAchievementBrowserOpen(true);
+    // Close overlay when opening panel
     setOverlayState({ type: 'none' });
   }, []);
 
@@ -556,6 +634,8 @@ export default function Home() {
         onOpenChange={handleHamburgerOpenChange}
         onOpenAreas={handleOpenAreas}
         onOpenStats={handleOpenStats}
+        onOpenAchievements={handleOpenAchievements}
+        achievementCount={{ unlocked: unlockedCount, total: achievementTotalCount }}
         showRoutes={showRoutes}
         onShowRoutesChange={setShowRoutes}
         theme={theme}
@@ -632,6 +712,25 @@ export default function Home() {
         }}
         onConfirm={handleConfirmExemption}
         deviationInfo={exemptionDeviationInfo ?? undefined}
+      />
+
+      {/* Achievement Browser Panel (TICKET-023) */}
+      <AchievementBrowser
+        isOpen={isAchievementBrowserOpen}
+        onClose={() => setIsAchievementBrowserOpen(false)}
+        achievements={allAchievements}
+        achievementsByCategory={achievementsByCategory}
+        unlockedCount={unlockedCount}
+        totalCount={achievementTotalCount}
+        loading={achievementsLoading}
+      />
+
+      {/* Achievement Unlock Modal (TICKET-023) */}
+      {/* WHY: Shows newly unlocked achievements after analysis completes */}
+      <AchievementModal
+        isOpen={newlyUnlocked.length > 0}
+        onClose={clearNewlyUnlocked}
+        achievements={newlyUnlocked}
       />
 
       {/* Walking Mode Overlay (ADR 017) */}

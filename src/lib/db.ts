@@ -21,7 +21,8 @@ const INDEXEDDB_STORE = 'database';
 
 // WHY: Schema version for migrations - increment when schema changes
 // v5: Added last_activity_sync_at and last_synced_activity_id columns for incremental sync (TICKET-016)
-const SCHEMA_VERSION = 5;
+// v6: Added achievements and user_achievements tables for gamification (TICKET-023)
+const SCHEMA_VERSION = 6;
 
 // ============================================
 // Types
@@ -321,6 +322,34 @@ CREATE INDEX IF NOT EXISTS idx_completions_tier ON area_completions(tier);
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY
 );
+
+-- ============================================
+-- ACHIEVEMENTS (static definitions, seeded on init)
+-- See ADR 019 for schema design
+-- ============================================
+CREATE TABLE IF NOT EXISTS achievements (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  icon TEXT NOT NULL,
+  category TEXT NOT NULL,
+  is_hidden INTEGER DEFAULT 0,
+  sort_order INTEGER NOT NULL,
+  condition_type TEXT NOT NULL,
+  condition_value TEXT NOT NULL
+);
+
+-- ============================================
+-- USER ACHIEVEMENTS (unlock records)
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_achievements (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  achievement_id TEXT NOT NULL REFERENCES achievements(id),
+  unlocked_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, achievement_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);
 `;
 
 // ============================================
@@ -517,6 +546,14 @@ export async function initDatabase(): Promise<Database> {
       console.log('[DB Migration] Incremental sync columns added successfully');
     }
 
+    // WHY: Schema version 6 adds achievement system tables (TICKET-023)
+    // Tables created by schema SQL, need to seed achievement definitions
+    if (currentVersion < 6) {
+      console.log('[DB Migration] Setting up achievement system...');
+      await seedAchievements();
+      console.log('[DB Migration] Achievement system setup complete');
+    }
+
     db.run('INSERT OR REPLACE INTO schema_version (version) VALUES (?)', [SCHEMA_VERSION]);
     await persistDatabase();
   }
@@ -577,6 +614,75 @@ export async function executeWrite(
     await persistDatabase();
   } catch (e) {
     database.run('ROLLBACK');
+    throw e;
+  }
+}
+
+// ============================================
+// Achievement Seeding (TICKET-023)
+// ============================================
+
+/**
+ * Seed the achievements table with static definitions.
+ * WHY: Achievements are defined in code but stored in DB for relational queries.
+ * See ADR 019 for achievement system design.
+ */
+async function seedAchievements(): Promise<void> {
+  if (!db) {
+    throw new Error('Database not initialized');
+  }
+
+  // WHY: Capture db reference to avoid race condition where closeDatabase()
+  // sets module-level db to null while we're awaiting the dynamic import
+  const database = db;
+
+  console.log('[DB] Seeding achievements...');
+  
+  // WHY: Dynamic import to avoid circular dependency
+  const { ACHIEVEMENTS } = await import('@/lib/achievements');
+
+  // WHY: Re-check db after async operation - it may have been closed during HMR/Strict Mode
+  if (!db) {
+    console.warn('[DB] Database closed during achievement seeding, aborting');
+    return;
+  }
+
+  database.run('BEGIN TRANSACTION');
+  
+  try {
+    for (const achievement of ACHIEVEMENTS) {
+      database.run(
+        `INSERT OR REPLACE INTO achievements 
+         (id, name, description, icon, category, is_hidden, sort_order, condition_type, condition_value)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          achievement.id,
+          achievement.name,
+          achievement.description,
+          achievement.icon,
+          achievement.category,
+          achievement.isHidden ? 1 : 0,
+          achievement.sortOrder,
+          achievement.conditionType,
+          JSON.stringify(achievement.conditionValue),
+        ]
+      );
+    }
+
+    database.run('COMMIT');
+    await persistDatabase();
+    
+    const count = database.exec('SELECT COUNT(*) FROM achievements')[0].values[0][0];
+    console.log(`[DB] Seeded ${count} achievements`);
+  } catch (e) {
+    // WHY: Check if database is still valid before rollback
+    if (db) {
+      try {
+        database.run('ROLLBACK');
+      } catch {
+        // Database may have been closed, ignore rollback error
+      }
+    }
     throw e;
   }
 }
@@ -1179,6 +1285,190 @@ export async function updateLastSync(
     [syncTimestamp, newestActivityId ?? null, userId]
   );
   console.log(`[DB] Updated sync timestamp for user ${userId}: ${syncTimestamp}`);
+}
+
+// ============================================
+// Achievement Queries (TICKET-023)
+// ============================================
+
+/**
+ * Get all user achievements (unlocked).
+ * WHY: Returns map of achievement_id -> unlock info for fast lookup.
+ */
+export function getUserAchievements(userId: number): Map<string, { unlockedAt: string }> {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    'SELECT achievement_id, unlocked_at FROM user_achievements WHERE user_id = ?',
+    [userId]
+  );
+  
+  const achievements = new Map<string, { unlockedAt: string }>();
+  
+  if (result.length > 0) {
+    for (const row of result[0].values) {
+      achievements.set(row[0] as string, {
+        unlockedAt: row[1] as string,
+      });
+    }
+  }
+  
+  return achievements;
+}
+
+/**
+ * Unlock an achievement for a user.
+ * WHY: Records the unlock with timestamp for display in achievement browser.
+ */
+export async function unlockAchievement(
+  userId: number,
+  achievementId: string
+): Promise<void> {
+  await executeWrite(
+    `INSERT OR IGNORE INTO user_achievements (user_id, achievement_id, unlocked_at)
+     VALUES (?, ?, datetime('now'))`,
+    [userId, achievementId]
+  );
+  console.log(`[DB] Unlocked achievement ${achievementId} for user ${userId}`);
+}
+
+/**
+ * Check if a user has a specific achievement.
+ */
+export function hasAchievement(userId: number, achievementId: string): boolean {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    'SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ? LIMIT 1',
+    [userId, achievementId]
+  );
+  
+  return result.length > 0 && result[0].values.length > 0;
+}
+
+/**
+ * Get count of unlocked achievements for a user.
+ */
+export function getUnlockedAchievementCount(userId: number): number {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    'SELECT COUNT(*) FROM user_achievements WHERE user_id = ?',
+    [userId]
+  );
+  
+  if (result.length === 0 || result[0].values.length === 0) {
+    return 0;
+  }
+  
+  return result[0].values[0][0] as number;
+}
+
+/**
+ * Get completed area IDs with their perimeters for a user.
+ * WHY: Needed for achievement condition evaluation (size-based achievements).
+ */
+export function getCompletedAreasWithPerimeter(userId: number): Map<number, number> {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    `SELECT a.fid, a.perimeter_meters 
+     FROM areas a
+     INNER JOIN area_completions ac ON a.id = ac.area_id
+     WHERE ac.user_id = ?`,
+    [userId]
+  );
+  
+  const areas = new Map<number, number>();
+  
+  if (result.length > 0) {
+    for (const row of result[0].values) {
+      areas.set(row[0] as number, row[1] as number);
+    }
+  }
+  
+  return areas;
+}
+
+/**
+ * Get the smallest area by perimeter (FID).
+ * WHY: Needed for "Bite Sized" achievement.
+ */
+export function getSmallestAreaFid(): number | null {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    'SELECT fid FROM areas ORDER BY perimeter_meters ASC LIMIT 1'
+  );
+  
+  if (result.length === 0 || result[0].values.length === 0) {
+    return null;
+  }
+  
+  return result[0].values[0][0] as number;
+}
+
+/**
+ * Get the area FID containing Malmö's geographic center.
+ * WHY: Needed for "The Centered" hidden achievement.
+ * Malmö center is approximately 55.6050°N, 13.0038°E
+ */
+export function getCenterAreaFid(): number | null {
+  const database = getDatabase();
+  
+  // WHY: This requires checking which polygon contains the center point
+  // We'll compute this by checking each area - expensive but only done once
+  // The result should be cached by the caller
+  const result = database.exec(
+    'SELECT fid, geometry_json FROM areas'
+  );
+  
+  if (result.length === 0) {
+    return null;
+  }
+  
+  // Malmö center coordinates
+  const centerLng = 13.0038;
+  const centerLat = 55.6050;
+  
+  // WHY: We need to check which polygon contains this point
+  // This is done synchronously since it's a one-time computation
+  for (const row of result[0].values) {
+    const fid = row[0] as number;
+    const geometryJson = row[1] as string;
+    
+    try {
+      const geometry = JSON.parse(geometryJson);
+      
+      // Simple point-in-polygon check for the center
+      // WHY: Using a simplified check - we'll use Turf.js in the service layer for accuracy
+      if (geometry.type === 'Polygon') {
+        // Check if center is roughly within bounding box as a quick filter
+        const coords = geometry.coordinates[0];
+        let minLng = Infinity, maxLng = -Infinity;
+        let minLat = Infinity, maxLat = -Infinity;
+        
+        for (const [lng, lat] of coords) {
+          minLng = Math.min(minLng, lng);
+          maxLng = Math.max(maxLng, lng);
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+        }
+        
+        if (centerLng >= minLng && centerLng <= maxLng &&
+            centerLat >= minLat && centerLat <= maxLat) {
+          // WHY: More accurate check will be done in achievement service with Turf.js
+          // For now, return the first area whose bounding box contains the center
+          // The actual point-in-polygon check happens in achievement-service.ts
+          return fid;
+        }
+      }
+    } catch {
+      // Skip invalid geometry
+    }
+  }
+  
+  return null;
 }
 
 /**

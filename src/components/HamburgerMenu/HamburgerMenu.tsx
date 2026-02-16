@@ -12,6 +12,9 @@ interface HamburgerMenuProps {
   onOpenChange: (open: boolean) => void;
   onOpenAreas: () => void;
   onOpenStats: () => void;
+  // WHY: Achievement browser per PRD Section 3.15 and TICKET-023
+  onOpenAchievements: () => void;
+  achievementCount?: { unlocked: number; total: number };
   // WHY: Route toggle controlled from page level per ADR 010 Section 3
   showRoutes: boolean;
   onShowRoutesChange: (show: boolean) => void;
@@ -44,6 +47,8 @@ export default function HamburgerMenu({
   onOpenChange, 
   onOpenAreas, 
   onOpenStats,
+  onOpenAchievements,
+  achievementCount,
   showRoutes,
   onShowRoutesChange,
   theme,
@@ -87,6 +92,11 @@ export default function HamburgerMenu({
   const handleStatsClick = () => {
     onOpenChange(false);
     onOpenStats();
+  };
+
+  const handleAchievementsClick = () => {
+    onOpenChange(false);
+    onOpenAchievements();
   };
 
   return (
@@ -152,6 +162,24 @@ export default function HamburgerMenu({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             <span>Stats</span>
+          </button>
+          
+          {/* WHY: Achievements browser per PRD Section 3.15 and TICKET-023 */}
+          <button
+            onClick={handleAchievementsClick}
+            className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-secondary flex items-center gap-3 cursor-pointer"
+          >
+            {/* Trophy icon */}
+            <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+            <span className="flex-1">Achievements</span>
+            {/* Achievement count badge */}
+            {achievementCount && (
+              <span className="text-xs text-muted-foreground">
+                {achievementCount.unlocked}/{achievementCount.total}
+              </span>
+            )}
           </button>
           
           {/* WHY: Divider separates navigation items from settings toggles */}

@@ -246,6 +246,25 @@
 - [x] Add dark mode toggle to Hamburger Menu (System/Light/Dark) - TICKET-022
 - [x] Implement theme persistence via localStorage - TICKET-022
 
+## Phase 6.7: Achievement System (ADR 019, TICKET-023)
+
+*Reference: [ADR 019](docs/ADR/019-achievement-system.md) | [PRD §3.15](docs/PRD/001-mvp-mobile-walker.md#315-achievement-system) | [Ticket](docs/tickets/023-achievement-system.md) | [Feature Doc](docs/features/achievements.md)*
+
+- [x] ADR 019: Achievement System Data Model
+- [x] Feature doc: achievements.md
+- [x] Update PRD 001 with achievement user stories (Section 3.15)
+- [x] Database schema: Add `achievements` and `user_achievements` tables (schema v6)
+- [x] Create `src/lib/achievements.ts` - 40 achievement definitions (35 regular + 5 hidden)
+- [x] Create `src/lib/adjacency.ts` - Area boundary sharing detection
+- [x] Create `src/lib/achievement-conditions.ts` - Modular condition evaluators
+- [x] Create `src/lib/achievement-service.ts` - Check and persist achievements
+- [x] Create `src/hooks/useAchievements.ts` - React hook for achievement state
+- [x] Create `src/components/AchievementBrowser/` - Slide-up panel for browsing
+- [x] Create `src/components/AchievementModal/` - Celebratory unlock modal
+- [x] Add Achievements button to HamburgerMenu with count badge
+- [x] Integrate into page.tsx (check after analysis, render components)
+- [x] Update feature documentation with implementation details
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

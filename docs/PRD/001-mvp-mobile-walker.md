@@ -3,7 +3,7 @@
 **Date:** 2026-02-02 (Updated: 2026-02-16)  
 **Status:** In Progress
 
-*Latest update: Distance-to-Boundary Indicator - real-time distance feedback during live walking (Section 3.13)*
+*Latest update: Achievement System - gamification with 40 unlockable achievements (Section 3.15)*
 
 ## 1. Overview
 
@@ -59,6 +59,17 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want the app to have a consistent color scheme and typography that makes it pleasant to use.
 *   **As a user,** I want to toggle between light, dark, and system theme modes so I can use my preferred visual style regardless of my device settings. (Added: 2026-02-16)
 
+### Achievement System Stories (Added: 2026-02-16)
+*   **As a user,** I want to earn achievements for reaching milestones (like completing 10, 50, or all 136 areas), so I feel rewarded for my progress.
+*   **As a user,** I want to earn achievements for quality accomplishments (like earning my first Platinum tier), so I'm motivated to walk accurately.
+*   **As a user,** I want to earn achievements for completing clusters of adjacent areas, so I'm encouraged to explore neighborhoods systematically.
+*   **As a user,** I want to earn achievements for special configurations (like 3 areas sharing a corner), so I discover interesting geographic patterns.
+*   **As a user,** I want to earn achievements based on area size (small quick walks vs marathon perimeters), so different play styles are rewarded.
+*   **As a user,** I want to browse all available achievements from the hamburger menu, so I know what goals I can work toward.
+*   **As a user,** I want to see which achievements I've already earned in the achievement list, so I can track my collection.
+*   **As a user,** I want hidden achievements to show as "???" until unlocked, so there's an element of surprise and discovery.
+*   **As a user,** I want to see a celebratory modal when I earn new achievements after analyzing walks, so I feel the accomplishment immediately.
+*   **As a user,** I want my achievements to persist across browser sessions, so I don't lose my progress.
 
 ### Subarea Visual Context Stories (Added: 2026-02-07)
 *   **As a user,** I want to see a mini-map of the selected subarea in the details panel, so I can study the area and plan my walking route.
@@ -636,6 +647,152 @@ Establish a cohesive visual identity and professional polish.
 *   **Transitions:** Smooth micro-interactions for hover states and panel transitions.
 *   **Loading States:** Skeleton loaders or branded spinners instead of generic loading text.
 
+### 3.15 Achievement System (Added: 2026-02-16)
+
+*Reference: ADR 019 (Achievement System Data Model)*
+
+Provide a gamification layer with unlockable achievements based on various accomplishments.
+
+#### Achievement Categories
+
+| Category | Description | Count |
+|----------|-------------|-------|
+| Area Milestones | Number of areas completed | 10 |
+| Tier Quality | Earning specific quality tiers | 6 |
+| Adjacent Areas | Clusters of connected areas | 6 |
+| Configurations | Special geometric patterns | 4 |
+| Area Size | Based on perimeter length | 5 |
+| Distance | Total walking distance | 4 |
+| Hidden | Secret conditions (shown as "???") | 5 |
+| **Total** | | **40** |
+
+#### Achievement List
+
+**Area Milestones:**
+
+| ID | Name | Icon | Description | Condition |
+|----|------|------|-------------|-----------|
+| first-steps | First Steps | 🎯 | Complete your first area | 1 area |
+| getting-started | Getting Started | 🌱 | Complete 5 areas | 5 areas |
+| double-digits | Double Digits | 🔟 | Complete 10 areas | 10 areas |
+| lucky-thirteen | Lucky Thirteen | 🍀 | Complete 13 areas | 13 areas |
+| quarter-century | Quarter Century | 🎂 | Complete 25 areas | 25 areas |
+| halfway-there | Halfway There | ⏳ | Complete 68 areas (50%) | 68 areas |
+| three-quarters | Three Quarters | 📊 | Complete 102 areas (75%) | 102 areas |
+| century-club | Century Club | 💯 | Complete 100 areas | 100 areas |
+| almost-there | Almost There | 🏃 | Complete 130 areas | 130 areas |
+| malmo-master | Malmö Master | 👑 | Complete all 136 areas | 136 areas |
+
+**Tier Quality:**
+
+| ID | Name | Icon | Description | Condition |
+|----|------|------|-------------|-----------|
+| bronze-beginner | Bronze Beginner | 🥉 | Earn your first Bronze tier | First Bronze |
+| silver-lining | Silver Lining | 🥈 | Earn your first Silver tier | First Silver |
+| gold-standard | Gold Standard | 🥇 | Earn your first Gold tier | First Gold |
+| platinum-pioneer | Platinum Pioneer | 🏆 | Earn your first Platinum tier | First Platinum |
+| golden-decade | Golden Decade | ✨ | Earn 10 Gold or better tiers | 10x Gold+ |
+| perfectionist | Perfectionist | 💎 | Earn 10 Platinum tiers | 10x Platinum |
+
+**Adjacent Areas:**
+
+| ID | Name | Icon | Description | Condition |
+|----|------|------|-------------|-----------|
+| good-neighbors | Good Neighbors | 🤝 | Complete 2 adjacent areas | 2 connected |
+| trilogy | Trilogy | 📚 | Complete 3 connected areas | 3 connected |
+| fantastic-four | Fantastic Four | 4️⃣ | Complete 4 connected areas | 4 connected |
+| six-pack | Six Pack | 🎲 | Complete 6 connected areas | 6 connected |
+| kingdom-builder | Kingdom Builder | 🏰 | Complete 10 connected areas | 10 connected |
+| empire | Empire | 👸 | Complete 20 connected areas | 20 connected |
+
+**Special Configurations:**
+
+| ID | Name | Icon | Description | Condition |
+|----|------|------|-------------|-----------|
+| triple-point | Triple Point | 📍 | Complete 3 areas sharing a single corner | 3 areas, 1 point |
+| crossroads | Crossroads | ✖️ | Complete 4 areas meeting at one point | 4 areas, 1 point |
+| chain-reaction | Chain Reaction | ⛓️ | Complete 5 areas in a line | 5 linear areas |
+| encirclement | Encirclement | 🔲 | Surround an unwalked area completely | Ring of completed |
+
+**Area Size:**
+
+| ID | Name | Icon | Description | Condition |
+|----|------|------|-------------|-----------|
+| bite-sized | Bite Sized | 🍪 | Complete the smallest area by perimeter | Smallest area |
+| marathon-walker | Marathon Walker | 🏅 | Complete an area with >5km perimeter | Single >5km |
+| quick-wins | Quick Wins | ⚡ | Complete 5 areas under 2km perimeter | 5x <2km |
+| go-big | Go Big | 🦣 | Complete 5 areas over 4km perimeter | 5x >4km |
+| middle-ground | Middle Ground | ⚖️ | Complete an area 2.5-3.5km perimeter | 2.5-3.5km range |
+
+**Distance:**
+
+| ID | Name | Icon | Description | Condition |
+|----|------|------|-------------|-----------|
+| fifty-km | Fifty Kilometers | 🛤️ | Walk 50km total | 50km walked |
+| century-walker | Century Walker | 🚶 | Walk 100km total | 100km walked |
+| double-century | Double Century | 🎖️ | Walk 200km total | 200km walked |
+| ultra-walker | Ultra Walker | 🌟 | Walk 500km total | 500km walked |
+
+**Hidden Achievements (5):**
+
+| ID | Display Name | Icon | Real Name | Secret Condition |
+|----|--------------|------|-----------|------------------|
+| hidden-1 | ??? | 🌌 | The Answer | Have exactly 42 areas completed |
+| hidden-2 | ??? | 🖤 | Triskaidekaphile | Complete your 13th area on a Friday |
+| hidden-3 | ??? | 🦉 | Night Owl | Analyze a walk between 2-4 AM |
+| hidden-4 | ??? | 🥔 | Potato Pride | Earn 5 Potato tier completions |
+| hidden-5 | ??? | 🎯 | The Centered | Complete the area containing Malmö's geographic center |
+
+#### Achievement Browser
+
+**Access:** Hamburger menu → "Achievements"
+
+**Panel Type:** Slide-up bottom sheet (same as Areas list)
+
+**Display Structure:**
+*   **Header:** "Achievements" with count (e.g., "12 / 40 unlocked")
+*   **Progress Bar:** Visual representation of total completion
+*   **Category Tabs/Sections:** Group by category for easier browsing
+*   **Achievement Cards:**
+    *   Icon (emoji)
+    *   Name (or "???" if hidden and locked)
+    *   Description (or "???" if hidden and locked)
+    *   Unlocked indicator (checkmark, colored border, or grayed out)
+    *   Unlock date (if earned)
+
+**Hidden Achievement Display:**
+*   Show that hidden achievements exist (count visible)
+*   Display as "???" for name and description until unlocked
+*   Icon shown as 🔒 or dimmed until unlocked
+*   Once unlocked, reveal full name, description, and icon
+
+#### Achievement Notification Modal
+
+**Trigger:** After analysis completes (single or batch), if new achievements earned
+
+**Behavior:**
+*   Appears as centered modal overlay
+*   Shows ALL newly earned achievements at once
+*   For batch analysis (multiple activities), consolidates into single modal
+*   Modal blocks interaction until dismissed
+
+**Content:**
+*   Header: "Achievement Unlocked!" (or "Achievements Unlocked!" if multiple)
+*   List of achievements with:
+    *   Large emoji icon
+    *   Achievement name
+    *   Achievement description
+*   Dismiss button: "Awesome!" or tap outside
+
+**Animation:** Subtle entrance animation, optional confetti for Platinum/hidden unlocks
+
+#### Persistence
+
+*   Achievements stored in SQLite (see ADR 019)
+*   Persists across page reloads and browser sessions
+*   Included in database export/import (backup feature)
+*   Achievement checking runs as separate process after analysis
+
 ## 4. Non-Functional Requirements
 
 *   **Mobile First:** UI controls (buttons, drawers, panels) must be touch-friendly and positioned for thumb usage.
@@ -652,4 +809,3 @@ Establish a cohesive visual identity and professional polish.
 *   **Route Suggestions:** Suggest optimal walking routes for incomplete areas.
 *   **Multi-city Support:** Expand beyond Malmö to other cities.
 *   **Sync Across Devices:** Cloud storage for progress (requires authentication backend).
-*   **Achievements/Badges:** Gamification elements beyond tiers.

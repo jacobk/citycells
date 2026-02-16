@@ -18,6 +18,15 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Achievement System**: 40 achievements (35 regular + 5 hidden) rewarding exploration milestones, tier quality, connected territories, and more. (PRD 001 §3.15, ADR 019, TICKET-023)
+  - Key files: `src/lib/achievements.ts`, `src/lib/adjacency.ts`, `src/lib/achievement-conditions.ts`, `src/lib/achievement-service.ts`, `src/hooks/useAchievements.ts`, `src/components/AchievementBrowser/`, `src/components/AchievementModal/`, `src/lib/db.ts` (schema v6)
+  - Database: Added `achievements` and `user_achievements` tables with migration to schema v6
+  - Achievement categories: Count (milestones), Tier (quality), Adjacent (clusters), Configuration (geometry), Size, Distance, Secret (hidden)
+  - Adjacency graph: Detects area boundary sharing, clusters, vertex sharing, and encirclement
+  - Browser panel: Slide-up panel from hamburger menu showing all achievements grouped by category
+  - Unlock modal: Celebratory notification when new achievements are earned after analysis
+  - Hidden achievements display as "???" until unlocked
+  - Achievements checked automatically after walk analysis completes
 - **Dark Mode Toggle**: Three-way theme selector (System/Light/Dark) in hamburger menu with localStorage persistence. (PRD 001 §3.14, TICKET-022)
   - Key files: `src/hooks/useTheme.ts` (NEW), `src/app/layout.tsx`, `src/components/HamburgerMenu/HamburgerMenu.tsx`
   - `useTheme` hook manages theme state with `useSyncExternalStore` for SSR compatibility
@@ -56,6 +65,20 @@ Each entry should reference:
   - Shared map config extracted to `src/lib/map-config.ts` for DRY consistency
 
 ### Fixed
+- **Strava rate limit handling**: App now gracefully handles 429 rate limit errors and displays cached data. (TICKET-023 bugfix)
+  - Key files: `src/hooks/useStrava.ts`, `src/app/api/activities/route.ts`, `src/components/Map/Map.tsx`
+  - API route returns proper 429/401 status codes with helpful error messages
+  - `useStrava` hook logs warning and continues with cached data instead of throwing
+  - Map component loads cached analyses even when activities array is empty
+- **Double API request bug**: Fixed `useStrava` hook causing duplicate activity fetches on each page load.
+  - Key files: `src/hooks/useStrava.ts`
+  - Root cause: `fetchActivities` callback depended on `[activities]`, causing recreation on every update
+  - Fix: Use functional state update `setActivities(prev => ...)` with empty dependency array
+- **Database race condition during HMR**: Fixed "Database not initialized" errors during React Strict Mode and hot reload.
+  - Key files: `src/app/page.tsx`, `src/lib/db.ts`, `src/components/AchievementBrowser/AchievementBrowser.tsx`
+  - Added try-catch in achievement userId effect with graceful fallback
+  - Fixed `seedAchievements` to handle database closure during async operations
+  - Added defensive null checks in AchievementBrowser for props during re-render cycles
 - **Strava authentication session loss**: Users now stay authenticated after closing browser or when session cookie expires. (ADR 013, TICKET-019)
   - Key files: `src/lib/auth-cookies.ts` (NEW), `src/app/api/auth/callback/route.ts`, `src/app/api/auth/restore-session/route.ts`, `docs/features/authentication.md`
   - Added `maxAge: 30 days` to `strava_refresh_token`, `strava_expires_at`, and `strava_athlete` cookies (were session cookies)

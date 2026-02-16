@@ -302,19 +302,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
   // Analysis Logic - runs analysis for all activities, optionally persists to database
   useEffect(() => {
-    if (!geoData || !activities.length) {
-      if (geoData) {
-        const areaDetails = buildAreaDetailMap(geoData);
-        const baseAreaData = buildBaseAreaClickData(areaDetails);
-        setAreaDetailsData(baseAreaData);
-        // WHY: Notify parent of all area data for use in SubAreaListPanel (ADR 008)
-        onAreasLoaded?.(baseAreaData);
-        onProgressChange({
-          completedCount: 0,
-          totalAreas: geoData.features.length,
-          tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0, potato: 0 }
-        });
-      }
+    if (!geoData) {
       return;
     }
 
@@ -337,7 +325,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
 
       // WHY: Load cached analysis results to avoid re-computation (ADR 004)
-      // This provides instant feedback for returning users
+      // This provides instant feedback for returning users AND when rate limited
+      // (when activities array is empty but cached data exists in database)
       let cachedResults = new Map<number, ReturnType<typeof loadCachedAnalyses> extends Map<number, infer V> ? V : never>();
       if (userId !== null) {
         try {
@@ -345,6 +334,19 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         } catch (e) {
           console.warn('[Map] Could not load cached analyses:', e);
         }
+      }
+      
+      // WHY: If no activities AND no cached data, show empty state
+      // This handles first-time users or users who haven't walked any areas yet
+      if (!activities.length && cachedResults.size === 0) {
+        setAreaDetailsData(newAreaDetailsData);
+        onAreasLoaded?.(newAreaDetailsData);
+        onProgressChange({
+          completedCount: 0,
+          totalAreas: geoData.features.length,
+          tierCounts: { platinum: 0, gold: 0, silver: 0, bronze: 0, potato: 0 }
+        });
+        return;
       }
 
       // WHY: Display cached results instantly while checking for new activities (ADR 004)
