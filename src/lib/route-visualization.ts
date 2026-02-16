@@ -8,14 +8,20 @@
  * @see docs/tickets/007-walk-route-visualization.md
  */
 
-import type { Feature, LineString, Polygon, MultiPolygon, Position } from 'geojson';
-import * as turf from '@turf/turf';
+import type { Feature, Polygon, MultiPolygon, Position } from 'geojson';
 import {
   ROUTE_DEVIATION_COLORS,
   ROUTE_DEVIATION_THRESHOLD_METERS,
   ROUTE_SEGMENT_STYLE,
   getRouteSegmentColor,
 } from '@/lib/design-tokens';
+// WHY: Import consolidated distance utilities from geo-distance.ts
+// Eliminates duplication - see TICKET-018 for consolidation rationale
+import {
+  distanceToLine,
+  polygonToPerimeterLines,
+  distanceToPerimeterLines,
+} from '@/lib/geo-distance';
 
 // =============================================================================
 // Types
@@ -43,53 +49,8 @@ export interface ProcessedRouteData {
 // Geometry Utilities
 // =============================================================================
 
-/**
- * Convert polygon to perimeter line(s).
- * WHY: Needed to calculate distance from route points to boundary.
- */
-function polygonToLine(polygon: Feature<Polygon | MultiPolygon>): Feature<LineString>[] {
-  const perimeterLine = turf.polygonToLine(polygon);
-  
-  if (perimeterLine.type === 'FeatureCollection') {
-    return perimeterLine.features as Feature<LineString>[];
-  }
-  return [perimeterLine as Feature<LineString>];
-}
-
-/**
- * Calculate distance from a point to the nearest point on a line.
- * WHY: Used to determine if a route segment is within the deviation threshold.
- * 
- * @param point - Point in [lng, lat] GeoJSON format
- * @param line - LineString feature to measure distance to
- * @returns Distance in meters
- */
-export function distanceToLine(point: Position, line: Feature<LineString>): number {
-  const pt = turf.point(point);
-  const nearestPt = turf.nearestPointOnLine(line, pt);
-  return turf.distance(pt, nearestPt, { units: 'meters' });
-}
-
-/**
- * Calculate the minimum distance from a point to any of the boundary lines.
- * WHY: MultiPolygons have multiple rings; we need the closest one.
- * 
- * @param point - Point in [lng, lat] GeoJSON format
- * @param boundaryLines - Array of LineString features
- * @returns Minimum distance in meters
- */
-function distanceToBoundary(point: Position, boundaryLines: Feature<LineString>[]): number {
-  let minDistance = Infinity;
-  
-  for (const line of boundaryLines) {
-    const distance = distanceToLine(point, line);
-    if (distance < minDistance) {
-      minDistance = distance;
-    }
-  }
-  
-  return minDistance;
-}
+// WHY: distanceToLine, polygonToPerimeterLines, and distanceToPerimeterLines are now
+// imported from geo-distance.ts to avoid duplication. See TICKET-018.
 
 /**
  * Calculate the midpoint of a segment.
@@ -124,7 +85,7 @@ export function prepareDeviationColoredRoute(
     return [];
   }
 
-  const boundaryLines = polygonToLine(boundaryFeature);
+  const boundaryLines = polygonToPerimeterLines(boundaryFeature);
   const segments: RouteSegment[] = [];
   
   let currentColor: string | null = null;
@@ -136,7 +97,7 @@ export function prepareDeviationColoredRoute(
     
     // Calculate midpoint and distance to boundary
     const midpoint = segmentMidpoint(start, end);
-    const distance = distanceToBoundary(midpoint, boundaryLines);
+    const distance = distanceToPerimeterLines(midpoint, boundaryLines);
     const color = getRouteSegmentColor(distance);
     
     // Convert to Leaflet [lat, lng] format
@@ -213,3 +174,7 @@ export {
   ROUTE_DEVIATION_THRESHOLD_METERS,
   ROUTE_SEGMENT_STYLE,
 };
+
+// WHY: Re-export distanceToLine for backwards compatibility
+// Previously defined locally, now imported from geo-distance.ts
+export { distanceToLine };

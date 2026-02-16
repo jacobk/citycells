@@ -16,13 +16,17 @@ import type { Feature, Polygon, MultiPolygon, LineString, Point, Position } from
 export { assignTier, TIER_THRESHOLDS, type Tier } from './tiers';
 import { assignTier, TIER_THRESHOLDS, type Tier } from './tiers';
 
-// ============================================
-// Constants - See ADR 003 for rationale
-// ============================================
+// WHY: Import consolidated distance utilities from geo-distance.ts
+// Eliminates duplication - see TICKET-018 for consolidation rationale
+import {
+  distanceToLine,
+  nearestPointOnLine,
+  polygonToPerimeterLines,
+  PERIMETER_BUFFER_METERS,
+} from './geo-distance';
 
-// WHY: 25m buffer accounts for GPS accuracy (5-15m) and sidewalk offsets
-// from property boundaries. Referenced in ADR 002.
-export const PERIMETER_BUFFER_METERS = 25;
+// Re-export for backwards compatibility
+export { PERIMETER_BUFFER_METERS } from './geo-distance';
 
 // WHY: 100m threshold for considering a walk "closed" - allows for
 // imprecise GPS at start/end points while still requiring reasonable closure
@@ -105,35 +109,8 @@ export interface FullAnalysisResult {
 // Helper Functions
 // ============================================
 
-/**
- * Convert a polygon to its perimeter line(s).
- */
-function getPerimeterLine(polygon: Feature<Polygon | MultiPolygon>): Feature<LineString> | Feature<LineString>[] {
-  const perimeterLine = turf.polygonToLine(polygon);
-  
-  if (perimeterLine.type === 'FeatureCollection') {
-    return perimeterLine.features as Feature<LineString>[];
-  }
-  return perimeterLine as Feature<LineString>;
-}
-
-/**
- * Calculate distance from a point to the nearest point on a line.
- */
-function distanceToLine(point: Position, line: Feature<LineString>): number {
-  const pt = turf.point(point);
-  const nearestPt = turf.nearestPointOnLine(line, pt);
-  return turf.distance(pt, nearestPt, { units: 'meters' });
-}
-
-/**
- * Find the nearest point on a line to a given point.
- */
-function nearestPointOnLine(point: Position, line: Feature<LineString>): Position {
-  const pt = turf.point(point);
-  const nearestPt = turf.nearestPointOnLine(line, pt);
-  return nearestPt.geometry.coordinates;
-}
+// WHY: distanceToLine, nearestPointOnLine, and polygonToPerimeterLines are now
+// imported from geo-distance.ts to avoid duplication. See TICKET-018.
 
 /**
  * Calculate the 90th percentile of an array of numbers.
@@ -162,11 +139,8 @@ export function calculatePerimeterCoverage(
   areaPolygon: Feature<Polygon | MultiPolygon>,
   perimeterLengthMeters: number
 ): { coveragePercent: number; coveredMeters: number } {
-  // Get perimeter as line(s)
-  const perimeterLine = getPerimeterLine(areaPolygon);
-  
-  // Create buffer around perimeter
-  const lines = Array.isArray(perimeterLine) ? perimeterLine : [perimeterLine];
+  // WHY: polygonToPerimeterLines always returns array - handles MultiPolygon case
+  const lines = polygonToPerimeterLines(areaPolygon);
   let totalCoveredMeters = 0;
   
   for (const line of lines) {
@@ -322,9 +296,8 @@ export function calculateAlignmentError(
   walkCoordinates: Position[],
   areaPolygon: Feature<Polygon | MultiPolygon>
 ): { rmseMeters: number; maxMeters: number; p90Meters: number; alignmentScore: number } {
-  const perimeterLine = getPerimeterLine(areaPolygon);
-  const lines = Array.isArray(perimeterLine) ? perimeterLine : [perimeterLine];
-  
+  // WHY: polygonToPerimeterLines always returns array - handles MultiPolygon case
+  const lines = polygonToPerimeterLines(areaPolygon);
   const distances: number[] = [];
   
   for (const coord of walkCoordinates) {
@@ -380,9 +353,8 @@ export function calculateEfficiency(
     return { efficiency: 0, borderAlignedMeters: 0, totalWalkMeters: 0 };
   }
   
-  // Get perimeter line(s)
-  const perimeterLine = getPerimeterLine(areaPolygon);
-  const lines = Array.isArray(perimeterLine) ? perimeterLine : [perimeterLine];
+  // WHY: polygonToPerimeterLines always returns array - handles MultiPolygon case
+  const lines = polygonToPerimeterLines(areaPolygon);
   
   // Create buffer around perimeter and find intersection
   let borderAlignedMeters = 0;
@@ -459,8 +431,8 @@ export function detectDeviations(
     return deviations;
   }
   
-  const perimeterLine = getPerimeterLine(areaPolygon);
-  const lines = Array.isArray(perimeterLine) ? perimeterLine : [perimeterLine];
+  // WHY: polygonToPerimeterLines always returns array - handles MultiPolygon case
+  const lines = polygonToPerimeterLines(areaPolygon);
   const primaryLine = lines[0]; // Use primary perimeter for border distance
   
   let inDeviation = false;

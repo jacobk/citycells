@@ -18,6 +18,12 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Distance-to-Boundary Indicator**: Real-time distance feedback during live walking mode. (PRD 001 §3.13, ADR 002, ADR 003, TICKET-018)
+  - Key files: `src/lib/geo-distance.ts` (NEW), `src/components/WalkingMode/WalkingMode.tsx`, `src/components/WalkingMode/WalkingControls.tsx`, `src/components/WalkingMode/LivePositionMarker.tsx`
+  - Status bar shows distance in meters: "✓ On track (12m)" (green) when within 25m tolerance, "23m from boundary" (neutral) when outside
+  - Position marker changes color: green (#22c55e) within tolerance, blue (#3b82f6) outside
+  - Consolidated distance utilities from `analysis.ts` and `route-visualization.ts` into new `geo-distance.ts` module
+  - 25m tolerance matches existing perimeter buffer from ADR 002/003 for consistent scoring feedback
 - **Live Walking Mode**: Real-time GPS navigation for walking sub-area boundaries. (PRD 001 §3.13, ADR 017, TICKET-017)
   - Key files: `src/components/WalkingMode/` (NEW), `src/hooks/useGeolocationTracking.ts` (NEW), `src/hooks/useWakeLock.ts` (NEW), `src/lib/map-config.ts` (NEW)
   - Full-screen overlay with boundary polygon and live position marker

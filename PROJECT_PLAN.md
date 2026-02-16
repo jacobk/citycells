@@ -219,6 +219,18 @@
 - [x] Update Map and AreaMiniMap to use shared map config
 - [x] Update feature docs (`docs/features/live-walking-mode.md`)
 
+## Phase 6.6: Distance-to-Boundary Indicator (TICKET-018)
+
+*Reference: [PRD §3.13](docs/PRD/001-mvp-mobile-walker.md#313-live-walking-mode) | [Feature Docs](docs/features/distance-indicator.md) | [Ticket](docs/tickets/018-distance-indicator.md)*
+
+- [x] Create consolidated `src/lib/geo-distance.ts` (distance calculation utilities)
+- [x] Refactor `analysis.ts` to use geo-distance.ts
+- [x] Refactor `route-visualization.ts` to use geo-distance.ts
+- [x] Add distance state and calculation to WalkingMode.tsx
+- [x] Add distance indicator UI to WalkingControls.tsx
+- [x] Add withinTolerance prop to LivePositionMarker.tsx (color change)
+- [x] Update feature docs (`docs/features/distance-indicator.md`)
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-15)  
+**Date:** 2026-02-02 (Updated: 2026-02-16)  
 **Status:** In Progress
 
-*Latest update: Live Walking Mode - real-time GPS navigation for walking sub-area boundaries (Section 3.13)*
+*Latest update: Distance-to-Boundary Indicator - real-time distance feedback during live walking (Section 3.13)*
 
 ## 1. Overview
 
@@ -42,13 +42,16 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want breadcrumb navigation to return from area details to the list.
 *   **As a user,** I want a hamburger menu to access different app sections without cluttering the map interface.
 
-### Live Walking Mode Stories (Added: 2026-02-15)
+### Live Walking Mode Stories (Added: 2026-02-15, Updated: 2026-02-16)
 *   **As a user,** I want to start a live walking session for a selected sub-area, so I can see my real-time position relative to the boundary.
 *   **As a user,** I want to see a full-screen map showing the sub-area boundary while walking, so I know exactly where to go.
 *   **As a user,** I want my GPS position to update continuously on the map, so I can see how I move relative to the boundary.
 *   **As a user,** I want to trigger live walking mode from the area details panel, so I can start walking any area I'm viewing.
 *   **As a user,** I want the screen to stay on during active walking (where supported), so I don't have to keep waking my phone.
 *   **As a user,** I want to exit walking mode and return to the normal app view when I'm done, so I can review my progress.
+*   **As a user,** I want to see my real-time distance from the boundary while walking, so I know how far I need to adjust my path. (Added: 2026-02-16)
+*   **As a user,** I want a clear visual indicator when I'm within the 25m tolerance zone, so I know I'm walking correctly. (Added: 2026-02-16)
+*   **As a user,** I want my position marker to change color based on my distance from the boundary, so I can see at a glance whether I'm on track. (Added: 2026-02-16)
 
 ### Subarea Visual Context Stories (Added: 2026-02-07)
 *   **As a user,** I want to see a mini-map of the selected subarea in the details panel, so I can study the area and plan my walking route.
@@ -556,6 +559,39 @@ Provide a real-time navigation view for walking sub-area boundaries.
 | GPS unavailable | Show warning, allow map viewing without live position |
 | GPS signal lost | Show "Acquiring GPS..." indicator, keep last known position |
 | Wake Lock unavailable | Continue without it, no user-facing error |
+
+#### Distance-to-Boundary Indicator (Added: 2026-02-16)
+
+Real-time feedback showing walker's distance from the boundary line.
+
+**Display Location:** Bottom status bar, next to GPS accuracy display
+
+**Numeric Distance:**
+*   Show distance in meters: "12m from boundary"
+*   Update in real-time with GPS position changes
+*   Only display when GPS position is available
+
+**Color-Coded Position Marker:**
+
+| Condition | Marker Color | Hex |
+|-----------|--------------|-----|
+| Within 25m tolerance | Green | `#22c55e` |
+| Outside 25m tolerance | Blue (default) | `#3b82f6` |
+
+*   Position marker (blue dot) color changes based on distance
+*   25m threshold matches existing analysis tolerance (ADR 002, ADR 003)
+
+**Status Bar Indicator:**
+
+| Condition | Display | Style |
+|-----------|---------|-------|
+| Within tolerance | "✓ On track (12m)" | Green text/background |
+| Outside tolerance | "23m from boundary" | Neutral text |
+
+**Calculation:**
+*   Use existing `distanceToLine()` pattern from `src/lib/analysis.ts`
+*   Calculate distance from current position to nearest point on boundary polygon perimeter
+*   Recalculate on each GPS position update
 
 #### Exit Behavior
 

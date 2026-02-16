@@ -6,8 +6,11 @@
  * Control buttons for Walking Mode: exit, center-on-me, zoom, and status indicators.
  * Positioned as floating controls over the full-screen map.
  * 
+ * Includes distance-to-boundary indicator showing real-time proximity feedback.
+ * 
  * @see docs/ADR/017-live-walking-mode.md
  * @see docs/tickets/017-live-walking-mode.md
+ * @see docs/tickets/018-distance-indicator.md
  */
 
 
@@ -35,6 +38,10 @@ interface WalkingControlsProps {
   gpsAccuracy: number | null;
   /** Area name being walked */
   areaName: string;
+  /** Distance to boundary in meters, or null if GPS unavailable */
+  distanceToBoundary: number | null;
+  /** Whether within 25m tolerance of boundary - see ADR 002 */
+  withinTolerance: boolean;
 }
 
 // =============================================================================
@@ -51,6 +58,8 @@ export default function WalkingControls({
   isAcquiringGPS,
   gpsAccuracy,
   areaName,
+  distanceToBoundary,
+  withinTolerance,
 }: WalkingControlsProps) {
   return (
     <>
@@ -139,11 +148,39 @@ export default function WalkingControls({
         </button>
       </div>
       
-      {/* Bottom Status Bar - GPS Accuracy */}
+      {/* Bottom Status Bar - Distance to Boundary and GPS Accuracy */}
+      {/* WHY: Show distance feedback only when GPS is available and not acquiring
+           Distance indicator is primary; GPS accuracy is secondary info - see TICKET-018 */}
       {gpsAccuracy !== null && !isAcquiringGPS && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[610]">
-          <div className="bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 text-white text-sm">
-            GPS accuracy: ±{Math.round(gpsAccuracy)}m
+          <div className="flex items-center gap-2">
+            {/* Distance to Boundary Indicator */}
+            {distanceToBoundary !== null && (
+              <div
+                className={`backdrop-blur-sm rounded-full px-4 py-2 text-sm font-medium flex items-center gap-2 ${
+                  withinTolerance
+                    ? 'bg-green-600/90 text-white'
+                    : 'bg-black/60 text-white'
+                }`}
+              >
+                {withinTolerance ? (
+                  <>
+                    {/* WHY: Checkmark icon reinforces "on track" status */}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    On track ({distanceToBoundary}m)
+                  </>
+                ) : (
+                  <>{distanceToBoundary}m from boundary</>
+                )}
+              </div>
+            )}
+            
+            {/* GPS Accuracy Indicator */}
+            <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-2 text-white/80 text-xs">
+              ±{Math.round(gpsAccuracy)}m GPS
+            </div>
           </div>
         </div>
       )}

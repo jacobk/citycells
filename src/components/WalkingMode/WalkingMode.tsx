@@ -28,6 +28,14 @@ import {
   UNWALKED_AREA_STYLE,
 } from '@/lib/design-tokens';
 import type { Tier } from '@/lib/analysis';
+// WHY: Import distance utilities for real-time boundary proximity feedback
+// See TICKET-018 for distance indicator feature requirements
+import {
+  polygonToPerimeterLines,
+  distanceToPerimeterLines,
+  PERIMETER_BUFFER_METERS,
+} from '@/lib/geo-distance';
+import type { Feature, Polygon, MultiPolygon, LineString } from 'geojson';
 
 import LivePositionMarker from './LivePositionMarker';
 import WalkingControls from './WalkingControls';
@@ -115,6 +123,8 @@ export default function WalkingMode({
   const [autoCenter, setAutoCenter] = useState(true);
   const [showIOSTip, setShowIOSTip] = useState(false);
   const [trackingStartTime, setTrackingStartTime] = useState<number | null>(null);
+  // WHY: Track distance to boundary for real-time feedback - see TICKET-018
+  const [distanceToBoundary, setDistanceToBoundary] = useState<number | null>(null);
   
   // Geolocation tracking
   const {
@@ -171,6 +181,36 @@ export default function WalkingMode({
       geometry,
     }],
   }), [geometry]);
+  
+  // WHY: Memoize perimeter lines to avoid recalculating on every position update
+  // Converting polygon to LineString is the expensive part; distance calculation is cheap
+  const perimeterLines = useMemo<Feature<LineString>[]>(() => {
+    // Create a Feature from the raw geometry for turf operations
+    const polygonFeature: Feature<Polygon | MultiPolygon> = {
+      type: 'Feature',
+      properties: {},
+      geometry: geometry as Polygon | MultiPolygon,
+    };
+    return polygonToPerimeterLines(polygonFeature);
+  }, [geometry]);
+  
+  // WHY: Calculate distance to boundary on each position update for real-time feedback
+  // Uses memoized perimeter lines for performance - see TICKET-018
+  useEffect(() => {
+    if (!position) {
+      setDistanceToBoundary(null);
+      return;
+    }
+    
+    // Convert position to GeoJSON [lng, lat] format
+    const point: [number, number] = [position.longitude, position.latitude];
+    const distance = distanceToPerimeterLines(point, perimeterLines);
+    setDistanceToBoundary(Math.round(distance));
+  }, [position, perimeterLines]);
+  
+  // WHY: Compute derived state for color coding - within 25m tolerance means "on track"
+  // 25m threshold defined in ADR 002 and ADR 003
+  const withinTolerance = distanceToBoundary !== null && distanceToBoundary <= PERIMETER_BUFFER_METERS;
   
   // WHY: Use tier colors for fill/stroke, fall back to unwalked style (matches AreaMiniMap)
   const fillColor = tier ? TIER_FILL_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
@@ -262,6 +302,7 @@ export default function WalkingMode({
         <LivePositionMarker
           position={position}
           autoCenter={autoCenter}
+          withinTolerance={withinTolerance}
         />
         
         {/* Map utilities */}
@@ -283,6 +324,8 @@ export default function WalkingMode({
         isAcquiringGPS={isAcquiring}
         gpsAccuracy={accuracy}
         areaName={areaName}
+        distanceToBoundary={distanceToBoundary}
+        withinTolerance={withinTolerance}
       />
       
       {/* Permission Error Overlay */}
