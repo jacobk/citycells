@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { refreshAccessToken, stravaConfig } from '@/lib/strava';
+import { setAuthCookies, type AthleteInfo } from '@/lib/auth-cookies';
 
 /**
  * POST /api/auth/restore-session
@@ -50,47 +51,47 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate expiration timestamp
-    const expiresAt = Date.now() + (refreshed.expires_in * 1000);
     // WHY: Store as Unix timestamp in seconds for consistency with Strava API
-    const tokenExpiresAtSeconds = Math.floor(expiresAt / 1000);
+    const tokenExpiresAtSeconds = Math.floor((Date.now() + refreshed.expires_in * 1000) / 1000);
 
-    // Set HTTP-only cookies for API route authentication
+    // WHY: Fetch athlete profile from Strava to populate strava_athlete cookie
+    // This was previously missing, causing useStrava hook to fail session restoration
+    // See ADR 013 (2026-02-16 Update) and TICKET-019 for details
+    let athleteInfo: AthleteInfo | undefined;
+    try {
+      const athleteResponse = await fetch('https://www.strava.com/api/v3/athlete', {
+        headers: { Authorization: `Bearer ${refreshed.access_token}` },
+      });
+
+      if (athleteResponse.ok) {
+        const athleteData = await athleteResponse.json();
+        athleteInfo = {
+          id: athleteData.id,
+          firstname: athleteData.firstname,
+          lastname: athleteData.lastname,
+          profile: athleteData.profile,
+        };
+      } else {
+        console.warn('[restore-session] Failed to fetch athlete profile:', athleteResponse.status);
+      }
+    } catch (err) {
+      // WHY: Non-fatal - session can still work without athlete display info
+      console.warn('[restore-session] Error fetching athlete profile:', err);
+    }
+
+    // WHY: Use centralized cookie helper to ensure consistent maxAge values
+    // This sets all cookies including strava_athlete (previously missing in restore-session)
+    // See ADR 013 (2026-02-16 Update) for cookie lifetime specifications
     const cookieStore = await cookies();
-    
-    // WHY: Access token cookie with same expiry as token
-    cookieStore.set('strava_access_token', refreshed.access_token, { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: refreshed.expires_in
+    await setAuthCookies(cookieStore, {
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token,
+      expiresIn: refreshed.expires_in,
+      athleteId: athlete_id,
+      athlete: athleteInfo,
     });
 
-    // WHY: Refresh token stored for API route token refresh
-    cookieStore.set('strava_refresh_token', refreshed.refresh_token, { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production',
-      path: '/'
-    });
-
-    // WHY: Expiration tracking for proactive refresh
-    cookieStore.set('strava_expires_at', expiresAt.toString(), { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production',
-      path: '/'
-    });
-
-    // WHY: Session cookie (1 hour) with athlete ID for session tracking
-    // This is the "session bridge" mentioned in ADR 013
-    cookieStore.set('strava_session', athlete_id.toString(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 3600, // 1 hour per ADR 013
-      sameSite: 'lax'
-    });
-
-    console.log(`[restore-session] Session restored for athlete ${athlete_id}`);
+    console.log(`[restore-session] Session restored for athlete ${athlete_id}${athleteInfo ? ` (${athleteInfo.firstname})` : ''}`);
 
     // WHY: Return token data for client to update SQLite
     // This keeps SQLite in sync with the fresh tokens

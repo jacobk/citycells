@@ -4,6 +4,7 @@ import strava from 'strava-v3';
 // Import to ensure config is applied
 import '@/lib/strava';
 import { getPublicUrl } from '@/lib/requestOrigin';
+import { setAuthCookies } from '@/lib/auth-cookies';
 
 /**
  * GET /api/auth/callback
@@ -26,53 +27,23 @@ export async function GET(request: Request) {
   try {
     const payload = await strava.oauth.getToken(code);
     
-    // Calculate expiration
-    const expiresAt = Date.now() + (payload.expires_in * 1000);
     // WHY: Store as Unix timestamp in seconds for consistency with Strava API
-    const tokenExpiresAtSeconds = Math.floor(expiresAt / 1000);
+    const tokenExpiresAtSeconds = Math.floor((Date.now() + payload.expires_in * 1000) / 1000);
 
-    // Store in HTTP-only cookies
+    // WHY: Use centralized cookie helper to ensure consistent maxAge values
+    // See ADR 013 (2026-02-16 Update) for cookie lifetime specifications
     const cookieStore = await cookies();
-    
-    cookieStore.set('strava_access_token', payload.access_token, { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: payload.expires_in
-    });
-
-    cookieStore.set('strava_refresh_token', payload.refresh_token, { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production',
-      path: '/'
-    });
-
-    cookieStore.set('strava_expires_at', expiresAt.toString(), { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production',
-      path: '/'
-    });
-
-    // WHY: Session cookie (1 hour) with athlete ID for session tracking (ADR 013)
-    // This is the "session bridge" - short-lived for security, SQLite has full tokens
-    cookieStore.set('strava_session', payload.athlete.id.toString(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 3600, // 1 hour per ADR 013
-      sameSite: 'lax'
-    });
-    
-    // Store basic athlete info visible to client (not httpOnly)
-    cookieStore.set('strava_athlete', JSON.stringify({
-      id: payload.athlete.id,
-      firstname: payload.athlete.firstname,
-      lastname: payload.athlete.lastname,
-      profile: payload.athlete.profile
-    }), {
-      httpOnly: false, // Client needs to access this to show "Logged in as..."
-      secure: process.env.NODE_ENV === 'production',
-      path: '/'
+    await setAuthCookies(cookieStore, {
+      accessToken: payload.access_token,
+      refreshToken: payload.refresh_token,
+      expiresIn: payload.expires_in,
+      athleteId: payload.athlete.id,
+      athlete: {
+        id: payload.athlete.id,
+        firstname: payload.athlete.firstname,
+        lastname: payload.athlete.lastname,
+        profile: payload.athlete.profile,
+      },
     });
 
     // WHY: Pass token data via URL params for client to store in SQLite (ADR 013)

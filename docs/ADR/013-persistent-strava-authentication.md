@@ -221,3 +221,35 @@ CREATE INDEX IF NOT EXISTS idx_users_strava_id ON users(strava_id);
 - API routes must handle token refresh atomically (avoid race conditions)
 - Need to handle IndexedDB storage limits (tokens are small, not a concern)
 - Cookie and SQLite state must stay synchronized
+
+## Updates
+
+### 2026-02-16: Cookie Lifetime Clarification
+
+**Issue:** The original ADR specified `maxAge: 3600` for `strava_session` but was silent on other cookies. The implementation set critical cookies (`strava_refresh_token`, `strava_expires_at`, `strava_athlete`) as **session cookies** (no `maxAge`), causing them to be deleted when the browser closes.
+
+**Problem:** When a user closes the browser:
+1. Session cookies are deleted
+2. `strava_session` (1 hour) eventually expires
+3. Without athlete ID, the system cannot look up tokens in SQLite
+4. User appears unauthenticated despite having valid tokens stored
+
+**Clarification - Complete Cookie Strategy:**
+
+| Cookie | HttpOnly | Max-Age | Purpose |
+|--------|----------|---------|---------|
+| `strava_access_token` | Yes | Match `expires_in` | API authentication |
+| `strava_refresh_token` | Yes | **30 days** | Token renewal (persistent) |
+| `strava_expires_at` | Yes | **30 days** | Token expiration tracking |
+| `strava_session` | Yes | 1 hour | Session identifier |
+| `strava_athlete` | No | **30 days** | UI display (name, profile) |
+
+**Rationale for 30 days:**
+- Aligns with typical Strava refresh token validity
+- Balances user convenience (stay logged in) with security
+- SQLite remains source of truth; cookies are convenience cache
+- If cookies expire but SQLite has valid tokens, session restoration works
+
+**Additional Requirement:** The `/api/auth/restore-session` endpoint must set the `strava_athlete` cookie when refreshing tokens, not just `strava_session`.
+
+See TICKET-019 for implementation.

@@ -18,6 +18,7 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 | File | Purpose |
 |------|---------|
 | `src/lib/strava.ts` | Strava API client, OAuth URL generation, token refresh, `getValidAccessToken()` |
+| `src/lib/auth-cookies.ts` | Centralized cookie configuration and `setAuthCookies()` helper |
 | `src/lib/auth-persistence.ts` | Client-side token persistence logic (SQLite sync) |
 | `src/lib/db.ts` | SQLite database with user token CRUD operations |
 | `src/app/api/auth/login/route.ts` | Initiates OAuth flow by redirecting to Strava |
@@ -134,8 +135,9 @@ Centralized token validation for API routes:
 **`POST /api/auth/restore-session`**
 1. Receives refresh_token from client (stored in SQLite)
 2. Refreshes tokens with Strava API
-3. Sets new HTTP-only cookies
-4. Returns new tokens for client to update SQLite
+3. Fetches athlete profile from Strava (for `strava_athlete` cookie)
+4. Sets all HTTP-only cookies with proper lifetimes via `setAuthCookies()`
+5. Returns new tokens for client to update SQLite
 
 **`useStrava()` hook**
 - Checks for OAuth callback params (just logged in)
@@ -148,10 +150,12 @@ Centralized token validation for API routes:
 | Cookie | HttpOnly | Max-Age | Purpose |
 |--------|----------|---------|---------|
 | `strava_access_token` | Yes | Token expiry | API authentication |
-| `strava_refresh_token` | Yes | Persistent | Token renewal |
-| `strava_expires_at` | Yes | Persistent | Token expiration tracking |
+| `strava_refresh_token` | Yes | 30 days | Token renewal |
+| `strava_expires_at` | Yes | 30 days | Token expiration tracking |
 | `strava_session` | Yes | 1 hour | Session identifier (athlete ID) |
-| `strava_athlete` | No | Persistent | UI display (name, profile pic) |
+| `strava_athlete` | No | 30 days | UI display (name, profile pic) |
+
+> **Implementation:** Cookie configuration is centralized in `src/lib/auth-cookies.ts` per ADR 013 (2026-02-16 Update). Both `/api/auth/callback` and `/api/auth/restore-session` use the shared `setAuthCookies()` helper to ensure consistent lifetimes.
 
 ### SQLite Token Storage
 

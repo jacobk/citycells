@@ -36,6 +36,11 @@ Each entry should reference:
   - Shared map config extracted to `src/lib/map-config.ts` for DRY consistency
 
 ### Fixed
+- **Strava authentication session loss**: Users now stay authenticated after closing browser or when session cookie expires. (ADR 013, TICKET-019)
+  - Key files: `src/lib/auth-cookies.ts` (NEW), `src/app/api/auth/callback/route.ts`, `src/app/api/auth/restore-session/route.ts`, `docs/features/authentication.md`
+  - Added `maxAge: 30 days` to `strava_refresh_token`, `strava_expires_at`, and `strava_athlete` cookies (were session cookies)
+  - `/api/auth/restore-session` now fetches athlete profile from Strava and sets `strava_athlete` cookie (was missing)
+  - Centralized cookie configuration in new `auth-cookies.ts` module with `setAuthCookies()` helper
 - **Potato tier persistence bug**: Areas with scores < 0.50 but > 0 now correctly persist with tier = 'potato' after page refresh. Previously saved with `tier = null` causing areas to disappear. (ADR 003, ADR 004, TICKET-016)
   - Key files: `src/lib/tiers.ts` (NEW), `src/lib/analysis.ts`, `src/lib/analysis-persistence.ts`, `src/lib/exemptions.ts`
   - Created centralized `assignTier(score)` function to prevent tier logic duplication
