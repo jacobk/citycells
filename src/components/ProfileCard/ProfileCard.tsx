@@ -354,7 +354,7 @@ export default function ProfileCard({
                     onClick={() => handleReAnalyze('rescore')}
                     disabled={isReAnalyzing || !isOnline}
                     title={!isOnline ? 'Requires internet' : undefined}
-                    className="flex-1 bg-purple-100 text-purple-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="flex-1 bg-primary/10 text-primary py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Re-score All
                   </button>
@@ -362,7 +362,7 @@ export default function ProfileCard({
                     onClick={() => handleReAnalyze('full')}
                     disabled={isReAnalyzing || !isOnline}
                     title={!isOnline ? 'Requires internet' : undefined}
-                    className="flex-1 bg-purple-100 text-purple-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="flex-1 bg-primary/10 text-primary py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Full Re-fetch
                   </button>

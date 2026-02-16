@@ -28,6 +28,7 @@ Enable any developer (human or AI agent) to:
 | Deployment | [deployment.md](./deployment.md) | Planned | [ADR 016](../ADR/016-vercel-deployment.md), [ADR 001](../ADR/001-tech-stack.md), [ADR 013](../ADR/013-persistent-strava-authentication.md) |
 | Live Walking Mode | [live-walking-mode.md](./live-walking-mode.md) | Implemented | [ADR 017](../ADR/017-live-walking-mode.md) |
 | Distance-to-Boundary Indicator | [distance-indicator.md](./distance-indicator.md) | Implemented | [ADR 002](../ADR/002-exclusive-activity-matching.md), [ADR 003](../ADR/003-multi-metric-completion-scoring.md), [ADR 017](../ADR/017-live-walking-mode.md) |
+| Branding & Visual Identity | [branding-visual-identity.md](./branding-visual-identity.md) | Planned | [ADR 018](../ADR/018-branding-design-system.md) |
 
 ## Document Template
 

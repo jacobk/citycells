@@ -18,6 +18,15 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Branding & Visual Identity**: Professional design system with Shadcn/UI and custom brand colors. (PRD 001 §3.14, ADR 018, TICKET-020, TICKET-021)
+  - Key files: `src/app/globals.css`, `src/app/layout.tsx`, `src/components/Brand/`, `src/components/ui/button.tsx`, `components.json`
+  - Brand colors: Primary (Violet #7c3aed), Accent (Fuchsia #d946ef), CSS variables for theming
+  - Full dark mode support with system preference detection
+  - Brand assets: Logo (SVG), Favicon suite (ico, svg, png), PWA manifest
+  - `Brand` component for consistent logo rendering (full/isotype variants)
+  - Shadcn/UI Button component + `cn()` utility for class merging
+  - Updated ProfileCard, HamburgerMenu, AreaDetailsPanel to use brand primary color
+  - Metadata: "CityCells - Malmö Explorer" title, proper favicon links, Open Graph tags
 - **Distance-to-Boundary Indicator**: Real-time distance feedback during live walking mode. (PRD 001 §3.13, ADR 002, ADR 003, TICKET-018)
   - Key files: `src/lib/geo-distance.ts` (NEW), `src/components/WalkingMode/WalkingMode.tsx`, `src/components/WalkingMode/WalkingControls.tsx`, `src/components/WalkingMode/LivePositionMarker.tsx`
   - Status bar shows distance in meters: "✓ On track (12m)" (green) when within 25m tolerance, "23m from boundary" (neutral) when outside

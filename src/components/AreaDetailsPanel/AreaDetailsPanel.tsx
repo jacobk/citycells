@@ -391,10 +391,10 @@ export default function AreaDetailsPanel({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
                 <span className="flex-1">Show Walk Route</span>
-                {/* WHY: Visual toggle indicator */}
+                {/* WHY: Visual toggle indicator - uses primary brand color */}
                 <div 
                   className={`w-8 h-5 rounded-full transition-colors ${
-                    showRoute ? 'bg-green-500' : 'bg-gray-300'
+                    showRoute ? 'bg-primary' : 'bg-gray-300'
                   }`}
                 >
                   <div 
@@ -415,12 +415,12 @@ export default function AreaDetailsPanel({
         )}
 
         {/* Start Walking Button (ADR 017) - fixed position above scrollable content */}
-        {/* WHY: Prominent green button matches navigation app conventions (user preference) */}
+        {/* WHY: Primary brand color for CTA creates cohesive brand experience (ADR 018) */}
         {onStartWalking && details.geometry && (
           <div className="px-4 py-3 border-t border-gray-100 shrink-0">
             <button
               onClick={() => onStartWalking(details.areaId)}
-              className="w-full bg-green-600 hover:bg-green-700 active:bg-green-800 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+              className="w-full bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
             >
               {/* Walking person icon */}
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -671,7 +671,7 @@ export default function AreaDetailsPanel({
                           <div className="relative" data-walk-menu>
                             {reAnalyzingWalkId === walk.id ? (
                               <div className="w-6 h-6 flex items-center justify-center">
-                                <svg className="w-4 h-4 animate-spin text-purple-600" fill="none" viewBox="0 0 24 24">
+                                <svg className="w-4 h-4 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                 </svg>

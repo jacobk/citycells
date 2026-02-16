@@ -1,28 +1,192 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =============================================================================
+   CityCells Design System - Brand Colors & Theming
+   
+   WHY: Centralized CSS variables enable consistent branding across the app.
+   Using oklch color space for better color manipulation and accessibility.
+   
+   Brand Colors (from ADR 018):
+   - Primary: Violet #7c3aed (oklch 0.541 0.234 293.4)
+   - Accent: Fuchsia #d946ef (oklch 0.667 0.295 328.4)
+   - Secondary: Slate #f1f5f9
+   - Destructive: Red #ef4444
+   
+   @see docs/ADR/018-branding-design-system.md
+   ============================================================================= */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base colors */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  
+  /* Card/Panel backgrounds */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  
+  /* WHY: Primary is Violet #7c3aed - matches Platinum tier for aspirational branding */
+  --primary: oklch(0.541 0.234 293.4);
+  --primary-foreground: oklch(0.985 0 0);
+  
+  /* Secondary: Slate-100 for subtle backgrounds */
+  --secondary: oklch(0.968 0.003 264.5);
+  --secondary-foreground: oklch(0.205 0 0);
+  
+  /* Muted: For disabled/subtle states */
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  
+  /* WHY: Accent is Fuchsia #d946ef - vibrant secondary action color */
+  --accent: oklch(0.667 0.295 328.4);
+  --accent-foreground: oklch(0.985 0 0);
+  
+  /* Destructive: Red for dangerous actions */
+  --destructive: oklch(0.577 0.245 27.3);
+  --destructive-foreground: oklch(0.985 0 0);
+  
+  /* Borders and inputs */
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.541 0.234 293.4); /* Primary color for focus rings */
+  
+  /* Chart colors (violet-fuchsia gradient) */
+  --chart-1: oklch(0.541 0.234 293.4); /* Violet */
+  --chart-2: oklch(0.627 0.265 303.9); /* Purple */
+  --chart-3: oklch(0.667 0.295 328.4); /* Fuchsia */
+  --chart-4: oklch(0.769 0.188 70.08);  /* Amber */
+  --chart-5: oklch(0.696 0.17 162.48);  /* Teal */
+  
+  /* Radius tokens */
+  --radius: 0.625rem;
+  
+  /* Sidebar (for future use) */
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.541 0.234 293.4);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.541 0.234 293.4);
 }
+
+/* =============================================================================
+   Dark Mode Theme
+   WHY: Proper dark mode improves accessibility and user preference support.
+   Uses lighter variants of brand colors for visibility on dark backgrounds.
+   ============================================================================= */
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  
+  --card: oklch(0.178 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.178 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  
+  /* WHY: Lighter violet in dark mode for visibility (#a78bfa) */
+  --primary: oklch(0.746 0.181 293.4);
+  --primary-foreground: oklch(0.145 0 0);
+  
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  
+  /* WHY: Lighter fuchsia in dark mode (#e879f9) */
+  --accent: oklch(0.784 0.238 328.4);
+  --accent-foreground: oklch(0.145 0 0);
+  
+  --destructive: oklch(0.637 0.237 25.3);
+  --destructive-foreground: oklch(0.985 0 0);
+  
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.746 0.181 293.4);
+  
+  /* Chart colors (brighter for dark mode) */
+  --chart-1: oklch(0.746 0.181 293.4);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.746 0.181 293.4);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.746 0.181 293.4);
+}
+
+/* =============================================================================
+   Tailwind Theme Integration
+   WHY: Maps CSS variables to Tailwind utility classes (bg-primary, text-accent, etc.)
+   ============================================================================= */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* =============================================================================
+   Base Styles
+   ============================================================================= */
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
 }
 
 /* =============================================================================
@@ -33,4 +197,9 @@ body {
 
 .leaflet-container .leaflet-tile-pane {
   filter: grayscale(100%) brightness(1.1) !important;
+}
+
+/* Dark mode map adjustments */
+.dark .leaflet-container .leaflet-tile-pane {
+  filter: grayscale(100%) brightness(0.8) invert(1) !important;
 }

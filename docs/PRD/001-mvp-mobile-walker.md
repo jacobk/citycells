@@ -53,6 +53,12 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want a clear visual indicator when I'm within the 25m tolerance zone, so I know I'm walking correctly. (Added: 2026-02-16)
 *   **As a user,** I want my position marker to change color based on my distance from the boundary, so I can see at a glance whether I'm on track. (Added: 2026-02-16)
 
+### Branding Stories (Added: 2026-02-16)
+*   **As a user,** I want the app to have a professional and sleek look so that I trust the quality of the service.
+*   **As a user,** I want to see a recognizable logo and app icon (favicon) so I can easily identify the app in my browser tabs and home screen.
+*   **As a user,** I want the app to have a consistent color scheme and typography that makes it pleasant to use.
+
+
 ### Subarea Visual Context Stories (Added: 2026-02-07)
 *   **As a user,** I want to see a mini-map of the selected subarea in the details panel, so I can study the area and plan my walking route.
 *   **As a user,** I want to see streets and paths in the mini-map, so I can find walkable routes along the boundary.
@@ -594,10 +600,34 @@ Real-time feedback showing walker's distance from the boundary line.
 *   Recalculate on each GPS position update
 
 #### Exit Behavior
-
 *   Tap exit button → Confirm if tracking > 1 minute
 *   Return to Area Details Panel for the same sub-area
 *   Clear Watch and release Wake Lock on exit
+
+### 3.14 Branding & Visual Identity (Added: 2026-02-16)
+
+*Reference: ADR 018 (Modern Branding & Design System)*
+
+Establish a cohesive visual identity and professional polish.
+
+#### Core Assets
+*   **Logo:** Modern, geometric logo representing "CityCells" (sub-areas/cells).
+*   **Isotype:** Simplified icon version for smaller contexts.
+*   **Favicon:** Full suite of favicons for Web (ICO, SVG) and Mobile (Apple Touch Icon, Android Manifest).
+*   **Meta Tags:** Updated `<title>` (CityCells - Malmö Explorer) and Open Graph descriptions.
+
+#### Design System (Shadcn/UI + Tailwind)
+*   **Typography:** Use `Geist Sans` or `Inter` for clean, modern readability.
+*   **Color Palette:**
+    *   **Primary:** Deep violet/purple (aligns with Platinum tier brand).
+    *   **Background:** Clean white/slate-50 for light mode, rich dark slate for potential dark mode.
+    *   **Accent:** Vibrant pink/magenta (from tier gradient).
+*   **Components:** Use `shadcn/ui` base components for consistent buttons, dialogs, cards, and inputs.
+*   **Radius:** Subtle rounding (e.g., `rounded-md` or `rounded-lg`) for a friendly but modern feel.
+
+#### UX Polish
+*   **Transitions:** Smooth micro-interactions for hover states and panel transitions.
+*   **Loading States:** Skeleton loaders or branded spinners instead of generic loading text.
 
 ## 4. Non-Functional Requirements
 

@@ -231,6 +231,19 @@
 - [x] Add withinTolerance prop to LivePositionMarker.tsx (color change)
 - [x] Update feature docs (`docs/features/distance-indicator.md`)
 
+## Phase 6.5: Branding & Visual Identity (ADR 018)
+*Reference: [ADR 018](docs/ADR/018-branding-design-system.md) | [TICKET-020](docs/tickets/020-branding-visual-identity.md) | [TICKET-021](docs/tickets/021-design-system-implementation.md)*
+
+- [x] Create brand assets (logo, favicon suite) - TICKET-020
+- [x] Install Shadcn/UI dependencies
+- [x] Configure CSS design tokens (primary/accent/destructive colors)
+- [x] Implement dark mode support
+- [x] Update app metadata (title, description, favicon links)
+- [x] Create Brand component (`src/components/Brand/`)
+- [x] Add Shadcn Button component
+- [x] Update components to use brand colors (ProfileCard, HamburgerMenu, AreaDetailsPanel)
+- [x] Create feature documentation (`docs/features/branding-visual-identity.md`)
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing
