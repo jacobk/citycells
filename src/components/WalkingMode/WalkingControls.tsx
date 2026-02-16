@@ -69,7 +69,7 @@ export default function WalkingControls({
           {/* Exit Button */}
           <button
             onClick={onExit}
-            className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-gray-700 hover:bg-white active:bg-gray-100 transition-colors"
+            className="w-12 h-12 bg-card/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-foreground hover:bg-card active:bg-secondary transition-colors"
             aria-label="Exit walking mode"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,7 +117,7 @@ export default function WalkingControls({
         {/* Center on Me Button */}
         <button
           onClick={onCenterOnMe}
-          className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-blue-600 hover:bg-white active:bg-gray-100 transition-colors"
+          className="w-12 h-12 bg-card/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-card active:bg-secondary transition-colors"
           aria-label="Center on my position"
         >
           <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -128,7 +128,7 @@ export default function WalkingControls({
         {/* Zoom In Button */}
         <button
           onClick={onZoomIn}
-          className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-gray-700 hover:bg-white active:bg-gray-100 transition-colors"
+          className="w-12 h-12 bg-card/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-foreground hover:bg-card active:bg-secondary transition-colors"
           aria-label="Zoom in"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,7 +139,7 @@ export default function WalkingControls({
         {/* Zoom Out Button */}
         <button
           onClick={onZoomOut}
-          className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-gray-700 hover:bg-white active:bg-gray-100 transition-colors"
+          className="w-12 h-12 bg-card/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-foreground hover:bg-card active:bg-secondary transition-colors"
           aria-label="Zoom out"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

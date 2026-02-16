@@ -30,28 +30,28 @@ interface PanelBreadcrumbsProps {
 export default function PanelBreadcrumbs({ areaName, onBackToList }: PanelBreadcrumbsProps) {
   return (
     <nav 
-      className="px-4 py-2 bg-gray-50 border-b border-gray-100"
+      className="px-4 py-2 bg-secondary border-b border-border"
       aria-label="Breadcrumb"
     >
       <ol className="flex items-center text-sm">
         <li>
           <button
             onClick={onBackToList}
-            className="text-orange-600 hover:text-orange-700 hover:underline font-medium cursor-pointer"
+            className="text-primary hover:text-primary/80 hover:underline font-medium cursor-pointer"
           >
             Areas
           </button>
         </li>
         <li className="flex items-center">
           <svg 
-            className="w-4 h-4 text-gray-400 mx-1" 
+            className="w-4 h-4 text-muted-foreground mx-1" 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span className="text-gray-700 truncate max-w-[200px]" title={areaName}>
+          <span className="text-foreground truncate max-w-[200px]" title={areaName}>
             {areaName}
           </span>
         </li>

@@ -57,6 +57,7 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want the app to have a professional and sleek look so that I trust the quality of the service.
 *   **As a user,** I want to see a recognizable logo and app icon (favicon) so I can easily identify the app in my browser tabs and home screen.
 *   **As a user,** I want the app to have a consistent color scheme and typography that makes it pleasant to use.
+*   **As a user,** I want to toggle between light, dark, and system theme modes so I can use my preferred visual style regardless of my device settings. (Added: 2026-02-16)
 
 
 ### Subarea Visual Context Stories (Added: 2026-02-07)
@@ -624,6 +625,12 @@ Establish a cohesive visual identity and professional polish.
     *   **Accent:** Vibrant pink/magenta (from tier gradient).
 *   **Components:** Use `shadcn/ui` base components for consistent buttons, dialogs, cards, and inputs.
 *   **Radius:** Subtle rounding (e.g., `rounded-md` or `rounded-lg`) for a friendly but modern feel.
+
+#### Dark Mode Toggle (Added: 2026-02-16)
+*   **Location:** Hamburger menu, alongside existing toggles.
+*   **Options:** Three-way selector: System (default) / Light / Dark.
+*   **Persistence:** User preference saved to localStorage, persists across sessions.
+*   **Behavior:** "System" follows `prefers-color-scheme`, manual selection overrides.
 
 #### UX Polish
 *   **Transitions:** Smooth micro-interactions for hover states and panel transitions.

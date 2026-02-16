@@ -109,20 +109,20 @@ export default function AreaTooltip({ data, position, onClose }: AreaTooltipProp
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-[1000] bg-white rounded-lg shadow-xl border border-gray-200 p-3 min-w-[200px] max-w-[280px] animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-[1000] bg-card rounded-lg shadow-xl border border-border p-3 min-w-[200px] max-w-[280px] animate-in fade-in zoom-in-95 duration-150"
       style={{
         left: adjustedPosition.x,
         top: adjustedPosition.y,
       }}
     >
       {/* Header: Area Name */}
-      <div className="font-bold text-gray-900 text-sm mb-1 pr-6">
+      <div className="font-bold text-foreground text-sm mb-1 pr-6">
         {data.areaName}
       </div>
 
       {/* WHY: Circumference with walk time shown for all areas per ADR 012 / PRD 3.5 */}
       {data.circumferenceMeters != null && (
-        <div className="text-xs text-gray-500 mb-2">
+        <div className="text-xs text-muted-foreground mb-2">
           {formatCircumferenceWithTime(data.circumferenceMeters)}
         </div>
       )}
@@ -130,7 +130,7 @@ export default function AreaTooltip({ data, position, onClose }: AreaTooltipProp
       {/* Close button (mobile) */}
       <button
         onClick={onClose}
-        className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 p-1"
+        className="absolute top-2 right-2 text-muted-foreground hover:text-foreground p-1"
         aria-label="Close tooltip"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,29 +148,29 @@ export default function AreaTooltip({ data, position, onClose }: AreaTooltipProp
             <span className="w-1.5 h-1.5 rounded-full bg-white/50" />
             {tierName}
           </span>
-          <span className="text-sm text-gray-600 font-medium">
+          <span className="text-sm text-muted-foreground font-medium">
             {scorePercent}%
           </span>
         </div>
       ) : (
-        <div className="text-xs text-gray-400 italic mb-2">
+        <div className="text-xs text-muted-foreground italic mb-2">
           Not yet completed
         </div>
       )}
 
       {/* Walk Count */}
       {data.walkCount > 0 && (
-        <div className="text-xs text-gray-500 mb-2">
+        <div className="text-xs text-muted-foreground mb-2">
           {data.walkCount} {data.walkCount === 1 ? 'walk' : 'walks'} matched
         </div>
       )}
 
       {/* Best Walk Link */}
       {data.bestWalkId && (
-        <div className="border-t border-gray-100 pt-2 mt-2">
-          <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Best Walk</div>
+        <div className="border-t border-border pt-2 mt-2">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Best Walk</div>
           {data.bestWalkName && (
-            <div className="text-xs text-gray-700 font-medium mb-1">{data.bestWalkName}</div>
+            <div className="text-xs text-foreground font-medium mb-1">{data.bestWalkName}</div>
           )}
           {/* WHY: Use "View on Strava" text format with exact Strava orange (#FC5200) per Strava API Brand Guidelines */}
           <a
@@ -187,7 +187,7 @@ export default function AreaTooltip({ data, position, onClose }: AreaTooltipProp
             View on Strava
           </a>
           {data.bestWalkDate && (
-            <div className="text-[10px] text-gray-400 mt-0.5">
+            <div className="text-[10px] text-muted-foreground mt-0.5">
               {data.bestWalkDate}
             </div>
           )}

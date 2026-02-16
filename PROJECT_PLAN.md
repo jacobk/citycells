@@ -243,6 +243,8 @@
 - [x] Add Shadcn Button component
 - [x] Update components to use brand colors (ProfileCard, HamburgerMenu, AreaDetailsPanel)
 - [x] Create feature documentation (`docs/features/branding-visual-identity.md`)
+- [x] Add dark mode toggle to Hamburger Menu (System/Light/Dark) - TICKET-022
+- [x] Implement theme persistence via localStorage - TICKET-022
 
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI

@@ -156,9 +156,10 @@ export default function ProfileCard({
       className="fixed top-4 right-4 z-[400]"
     >
       {/* Collapsed state: avatar button */}
+      {/* WHY: Using design system tokens (bg-card, border-border) for dark mode support */}
       <button
         onClick={onToggle}
-        className={`w-12 h-12 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all duration-200 cursor-pointer overflow-hidden ${
+        className={`w-12 h-12 bg-card/95 backdrop-blur-sm rounded-full shadow-lg border border-border flex items-center justify-center hover:bg-secondary transition-all duration-200 cursor-pointer overflow-hidden ${
           isExpanded ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
         }`}
         aria-label={isExpanded ? 'Close profile' : 'Open profile'}
@@ -171,18 +172,19 @@ export default function ProfileCard({
             className="w-full h-full rounded-full object-cover"
           />
         ) : loading ? (
-          <div className="w-6 h-6 bg-gray-200 rounded-full animate-pulse" />
+          <div className="w-6 h-6 bg-muted rounded-full animate-pulse" />
         ) : (
           // User icon for logged out state
-          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
         )}
       </button>
 
       {/* Expanded state: full card */}
+      {/* WHY: Using design system tokens for dark mode support */}
       <div 
-        className={`absolute top-0 right-0 z-[450] bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg w-72 border border-gray-100 transition-all duration-300 origin-top-right ${
+        className={`absolute top-0 right-0 z-[450] bg-card/95 backdrop-blur-sm p-4 rounded-xl shadow-lg w-72 border border-border transition-all duration-300 origin-top-right ${
           isExpanded 
             ? 'opacity-100 scale-100 pointer-events-auto' 
             : 'opacity-0 scale-95 pointer-events-none'
@@ -191,7 +193,7 @@ export default function ProfileCard({
         {/* Close button */}
         <button
           onClick={onToggle}
-          className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+          className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           aria-label="Close profile"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,29 +201,29 @@ export default function ProfileCard({
           </svg>
         </button>
 
-        <h1 className="font-bold text-xl text-gray-800 mb-1 pr-6">CityCells: Malmö</h1>
+        <h1 className="font-bold text-xl text-foreground mb-1 pr-6">CityCells: Malmö</h1>
         
         {loading ? (
-          <div className="text-sm text-gray-500 animate-pulse">Checking Strava...</div>
+          <div className="text-sm text-muted-foreground animate-pulse">Checking Strava...</div>
         ) : athlete ? (
           <div>
             <div className="flex items-center gap-3 mb-3">
-              <img src={athlete.profile} alt="Profile" className="w-10 h-10 rounded-full border border-gray-200" />
+              <img src={athlete.profile} alt="Profile" className="w-10 h-10 rounded-full border border-border" />
               <div>
-                <p className="text-sm font-semibold text-gray-800">{athlete.firstname} {athlete.lastname}</p>
-                <p className="text-xs text-green-600 font-medium">{activitiesCount} Walks Found</p>
+                <p className="text-sm font-semibold text-foreground">{athlete.firstname} {athlete.lastname}</p>
+                <p className="text-xs text-green-600 dark:text-green-400 font-medium">{activitiesCount} Walks Found</p>
               </div>
             </div>
             
             {/* Progress Section */}
             <div className="mb-4">
-              <div className="text-xs text-gray-500 mb-1 flex justify-between">
+              <div className="text-xs text-muted-foreground mb-1 flex justify-between">
                 <span>Progress</span>
                 <span>{progress.completedCount} / {progress.totalAreas > 0 ? progress.totalAreas : '...'}</span>
               </div>
               
               {/* WHY: Multi-segment progress bar showing tier breakdown */}
-              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex">
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden flex">
                 {progress.tierCounts.platinum > 0 && (
                   <div 
                     className="h-2 transition-all duration-1000"
@@ -275,31 +277,31 @@ export default function ProfileCard({
                   {progress.tierCounts.platinum > 0 && (
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('platinum') }} />
-                      <span className="text-gray-600">{progress.tierCounts.platinum}</span>
+                      <span className="text-muted-foreground">{progress.tierCounts.platinum}</span>
                     </div>
                   )}
                   {progress.tierCounts.gold > 0 && (
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('gold') }} />
-                      <span className="text-gray-600">{progress.tierCounts.gold}</span>
+                      <span className="text-muted-foreground">{progress.tierCounts.gold}</span>
                     </div>
                   )}
                   {progress.tierCounts.silver > 0 && (
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('silver') }} />
-                      <span className="text-gray-600">{progress.tierCounts.silver}</span>
+                      <span className="text-muted-foreground">{progress.tierCounts.silver}</span>
                     </div>
                   )}
                   {progress.tierCounts.bronze > 0 && (
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('bronze') }} />
-                      <span className="text-gray-600">{progress.tierCounts.bronze}</span>
+                      <span className="text-muted-foreground">{progress.tierCounts.bronze}</span>
                     </div>
                   )}
                   {progress.tierCounts.potato > 0 && (
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getTierColor('potato') }} />
-                      <span className="text-gray-600">{progress.tierCounts.potato}</span>
+                      <span className="text-muted-foreground">{progress.tierCounts.potato}</span>
                     </div>
                   )}
                 </div>
@@ -309,11 +311,11 @@ export default function ProfileCard({
             {/* WHY: Re-analyze section per ADR 011 and PRD 3.10
                 Two modes: re-score (fast, uses cached GPS) and full (re-fetches from Strava) */}
             {onReAnalyze && progress.completedCount > 0 && (
-              <div className="mb-4 pt-3 border-t border-gray-100">
-                <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+              <div className="mb-4 pt-3 border-t border-border">
+                <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
                   <span>Re-analyze Walks</span>
                   <span 
-                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 text-[9px] text-gray-400 cursor-help"
+                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-border text-[9px] text-muted-foreground cursor-help"
                     title="Re-score: Fast, uses cached GPS data. Use after app updates.&#10;Full: Re-fetches GPS from Strava. Use if you edited activities."
                   >
                     ?
@@ -322,8 +324,8 @@ export default function ProfileCard({
 
                 {/* Re-analysis progress indicator */}
                 {isReAnalyzing && reAnalysisProgress && (
-                  <div className="bg-blue-50 rounded-lg p-2 mb-2 text-xs">
-                    <div className="flex items-center gap-2 text-blue-700">
+                  <div className="bg-blue-500/10 dark:bg-blue-500/20 rounded-lg p-2 mb-2 text-xs">
+                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
                       <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -333,7 +335,7 @@ export default function ProfileCard({
                       </span>
                     </div>
                     {reAnalysisProgress.currentWalkName && (
-                      <div className="text-blue-600 truncate mt-1 pl-6">
+                      <div className="text-blue-600 dark:text-blue-400 truncate mt-1 pl-6">
                         {reAnalysisProgress.currentWalkName}
                       </div>
                     )}
@@ -342,7 +344,7 @@ export default function ProfileCard({
 
                 {/* Error message */}
                 {reAnalyzeError && (
-                  <div className="bg-red-50 text-red-700 rounded-lg p-2 mb-2 text-xs">
+                  <div className="bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-400 rounded-lg p-2 mb-2 text-xs">
                     {reAnalyzeError}
                   </div>
                 )}
@@ -367,9 +369,9 @@ export default function ProfileCard({
                     Full Re-fetch
                   </button>
                 </div>
-                <div className="text-[10px] text-gray-400 mt-1.5 leading-tight">
+                <div className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
                   {!isOnline ? (
-                    <span className="text-amber-600">Offline — re-analysis unavailable</span>
+                    <span className="text-amber-600 dark:text-amber-400">Offline — re-analysis unavailable</span>
                   ) : (
                     'Re-score: Fast, uses cached GPS. Full: Re-fetches from Strava.'
                   )}
@@ -379,13 +381,13 @@ export default function ProfileCard({
 
             {/* WHY: Data management section - force refresh and clear data (TICKET-016) */}
             {onForceRefresh && (
-              <div className="mb-4 pt-3 border-t border-gray-100">
-                <div className="text-xs text-gray-500 mb-2">Sync Activities</div>
+              <div className="mb-4 pt-3 border-t border-border">
+                <div className="text-xs text-muted-foreground mb-2">Sync Activities</div>
                 <button
                   onClick={handleForceRefresh}
                   disabled={isRefreshing || !isOnline}
                   title={!isOnline ? 'Requires internet' : 'Re-fetch all activities from Strava'}
-                  className="w-full bg-blue-100 text-blue-700 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-blue-500/20 dark:hover:bg-blue-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                 >
                   {isRefreshing ? (
                     <>
@@ -399,9 +401,9 @@ export default function ProfileCard({
                     'Force Refresh All Activities'
                   )}
                 </button>
-                <div className="text-[10px] text-gray-400 mt-1.5 leading-tight">
+                <div className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
                   {!isOnline ? (
-                    <span className="text-amber-600">Offline — sync unavailable</span>
+                    <span className="text-amber-600 dark:text-amber-400">Offline — sync unavailable</span>
                   ) : (
                     'Re-fetch all activities from Strava (ignores incremental sync)'
                   )}
@@ -412,7 +414,7 @@ export default function ProfileCard({
             <div className="flex gap-2">
               <button 
                 onClick={onLogout}
-                className="flex-1 bg-gray-100 text-gray-600 py-2 px-4 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors cursor-pointer"
+                className="flex-1 bg-secondary text-secondary-foreground py-2 px-4 rounded-lg font-medium text-sm hover:bg-muted transition-colors cursor-pointer"
               >
                 Sign Out
               </button>
@@ -421,20 +423,20 @@ export default function ProfileCard({
             {/* WHY: Clear all data button with confirmation (TICKET-016) 
                 Destructive action - requires confirmation to prevent accidental data loss */}
             {onClearData && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="mt-3 pt-3 border-t border-border">
                 {!showClearConfirm ? (
                   <button
                     onClick={() => setShowClearConfirm(true)}
-                    className="w-full text-red-600 text-xs hover:text-red-700 transition-colors cursor-pointer py-1"
+                    className="w-full text-red-600 dark:text-red-400 text-xs hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer py-1"
                   >
                     Clear All Data
                   </button>
                 ) : (
-                  <div className="bg-red-50 rounded-lg p-3">
-                    <p className="text-xs text-red-800 font-medium mb-2">
+                  <div className="bg-red-500/10 dark:bg-red-500/20 rounded-lg p-3">
+                    <p className="text-xs text-red-800 dark:text-red-300 font-medium mb-2">
                       Delete all your walks and analysis data?
                     </p>
-                    <p className="text-[10px] text-red-600 mb-3">
+                    <p className="text-[10px] text-red-600 dark:text-red-400 mb-3">
                       This will remove all synced activities, scores, and progress. 
                       Your Strava connection will be preserved.
                     </p>
@@ -442,7 +444,7 @@ export default function ProfileCard({
                       <button
                         onClick={() => setShowClearConfirm(false)}
                         disabled={isClearing}
-                        className="flex-1 bg-white text-gray-600 py-1.5 px-3 rounded text-xs font-medium hover:bg-gray-100 transition-colors border border-gray-200 cursor-pointer disabled:opacity-50"
+                        className="flex-1 bg-card text-muted-foreground py-1.5 px-3 rounded text-xs font-medium hover:bg-secondary transition-colors border border-border cursor-pointer disabled:opacity-50"
                       >
                         Cancel
                       </button>
@@ -471,7 +473,7 @@ export default function ProfileCard({
           </div>
         ) : (
           <div>
-            <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+            <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
               Track your mission to walk around every sub-area of Malmö.
             </p>
             <button 

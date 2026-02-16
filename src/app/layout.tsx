@@ -61,6 +61,27 @@ export const viewport: Viewport = {
   ],
 };
 
+/**
+ * Inline script to apply theme before first paint (prevents FOUC).
+ * WHY: This script runs synchronously before React hydration, ensuring
+ * the correct theme is applied immediately and avoiding a flash of the wrong theme.
+ * 
+ * @see docs/tickets/022-dark-mode-toggle.md
+ * @see docs/PRD/001-mvp-mobile-walker.md Section 3.14
+ */
+const themeScript = `
+(function() {
+  try {
+    var theme = localStorage.getItem('citycells-theme') || 'system';
+    var isDark = theme === 'dark' || 
+      (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -68,6 +89,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* WHY: Inline script prevents flash of wrong theme (FOUC) by applying 
+            .dark class before React hydrates. Must be in <head> to run early. */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

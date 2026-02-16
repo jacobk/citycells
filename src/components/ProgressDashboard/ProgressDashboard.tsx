@@ -80,17 +80,18 @@ export default function ProgressDashboard({
       />
 
       {/* Drawer */}
+      {/* WHY: Using design system tokens for dark mode support */}
       <div
-        className={`fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-[501] transform transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-full w-80 bg-card shadow-2xl z-[501] transform transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Progress Dashboard</h2>
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-lg font-bold text-foreground">Progress Dashboard</h2>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 -mr-2"
+            className="p-2 text-muted-foreground hover:text-foreground -mr-2"
             aria-label="Close dashboard"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,28 +111,28 @@ export default function ProgressDashboard({
                 <img 
                   src={athleteProfile} 
                   alt={athleteName}
-                  className="w-12 h-12 rounded-full border border-gray-200"
+                  className="w-12 h-12 rounded-full border border-border"
                 />
               )}
               <div>
-                <div className="font-semibold text-gray-900">{athleteName}</div>
-                <div className="text-sm text-gray-500">Explorer</div>
+                <div className="font-semibold text-foreground">{athleteName}</div>
+                <div className="text-sm text-muted-foreground">Explorer</div>
               </div>
             </div>
           )}
 
           {/* Overall Progress */}
-          <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4">
-            <div className="text-sm text-gray-500 mb-1">Overall Progress</div>
-            <div className="text-3xl font-bold text-gray-900 mb-2">
+          <div className="bg-secondary rounded-xl p-4">
+            <div className="text-sm text-muted-foreground mb-1">Overall Progress</div>
+            <div className="text-3xl font-bold text-foreground mb-2">
               {percentage.toFixed(1)}%
             </div>
-            <div className="text-sm text-gray-600 mb-3">
+            <div className="text-sm text-muted-foreground mb-3">
               {completedCount} of {totalAreas} areas completed
             </div>
             
             {/* Progress bar */}
-            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-1000"
                 style={{ width: `${percentage}%` }}
@@ -139,7 +140,7 @@ export default function ProgressDashboard({
             </div>
             
             {remainingAreas > 0 && (
-              <div className="text-xs text-gray-500 mt-2">
+              <div className="text-xs text-muted-foreground mt-2">
                 {remainingAreas} areas remaining
               </div>
             )}
@@ -147,14 +148,14 @@ export default function ProgressDashboard({
 
           {/* Distance Progress (Ticket 012) */}
           {hasDistanceMetrics && (
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
-              <div className="text-sm text-gray-500 mb-1">Distance Progress</div>
-              <div className="text-sm text-gray-600 mb-3">
+            <div className="bg-blue-500/10 dark:bg-blue-500/20 rounded-xl p-4">
+              <div className="text-sm text-muted-foreground mb-1">Distance Progress</div>
+              <div className="text-sm text-muted-foreground mb-3">
                 Walked {formatDistance(theoreticalDistance!)} of {formatDistance(totalPerimeterDistance!)}
               </div>
               
               {/* Distance progress bar */}
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
+              <div className="w-full bg-muted rounded-full h-3 overflow-hidden mb-3">
                 <div
                   className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-1000"
                   style={{ width: `${distanceProgressPercentage}%` }}
@@ -163,14 +164,14 @@ export default function ProgressDashboard({
 
               {/* Secondary stats */}
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-gray-600">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Actual walked:</span>
                   <span className="font-medium">{formatDistance(actualWalkedDistance!)}</span>
                 </div>
                 {distanceDifference !== 0 && (
-                  <div className="flex justify-between text-gray-600">
+                  <div className="flex justify-between text-muted-foreground">
                     <span>Difference:</span>
-                    <span className={`font-medium ${distanceDifference > 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                    <span className={`font-medium ${distanceDifference > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
                       {distanceDifference > 0 ? '+' : ''}{formatDistance(Math.abs(distanceDifference))}
                     </span>
                   </div>
@@ -181,7 +182,7 @@ export default function ProgressDashboard({
 
           {/* Tier Breakdown */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Tier Breakdown</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Tier Breakdown</h3>
             <div className="space-y-3">
               {tiers.map(({ key, label }) => {
                 const count = tierCounts[key];
@@ -196,10 +197,10 @@ export default function ProgressDashboard({
                     />
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-700">{label}</span>
-                        <span className="text-sm font-medium text-gray-900">{count}</span>
+                        <span className="text-sm text-muted-foreground">{label}</span>
+                        <span className="text-sm font-medium text-foreground">{count}</span>
                       </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div className="w-full bg-muted rounded-full h-1.5">
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{ 
@@ -217,31 +218,31 @@ export default function ProgressDashboard({
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-gray-900">{completedCount}</div>
-              <div className="text-xs text-gray-500">Completed</div>
+            <div className="bg-secondary rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-foreground">{completedCount}</div>
+              <div className="text-xs text-muted-foreground">Completed</div>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-gray-900">{remainingAreas}</div>
-              <div className="text-xs text-gray-500">Remaining</div>
+            <div className="bg-secondary rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-foreground">{remainingAreas}</div>
+              <div className="text-xs text-muted-foreground">Remaining</div>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3 text-center">
+            <div className="bg-secondary rounded-lg p-3 text-center">
               <div className="text-2xl font-bold" style={{ color: getTierColor('platinum') }}>
                 {tierCounts.platinum}
               </div>
-              <div className="text-xs text-gray-500">Platinum</div>
+              <div className="text-xs text-muted-foreground">Platinum</div>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3 text-center">
+            <div className="bg-secondary rounded-lg p-3 text-center">
               <div className="text-2xl font-bold" style={{ color: getTierColor('gold') }}>
                 {tierCounts.gold}
               </div>
-              <div className="text-xs text-gray-500">Gold</div>
+              <div className="text-xs text-muted-foreground">Gold</div>
             </div>
           </div>
 
           {/* Motivation Message */}
           {completedCount > 0 && completedCount < totalAreas && (
-            <div className="text-center py-4 text-gray-600 text-sm">
+            <div className="text-center py-4 text-muted-foreground text-sm">
               {percentage < 25 && "Great start! Keep exploring Malmö! 🚶"}
               {percentage >= 25 && percentage < 50 && "You're making progress! 💪"}
               {percentage >= 50 && percentage < 75 && "Over halfway there! Amazing! 🎯"}
@@ -250,10 +251,10 @@ export default function ProgressDashboard({
           )}
           
           {completedCount === totalAreas && totalAreas > 0 && (
-            <div className="text-center py-4 bg-gradient-to-r from-orange-100 to-amber-100 rounded-xl">
+            <div className="text-center py-4 bg-orange-500/10 dark:bg-orange-500/20 rounded-xl">
               <div className="text-2xl mb-2">🏆</div>
-              <div className="font-bold text-gray-900">Malmö Conquered!</div>
-              <div className="text-sm text-gray-600">You&apos;ve walked every sub-area!</div>
+              <div className="font-bold text-foreground">Malmö Conquered!</div>
+              <div className="text-sm text-muted-foreground">You&apos;ve walked every sub-area!</div>
             </div>
           )}
         </div>

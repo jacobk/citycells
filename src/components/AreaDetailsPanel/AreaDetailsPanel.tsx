@@ -320,9 +320,10 @@ export default function AreaDetailsPanel({
       />
 
       {/* Panel */}
+      {/* WHY: Using design system tokens for dark mode support */}
       <div
         ref={panelRef}
-        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-[501] transform transition-[transform,height] duration-300 ease-out overflow-hidden flex flex-col ${
+        className={`fixed bottom-0 left-0 right-0 bg-card rounded-t-2xl z-[501] transform transition-[transform,height] duration-300 ease-out overflow-hidden flex flex-col ${
           isOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
         style={{ height: isOpen ? panelHeight : '0' }}
@@ -332,20 +333,20 @@ export default function AreaDetailsPanel({
         <div 
           className={`flex justify-center py-6 transition-opacity duration-150 ${
             isDragging ? 'cursor-grabbing opacity-70' : 'cursor-grab opacity-100'
-          } hover:bg-gray-100 active:opacity-70`}
+          } hover:bg-secondary active:opacity-70`}
           {...handlers}
         >
-          <div className="w-12 h-1 bg-gray-300 rounded-full" />
+          <div className="w-12 h-1 bg-muted-foreground/30 rounded-full" />
         </div>
 
         {/* Breadcrumbs (ADR 008) - shown when navigated from list */}
         {breadcrumbs}
 
         {/* Header */}
-        <div className="px-4 pb-3 border-b border-gray-100 shrink-0">
+        <div className="px-4 pb-3 border-b border-border shrink-0">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{details.areaName}</h2>
+              <h2 className="text-xl font-bold text-foreground">{details.areaName}</h2>
               {details.tier ? (
                 <div className="flex items-center gap-2 mt-1">
                   <span 
@@ -354,17 +355,17 @@ export default function AreaDetailsPanel({
                   >
                     {tierName}
                   </span>
-                  <span className="text-sm text-gray-600 font-medium">
+                  <span className="text-sm text-muted-foreground font-medium">
                     {(details.qualityScore * 100).toFixed(1)}% Quality Score
                   </span>
                 </div>
               ) : (
-                <div className="text-sm text-gray-400 italic mt-1">Not yet walked</div>
+                <div className="text-sm text-muted-foreground italic mt-1">Not yet walked</div>
               )}
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 -mr-2 -mt-1"
+              className="p-2 text-muted-foreground hover:text-foreground -mr-2 -mt-1"
               aria-label="Close panel"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -382,23 +383,23 @@ export default function AreaDetailsPanel({
             {details.walks.length > 0 && (
               <button
                 onClick={() => setShowRoute(!showRoute)}
-                className="w-full mb-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-3 cursor-pointer transition-colors shrink-0"
+                className="w-full mb-2 px-3 py-2 text-left text-sm text-foreground hover:bg-secondary rounded-lg flex items-center gap-3 cursor-pointer transition-colors shrink-0"
                 role="switch"
                 aria-checked={showRoute}
               >
                 {/* Route/Path icon */}
-                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
                 <span className="flex-1">Show Walk Route</span>
                 {/* WHY: Visual toggle indicator - uses primary brand color */}
                 <div 
                   className={`w-8 h-5 rounded-full transition-colors ${
-                    showRoute ? 'bg-primary' : 'bg-gray-300'
+                    showRoute ? 'bg-primary' : 'bg-muted'
                   }`}
                 >
                   <div 
-                    className={`w-4 h-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${
+                    className={`w-4 h-4 mt-0.5 rounded-full bg-card shadow-sm transition-transform ${
                       showRoute ? 'translate-x-3.5' : 'translate-x-0.5'
                     }`}
                   />
@@ -417,7 +418,7 @@ export default function AreaDetailsPanel({
         {/* Start Walking Button (ADR 017) - fixed position above scrollable content */}
         {/* WHY: Primary brand color for CTA creates cohesive brand experience (ADR 018) */}
         {onStartWalking && details.geometry && (
-          <div className="px-4 py-3 border-t border-gray-100 shrink-0">
+          <div className="px-4 py-3 border-t border-border shrink-0">
             <button
               onClick={() => onStartWalking(details.areaId)}
               className="w-full bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
@@ -433,12 +434,12 @@ export default function AreaDetailsPanel({
 
         {/* Area Stats Section (Ticket 015) - circumference with walk time, below mini-map */}
         {/* WHY: Shows same quick-reference stats from hover tooltip so users don't need to close panel to see them */}
-        <div className="px-4 py-3 border-t border-gray-100 shrink-0">
+        <div className="px-4 py-3 border-t border-border shrink-0">
           <div className="flex items-center justify-center gap-2 text-sm">
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
-            <span className="text-gray-600 font-medium">
+            <span className="text-muted-foreground font-medium">
               {formatCircumferenceWithTime(details.totalPerimeterMeters)}
             </span>
           </div>
@@ -450,98 +451,98 @@ export default function AreaDetailsPanel({
           {/* Score Breakdown (if completed) */}
           {details.tier && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Score Breakdown</h3>
-              <div className="bg-gray-50 rounded-lg overflow-hidden">
+              <h3 className="text-sm font-semibold text-foreground mb-2">Score Breakdown</h3>
+              <div className="bg-secondary rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3 font-medium text-gray-600">Metric</th>
-                      <th className="text-right py-2 px-3 font-medium text-gray-600">Value</th>
-                      <th className="text-right py-2 px-3 font-medium text-gray-600">Weight</th>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">Metric</th>
+                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Value</th>
+                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Weight</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-gray-100">
-                      <td className="py-2 px-3 text-gray-800">
+                    <tr className="border-b border-border">
+                      <td className="py-2 px-3 text-foreground">
                         <Link
                           href="/docs/metrics/border-traced"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           Border Traced
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 dark:border-blue-700 text-[10px] text-blue-500 dark:text-blue-400">
                             i
                           </span>
                         </Link>
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-900 font-medium">
+                      <td className="text-right py-2 px-3 text-foreground font-medium">
                         {(details.metrics.perimeterCoveragePercent * 100).toFixed(0)}%
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-500">
+                      <td className="text-right py-2 px-3 text-muted-foreground">
                         {(SCORE_WEIGHTS.perimeterCoverage * 100).toFixed(0)}%
                       </td>
                     </tr>
-                    <tr className="border-b border-gray-100">
-                      <td className="py-2 px-3 text-gray-800">
+                    <tr className="border-b border-border">
+                      <td className="py-2 px-3 text-foreground">
                         <Link
                           href="/docs/metrics/area-enclosed"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           Area Enclosed
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 dark:border-blue-700 text-[10px] text-blue-500 dark:text-blue-400">
                             i
                           </span>
                         </Link>
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-900 font-medium">
+                      <td className="text-right py-2 px-3 text-foreground font-medium">
                         {(details.metrics.areaCoveragePercent * 100).toFixed(0)}%
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-500">
+                      <td className="text-right py-2 px-3 text-muted-foreground">
                         {(SCORE_WEIGHTS.areaCoverage * 100).toFixed(0)}%
                       </td>
                     </tr>
-                    <tr className="border-b border-gray-100">
-                      <td className="py-2 px-3 text-gray-800">
+                    <tr className="border-b border-border">
+                      <td className="py-2 px-3 text-foreground">
                         <Link
                           href="/docs/metrics/path-precision"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           Path Precision
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 dark:border-blue-700 text-[10px] text-blue-500 dark:text-blue-400">
                             i
                           </span>
                         </Link>
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-900 font-medium">
+                      <td className="text-right py-2 px-3 text-foreground font-medium">
                         {details.metrics.rmseMeters.toFixed(1)}m
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-500">
+                      <td className="text-right py-2 px-3 text-muted-foreground">
                         {(SCORE_WEIGHTS.alignment * 100).toFixed(0)}%
                       </td>
                     </tr>
                     <tr>
-                      <td className="py-2 px-3 text-gray-800">
+                      <td className="py-2 px-3 text-foreground">
                         <Link
                           href="/docs/metrics/route-efficiency"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           Route Efficiency
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 text-[10px] text-blue-500">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 dark:border-blue-700 text-[10px] text-blue-500 dark:text-blue-400">
                             i
                           </span>
                         </Link>
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-900 font-medium">
+                      <td className="text-right py-2 px-3 text-foreground font-medium">
                         {(details.metrics.efficiency * 100).toFixed(0)}%
                       </td>
-                      <td className="text-right py-2 px-3 text-gray-500">
+                      <td className="text-right py-2 px-3 text-muted-foreground">
                         {(SCORE_WEIGHTS.efficiency * 100).toFixed(0)}%
                       </td>
                     </tr>
                   </tbody>
                   <tfoot>
-                    <tr className="bg-gray-100">
-                      <td className="py-2 px-3 font-semibold text-gray-900">Quality Score</td>
-                      <td className="text-right py-2 px-3 font-bold text-gray-900" colSpan={2}>
+                    <tr className="bg-muted">
+                      <td className="py-2 px-3 font-semibold text-foreground">Quality Score</td>
+                      <td className="text-right py-2 px-3 font-bold text-foreground" colSpan={2}>
                         {(details.qualityScore * 100).toFixed(1)}%
                       </td>
                     </tr>
@@ -553,47 +554,47 @@ export default function AreaDetailsPanel({
 
           {/* Area & Perimeter Info */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Area Information</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-2">Area Information</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">Total Area</div>
-                <div className="text-sm font-medium text-gray-900">{formatArea(details.totalAreaSqm)}</div>
+              <div className="bg-secondary rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1">Total Area</div>
+                <div className="text-sm font-medium text-foreground">{formatArea(details.totalAreaSqm)}</div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">Sub-area Circumference</div>
-                <div className="text-sm font-medium text-gray-900">{formatDistance(details.totalPerimeterMeters)}</div>
+              <div className="bg-secondary rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1">Sub-area Circumference</div>
+                <div className="text-sm font-medium text-foreground">{formatDistance(details.totalPerimeterMeters)}</div>
               </div>
               {details.tier && (
                 <>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Enclosed Area</div>
-                    <div className="text-sm font-medium text-gray-900">
+                  <div className="bg-secondary rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">Enclosed Area</div>
+                    <div className="text-sm font-medium text-foreground">
                       {formatArea(details.metrics.enclosedAreaSqm)}
                     </div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Total Walk Length</div>
-                    <div className="text-sm font-medium text-gray-900">
+                  <div className="bg-secondary rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">Total Walk Length</div>
+                    <div className="text-sm font-medium text-foreground">
                       {formatDistance(details.metrics.totalWalkLengthMeters)}
                     </div>
                   </div>
                   
                   {/* WHY: Show perimeter walked vs circumference to help understand coverage */}
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Perimeter Walked</div>
-                    <div className="text-sm font-medium text-gray-900">
+                  <div className="bg-secondary rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">Perimeter Walked</div>
+                    <div className="text-sm font-medium text-foreground">
                       {formatDistance(details.metrics.coveredDistanceMeters)}
                     </div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Walk vs Circumference</div>
+                  <div className="bg-secondary rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">Walk vs Circumference</div>
                     {(() => {
                       const diff = details.metrics.totalWalkLengthMeters - details.totalPerimeterMeters;
                       const isOver = diff > 0;
                       return (
-                        <div className={`text-sm font-medium ${isOver ? 'text-amber-600' : 'text-green-600'}`}>
+                        <div className={`text-sm font-medium ${isOver ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
                           {isOver ? '+' : ''}{formatDistance(Math.abs(diff))}
-                          <span className="text-xs text-gray-500 ml-1">
+                          <span className="text-xs text-muted-foreground ml-1">
                             {isOver ? '(detours)' : '(efficient)'}
                           </span>
                         </div>
@@ -601,16 +602,16 @@ export default function AreaDetailsPanel({
                     })()}
                   </div>
                   
-                  <div className="col-span-2 bg-gray-50 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Loop Status</div>
-                    <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <div className="col-span-2 bg-secondary rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">Loop Status</div>
+                    <div className="text-sm font-medium text-foreground flex items-center gap-2">
                       {details.metrics.isClosedLoop ? (
                         <>
-                          <span className="text-green-600">✓</span> Closed Loop
+                          <span className="text-green-600 dark:text-green-400">✓</span> Closed Loop
                         </>
                       ) : (
                         <>
-                          <span className="text-amber-600">⚠</span> Open ({formatDistance(details.metrics.loopGapMeters)} gap)
+                          <span className="text-amber-600 dark:text-amber-400">⚠</span> Open ({formatDistance(details.metrics.loopGapMeters)} gap)
                         </>
                       )}
                     </div>
@@ -623,7 +624,7 @@ export default function AreaDetailsPanel({
           {/* Walk History */}
           {details.walks.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              <h3 className="text-sm font-semibold text-foreground mb-2">
                 Walk History ({details.walks.length})
               </h3>
               <div className="space-y-2">
@@ -633,16 +634,16 @@ export default function AreaDetailsPanel({
                   <div 
                     key={walk.id} 
                     onClick={() => setSelectedWalkId(walk.id)}
-                    className={`bg-gray-50 rounded-lg p-3 cursor-pointer transition-colors hover:bg-gray-100 ${
-                      walk.isBest ? 'ring-2 ring-orange-200' : ''
+                    className={`bg-secondary rounded-lg p-3 cursor-pointer transition-colors hover:bg-muted ${
+                      walk.isBest ? 'ring-2 ring-orange-200 dark:ring-orange-700' : ''
                     } ${
-                      isSelected ? 'ring-2 ring-blue-500' : ''
+                      isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         {walk.name && (
-                          <div className="text-sm font-medium text-gray-800 mb-1">{walk.name}</div>
+                          <div className="text-sm font-medium text-foreground mb-1">{walk.name}</div>
                         )}
                         {/* WHY: Use "View on Strava" text format with exact Strava orange (#FC5200) per Strava API Brand Guidelines */}
                         <a
@@ -656,12 +657,12 @@ export default function AreaDetailsPanel({
                           View on Strava
                         </a>
                         {walk.date && (
-                          <div className="text-xs text-gray-500 mt-0.5">{walk.date}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{walk.date}</div>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {walk.isBest && (
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                          <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full font-medium">
                             Best
                           </span>
                         )}
@@ -682,7 +683,7 @@ export default function AreaDetailsPanel({
                                   e.stopPropagation();
                                   setOpenWalkMenuId(openWalkMenuId === walk.id ? null : walk.id);
                                 }}
-                                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                                className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-colors"
                                 aria-label="Re-analyze walk"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -692,18 +693,18 @@ export default function AreaDetailsPanel({
                             )}
                             {openWalkMenuId === walk.id && (
                               <div 
-                                className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[140px]"
+                                className="absolute right-0 top-full mt-1 bg-card rounded-lg shadow-lg border border-border py-1 z-10 min-w-[140px]"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <button
                                   onClick={() => handleReAnalyzeWalk(walk.id, 'rescore')}
-                                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
+                                  className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-secondary"
                                 >
                                   Re-score
                                 </button>
                                 <button
                                   onClick={() => handleReAnalyzeWalk(walk.id, 'full')}
-                                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
+                                  className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-secondary"
                                 >
                                   Full re-fetch
                                 </button>
@@ -713,7 +714,7 @@ export default function AreaDetailsPanel({
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-4 mt-2 text-xs text-gray-600">
+                    <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
                       {walk.distanceMeters && (
                         <span>{formatDistance(walk.distanceMeters)}</span>
                       )}
@@ -731,23 +732,23 @@ export default function AreaDetailsPanel({
           {/* Deviations */}
           {details.deviations.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              <h3 className="text-sm font-semibold text-foreground mb-2">
                 Detected Deviations ({details.deviations.length})
               </h3>
               <div className="space-y-2">
                 {details.deviations.map(deviation => (
-                  <div key={deviation.id} className="bg-gray-50 rounded-lg p-3">
+                  <div key={deviation.id} className="bg-secondary rounded-lg p-3">
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <div className="text-sm font-medium text-gray-800 capitalize">
+                        <div className="text-sm font-medium text-foreground capitalize">
                           {deviation.classification.replace('_', ' ')}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
+                        <div className="text-xs text-muted-foreground mt-0.5">
                           {formatDistance(deviation.borderGapMeters)} of border skipped
                         </div>
                       </div>
                       {deviation.isExempt ? (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                        <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                           <span>✓</span> Exempt
                         </span>
                       ) : null}
@@ -755,24 +756,24 @@ export default function AreaDetailsPanel({
                     
                     <div className="grid grid-cols-2 gap-2 text-xs mb-3">
                       <div>
-                        <span className="text-gray-500">Detour: </span>
-                        <span className="text-gray-700">{formatDistance(deviation.detourDistanceMeters)}</span>
+                        <span className="text-muted-foreground">Detour: </span>
+                        <span className="text-foreground">{formatDistance(deviation.detourDistanceMeters)}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Max deviation: </span>
-                        <span className="text-gray-700">{formatDistance(deviation.maxDeviationMeters)}</span>
+                        <span className="text-muted-foreground">Max deviation: </span>
+                        <span className="text-foreground">{formatDistance(deviation.maxDeviationMeters)}</span>
                       </div>
                     </div>
 
                     {deviation.isExempt ? (
                       <div className="flex items-center justify-between">
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-muted-foreground">
                           Reason: {deviation.exemptionReason}
                         </div>
                         {onRemoveExemption && (
                           <button
                             onClick={() => onRemoveExemption(deviation.id)}
-                            className="text-xs text-red-600 hover:text-red-700 hover:underline"
+                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:underline"
                           >
                             Remove Exemption
                           </button>
@@ -782,7 +783,7 @@ export default function AreaDetailsPanel({
                       onExemptDeviation && (
                         <button
                           onClick={() => onExemptDeviation(deviation.id)}
-                          className="w-full text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 py-1.5 rounded font-medium transition-colors"
+                          className="w-full text-xs bg-muted hover:bg-muted/80 text-foreground py-1.5 rounded font-medium transition-colors"
                         >
                           Mark as Exempt
                         </button>

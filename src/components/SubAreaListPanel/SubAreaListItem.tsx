@@ -42,7 +42,7 @@ export default function SubAreaListItem({ data, onClick }: SubAreaListItemProps)
   return (
     <button
       onClick={() => onClick(areaId)}
-      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 text-left cursor-pointer"
+      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary transition-colors border-b border-border last:border-b-0 text-left cursor-pointer"
     >
       {/* Status Indicator - Tier badge or empty circle */}
       <div className="flex-shrink-0">
@@ -54,7 +54,7 @@ export default function SubAreaListItem({ data, onClick }: SubAreaListItemProps)
           />
         ) : (
           <div 
-            className="w-4 h-4 rounded-full border-2 border-gray-300"
+            className="w-4 h-4 rounded-full border-2 border-muted-foreground/30"
             title="Not completed"
           />
         )}
@@ -62,14 +62,14 @@ export default function SubAreaListItem({ data, onClick }: SubAreaListItemProps)
 
       {/* Area Info */}
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-gray-900 truncate">
+        <div className="text-sm font-medium text-foreground truncate">
           {areaName}
         </div>
-        <div className="text-xs text-gray-500 flex items-center gap-2">
+        <div className="text-xs text-muted-foreground flex items-center gap-2">
           <span>{circumferenceKm} km</span>
           {walkCount > 0 && (
             <>
-              <span className="text-gray-300">•</span>
+              <span className="text-muted-foreground/50">•</span>
               <span>{walkCount} {walkCount === 1 ? 'walk' : 'walks'}</span>
             </>
           )}
@@ -77,7 +77,7 @@ export default function SubAreaListItem({ data, onClick }: SubAreaListItemProps)
       </div>
 
       {/* Chevron */}
-      <div className="flex-shrink-0 text-gray-400">
+      <div className="flex-shrink-0 text-muted-foreground">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>

@@ -16,6 +16,8 @@ import { WalkingMode } from '@/components/WalkingMode';
 import type { ExemptionReason } from '@/lib/exemption-types';
 import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
 import { useDatabase } from '@/hooks/useDatabase';
+// WHY: Theme hook for dark mode toggle per PRD Section 3.14
+import { useTheme } from '@/hooks/useTheme';
 
 // ============================================
 // Types - Panel Navigation State (ADR 008)
@@ -57,6 +59,8 @@ const EMPTY_METRICS: AnalysisMetrics = {
 
 export default function Home() {
   const { athlete, activities, loading, login, logout } = useStrava();
+  // WHY: Theme hook for dark mode toggle per PRD Section 3.14
+  const { theme, setTheme } = useTheme();
   const [progress, setProgress] = useState<ProgressInfo>({ 
     completedCount: 0, 
     totalAreas: 0,
@@ -554,6 +558,8 @@ export default function Home() {
         onOpenStats={handleOpenStats}
         showRoutes={showRoutes}
         onShowRoutesChange={setShowRoutes}
+        theme={theme}
+        onThemeChange={setTheme}
       />
       
       {/* Profile Card - Top Right, Collapsible (ADR 009) */}

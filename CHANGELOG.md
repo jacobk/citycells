@@ -18,6 +18,17 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Dark Mode Toggle**: Three-way theme selector (System/Light/Dark) in hamburger menu with localStorage persistence. (PRD 001 §3.14, TICKET-022)
+  - Key files: `src/hooks/useTheme.ts` (NEW), `src/app/layout.tsx`, `src/components/HamburgerMenu/HamburgerMenu.tsx`
+  - `useTheme` hook manages theme state with `useSyncExternalStore` for SSR compatibility
+  - Inline script in `<head>` prevents flash of wrong theme (FOUC) on page load
+  - Segmented control UI with System/Light/Dark options
+  - Theme persisted to localStorage (key: `citycells-theme`), defaults to `system`
+  - System mode follows OS preference via `prefers-color-scheme` media query
+  - Updated all UI components for dark mode support using design system CSS tokens:
+    - ProfileCard, ProgressDashboard, AreaDetailsPanel, SubAreaListPanel, SubAreaListItem
+    - AreaTooltip, ExemptionModal, PanelBreadcrumbs, WalkingMode, WalkingControls
+  - Token mappings: `bg-white` → `bg-card`, `bg-gray-50` → `bg-secondary`, `text-gray-900` → `text-foreground`
 - **Branding & Visual Identity**: Professional design system with Shadcn/UI and custom brand colors. (PRD 001 §3.14, ADR 018, TICKET-020, TICKET-021)
   - Key files: `src/app/globals.css`, `src/app/layout.tsx`, `src/components/Brand/`, `src/components/ui/button.tsx`, `components.json`
   - Brand colors: Primary (Violet #7c3aed), Accent (Fuchsia #d946ef), CSS variables for theming
