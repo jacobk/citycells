@@ -90,29 +90,37 @@ Tokens are stored in two locations for different purposes:
        │ 1. Opens app           │                         │
        │───────────────────────>│                         │
        │                        │                         │
-       │ 2. Check SQLite        │                         │
-       │    for stored tokens   │                         │
+       │ 2. Check SQLite for    │                         │
+       │    tokens + athlete    │                         │
        │<───────────────────────│                         │
        │                        │                         │
        │ 3. POST /restore-session                         │
-       │    with refresh_token  │                         │
+       │    {refresh_token,     │                         │
+       │     cached_athlete?}   │                         │
        │───────────────────────>│                         │
        │                        │                         │
-       │                        │ 4. Refresh with Strava  │
+       │                        │ 4. Refresh tokens       │
        │                        │────────────────────────>│
-       │                        │                         │
-       │                        │ 5. New tokens           │
        │                        │<────────────────────────│
+       │                        │                         │
+       │                        │ 5. If cached: use it    │
+       │                        │    else: fetch athlete  │
+       │                        │    (rare, 1 API call)   │
        │                        │                         │
        │ 6. Set cookies +       │                         │
        │    return new tokens   │                         │
+       │    (+ athlete if       │                         │
+       │     fetched fresh)     │                         │
        │<───────────────────────│                         │
        │                        │                         │
-       │ 7. Update SQLite       │                         │
-       │    + fetch activities  │                         │
+       │ 7. Update SQLite:      │                         │
+       │    tokens + athlete    │                         │
+       │    cache (if new)      │                         │
        │───────────────────────>│                         │
        │                        │                         │
 ```
+
+> **Optimization (TICKET-024)**: Athlete info (firstname, lastname, profile) is cached in SQLite alongside tokens. On session restoration, the client sends cached athlete info to the server, which skips the Strava `/api/v3/athlete` API call. This reduces session restoration from 2 API calls to 1.
 
 ### Key Functions
 
@@ -133,11 +141,12 @@ Centralized token validation for API routes:
 5. Redirects with token params for client-side SQLite storage
 
 **`POST /api/auth/restore-session`**
-1. Receives refresh_token from client (stored in SQLite)
-2. Refreshes tokens with Strava API
-3. Fetches athlete profile from Strava (for `strava_athlete` cookie)
-4. Sets all HTTP-only cookies with proper lifetimes via `setAuthCookies()`
-5. Returns new tokens for client to update SQLite
+1. Receives refresh_token and optional cached_athlete from client (stored in SQLite)
+2. Refreshes tokens with Strava API (1 API call)
+3. If cached_athlete provided: uses it for `strava_athlete` cookie (0 API calls)
+4. If no cache: fetches athlete profile from Strava (1 API call, rare)
+5. Sets all HTTP-only cookies with proper lifetimes via `setAuthCookies()`
+6. Returns new tokens (and fetched_athlete if freshly fetched) for client to update SQLite
 
 **`useStrava()` hook**
 - Checks for OAuth callback params (just logged in)
@@ -159,7 +168,7 @@ Centralized token validation for API routes:
 
 ### SQLite Token Storage
 
-Tokens are stored in the `users` table (see [ADR 004](../ADR/004-sqlite-storage.md)):
+Tokens and cached athlete info are stored in the `users` table (see [ADR 004](../ADR/004-sqlite-storage.md)):
 
 ```sql
 CREATE TABLE users (
@@ -169,13 +178,18 @@ CREATE TABLE users (
   access_token TEXT,
   refresh_token TEXT,
   token_expires_at INTEGER,  -- Unix timestamp in seconds
+  -- Cached athlete info (TICKET-024, ADR 013 2026-02-17 Update)
+  firstname TEXT,
+  lastname TEXT,
+  profile TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 ```
 
 Key operations in `src/lib/db.ts`:
 - `getUserByStravaId(stravaId)` - Check for stored user
-- `updateUserTokens(stravaId, tokens)` - Store/update tokens
+- `updateUserTokens(stravaId, tokens, username?, athleteInfo?)` - Store/update tokens and athlete cache
+- `getCachedAthleteInfo(stravaId)` - Get cached athlete info for session restoration
 - `clearUserTokens(stravaId)` - Clear tokens on logout
 
 ## Rationale

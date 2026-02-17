@@ -55,6 +55,13 @@ export async function GET(request: Request) {
     redirectUrl.searchParams.set('access_token', payload.access_token);
     redirectUrl.searchParams.set('refresh_token', payload.refresh_token);
     redirectUrl.searchParams.set('token_expires_at', tokenExpiresAtSeconds.toString());
+    
+    // WHY: Pass athlete info for client to cache in SQLite (TICKET-024)
+    // This enables session restoration without an extra Strava API call
+    // See ADR 013 (2026-02-17 Update) for rationale
+    redirectUrl.searchParams.set('firstname', payload.athlete.firstname);
+    redirectUrl.searchParams.set('lastname', payload.athlete.lastname);
+    redirectUrl.searchParams.set('profile', payload.athlete.profile);
 
     return NextResponse.redirect(redirectUrl);
   } catch (err) {

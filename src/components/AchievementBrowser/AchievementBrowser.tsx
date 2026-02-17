@@ -9,14 +9,17 @@ import type { AchievementWithStatus } from '@/hooks/useAchievements';
 // Types
 // ============================================
 
+// WHY: Create a stable empty Map at module level to avoid recreating on every render
+const EMPTY_MAP = new Map<AchievementCategory, AchievementWithStatus[]>();
+
 interface AchievementBrowserProps {
   isOpen: boolean;
   onClose: () => void;
   achievements: AchievementWithStatus[];
-  achievementsByCategory: Map<AchievementCategory, AchievementWithStatus[]>;
-  unlockedCount: number;
-  totalCount: number;
-  loading: boolean;
+  achievementsByCategory?: Map<AchievementCategory, AchievementWithStatus[]>;
+  unlockedCount?: number;
+  totalCount?: number;
+  loading?: boolean;
 }
 
 // ============================================
@@ -38,12 +41,14 @@ export default function AchievementBrowser({
   achievementsByCategory,
   unlockedCount = 0,
   totalCount = 0,
-  loading,
+  loading = false,
 }: AchievementBrowserProps) {
-  // WHY: Defensive fallback for edge cases during HMR/force refresh
-  // where props might briefly be undefined during React reconciliation
-  const safeAchievementsByCategory = achievementsByCategory ?? new Map<AchievementCategory, AchievementWithStatus[]>();
-  
+  // WHY: Use module-level empty Map as fallback to guarantee .get() always works
+  // This handles edge cases during HMR/force refresh where props might be undefined
+  const safeAchievementsByCategory = (achievementsByCategory && achievementsByCategory instanceof Map) 
+    ? achievementsByCategory 
+    : EMPTY_MAP;
+
   // Prevent body scroll when panel is open
   useEffect(() => {
     if (isOpen) {
@@ -177,7 +182,7 @@ export default function AchievementBrowser({
           })}
           
           {/* Empty State */}
-          {achievementsByCategory.size === 0 && !loading && (
+          {safeAchievementsByCategory.size === 0 && !loading && (
             <div className="px-4 py-8 text-center text-muted-foreground">
               <p>Loading achievements...</p>
             </div>

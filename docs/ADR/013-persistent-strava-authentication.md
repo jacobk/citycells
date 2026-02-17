@@ -253,3 +253,36 @@ CREATE INDEX IF NOT EXISTS idx_users_strava_id ON users(strava_id);
 **Additional Requirement:** The `/api/auth/restore-session` endpoint must set the `strava_athlete` cookie when refreshing tokens, not just `strava_session`.
 
 See TICKET-019 for implementation.
+
+### 2026-02-17: Athlete Info Caching Optimization
+
+**Issue:** The 2026-02-16 fix required `/api/auth/restore-session` to fetch athlete profile from Strava API to populate the `strava_athlete` cookie. This means every session restoration makes **2 Strava API calls**:
+1. Token refresh (POST to OAuth endpoint)
+2. Athlete profile fetch (GET `/api/v3/athlete`)
+
+This doubles API usage during session restoration and contributes to rate limit consumption.
+
+**Optimization:** Cache athlete info (firstname, lastname, profile URL) in SQLite alongside tokens. The athlete profile rarely changes, so we can:
+1. Store athlete info when first received during OAuth callback
+2. Reuse cached info during session restoration
+3. Only fetch fresh athlete info if cache is missing or explicitly refreshed
+
+**Schema Update:**
+```sql
+-- Add columns to users table
+ALTER TABLE users ADD COLUMN firstname TEXT;
+ALTER TABLE users ADD COLUMN lastname TEXT;
+ALTER TABLE users ADD COLUMN profile_url TEXT;
+```
+
+**Updated Session Restoration Flow:**
+1. Receive refresh_token from client
+2. Refresh tokens with Strava (1 API call)
+3. Check SQLite for cached athlete info
+4. If cached: use it for `strava_athlete` cookie (0 API calls)
+5. If missing: fetch from Strava and cache (1 API call - rare)
+6. Set cookies and return
+
+**Result:** Session restoration typically uses **1 API call** instead of 2.
+
+See TICKET-024 for implementation.

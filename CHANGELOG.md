@@ -18,6 +18,17 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Athlete Info Caching**: Session restoration now uses 1 Strava API call instead of 2 by caching athlete profile in SQLite. (ADR 013 2026-02-17 Update, TICKET-024)
+  - Key files: `src/lib/db.ts` (schema v7), `src/lib/auth-persistence.ts`, `src/app/api/auth/restore-session/route.ts`, `src/app/api/auth/callback/route.ts`
+  - Database: Added `firstname`, `lastname`, `profile` columns to `users` table with migration to schema v7
+  - OAuth callback passes athlete info to client for SQLite caching
+  - Session restoration sends cached athlete to server, skipping `/api/v3/athlete` API call
+  - Fallback: If cache missing, fetches from Strava and returns for client to cache
+- **Dev Login Page**: Local development helper at `/dev-login` to bypass OAuth flow. (Development only)
+  - Key files: `src/app/dev-login/page.tsx`, `src/app/api/auth/dev-login/route.ts`
+  - Paste cookie values from production to authenticate locally
+  - Handles URL-encoded athlete JSON automatically
+  - Returns 403 in production environment
 - **Achievement System**: 40 achievements (35 regular + 5 hidden) rewarding exploration milestones, tier quality, connected territories, and more. (PRD 001 §3.15, ADR 019, TICKET-023)
   - Key files: `src/lib/achievements.ts`, `src/lib/adjacency.ts`, `src/lib/achievement-conditions.ts`, `src/lib/achievement-service.ts`, `src/hooks/useAchievements.ts`, `src/components/AchievementBrowser/`, `src/components/AchievementModal/`, `src/lib/db.ts` (schema v6)
   - Database: Added `achievements` and `user_achievements` tables with migration to schema v6

@@ -715,15 +715,18 @@ export default function Home() {
       />
 
       {/* Achievement Browser Panel (TICKET-023) */}
-      <AchievementBrowser
-        isOpen={isAchievementBrowserOpen}
-        onClose={() => setIsAchievementBrowserOpen(false)}
-        achievements={allAchievements}
-        achievementsByCategory={achievementsByCategory}
-        unlockedCount={unlockedCount}
-        totalCount={achievementTotalCount}
-        loading={achievementsLoading}
-      />
+      {/* WHY: Only render when achievementsByCategory is a valid Map to prevent errors during initialization */}
+      {achievementsByCategory instanceof Map && (
+        <AchievementBrowser
+          isOpen={isAchievementBrowserOpen}
+          onClose={() => setIsAchievementBrowserOpen(false)}
+          achievements={allAchievements}
+          achievementsByCategory={achievementsByCategory}
+          unlockedCount={unlockedCount}
+          totalCount={achievementTotalCount}
+          loading={achievementsLoading}
+        />
+      )}
 
       {/* Achievement Unlock Modal (TICKET-023) */}
       {/* WHY: Shows newly unlocked achievements after analysis completes */}

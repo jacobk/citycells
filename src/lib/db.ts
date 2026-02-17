@@ -22,7 +22,8 @@ const INDEXEDDB_STORE = 'database';
 // WHY: Schema version for migrations - increment when schema changes
 // v5: Added last_activity_sync_at and last_synced_activity_id columns for incremental sync (TICKET-016)
 // v6: Added achievements and user_achievements tables for gamification (TICKET-023)
-const SCHEMA_VERSION = 6;
+// v7: Added athlete info columns (firstname, lastname, profile) for caching (TICKET-024)
+const SCHEMA_VERSION = 7;
 
 // ============================================
 // Types
@@ -53,6 +54,7 @@ export interface UserProgressRow {
 export type Tier = 'platinum' | 'gold' | 'silver' | 'bronze' | 'potato';
 
 // WHY: UserRow includes token fields for persistent authentication (ADR 013)
+// and cached athlete info for session restoration optimization (TICKET-024)
 export interface UserRow {
   id: number;
   strava_id: number;
@@ -60,6 +62,11 @@ export interface UserRow {
   access_token: string | null;
   refresh_token: string | null;
   token_expires_at: number | null;
+  // WHY: Cached athlete info to avoid extra Strava API call on session restoration
+  // See ADR 013 (2026-02-17 Update) for rationale
+  firstname: string | null;
+  lastname: string | null;
+  profile: string | null;
   created_at: string;
 }
 
@@ -68,6 +75,14 @@ export interface TokenData {
   access_token: string;
   refresh_token: string;
   token_expires_at: number; // Unix timestamp in seconds
+}
+
+// WHY: CachedAthleteInfo matches the AthleteInfo type from auth-cookies.ts
+// Used to cache athlete display info in SQLite (TICKET-024, ADR 013 2026-02-17 Update)
+export interface CachedAthleteInfo {
+  firstname: string;
+  lastname: string;
+  profile: string;
 }
 
 // ============================================
@@ -554,8 +569,52 @@ export async function initDatabase(): Promise<Database> {
       console.log('[DB Migration] Achievement system setup complete');
     }
 
+    // WHY: Re-check db after async seedAchievements - it may have been closed during HMR/Strict Mode
+    if (!db) {
+      console.warn('[DB] Database closed during achievement seeding, aborting initialization');
+      throw new Error('Database closed during initialization');
+    }
+
+    // WHY: Schema version 7 adds athlete info caching columns (TICKET-024)
+    // Caches firstname, lastname, profile to avoid extra Strava API call on session restoration
+    // See ADR 013 (2026-02-17 Update) for rationale
+    if (currentVersion < 7) {
+      console.log('[DB Migration] Adding athlete info cache columns...');
+      
+      const columnsResult = db.exec("PRAGMA table_info(users)");
+      const columnNames = new Set(
+        columnsResult.length > 0
+          ? columnsResult[0].values.map(row => row[1] as string)
+          : []
+      );
+
+      if (!columnNames.has('firstname')) {
+        db.run('ALTER TABLE users ADD COLUMN firstname TEXT');
+      }
+      if (!columnNames.has('lastname')) {
+        db.run('ALTER TABLE users ADD COLUMN lastname TEXT');
+      }
+      if (!columnNames.has('profile')) {
+        db.run('ALTER TABLE users ADD COLUMN profile TEXT');
+      }
+      
+      console.log('[DB Migration] Athlete info cache columns added successfully');
+    }
+
+    // WHY: Final null check before persisting - db may have been closed during migrations
+    if (!db) {
+      console.warn('[DB] Database closed during migrations, aborting initialization');
+      throw new Error('Database closed during initialization');
+    }
+
     db.run('INSERT OR REPLACE INTO schema_version (version) VALUES (?)', [SCHEMA_VERSION]);
     await persistDatabase();
+  }
+
+  // WHY: Re-check db after async migrations - it may have been closed during HMR/Strict Mode
+  if (!db) {
+    console.warn('[DB] Database closed during migration, aborting initialization');
+    throw new Error('Database closed during initialization');
   }
 
   // Seed areas if empty
@@ -1065,7 +1124,8 @@ export function getUserByStravaId(stravaId: number): UserRow | null {
   const database = getDatabase();
   
   const result = database.exec(
-    `SELECT id, strava_id, username, access_token, refresh_token, token_expires_at, created_at
+    `SELECT id, strava_id, username, access_token, refresh_token, token_expires_at, 
+            firstname, lastname, profile, created_at
      FROM users WHERE strava_id = ? LIMIT 1`,
     [stravaId]
   );
@@ -1082,7 +1142,10 @@ export function getUserByStravaId(stravaId: number): UserRow | null {
     access_token: row[3] as string | null,
     refresh_token: row[4] as string | null,
     token_expires_at: row[5] as number | null,
-    created_at: row[6] as string,
+    firstname: row[6] as string | null,
+    lastname: row[7] as string | null,
+    profile: row[8] as string | null,
+    created_at: row[9] as string,
   };
 }
 
@@ -1090,11 +1153,19 @@ export function getUserByStravaId(stravaId: number): UserRow | null {
  * Update tokens for a user (create if not exists).
  * WHY: Called after OAuth callback and token refresh to persist tokens.
  * See ADR 013 "Token Storage Strategy" section.
+ * 
+ * @param stravaId - Strava athlete ID
+ * @param tokens - Token data (access, refresh, expiry)
+ * @param username - Optional username for display
+ * @param athleteInfo - Optional athlete info to cache (TICKET-024)
+ *                      When provided, caches firstname/lastname/profile to avoid
+ *                      extra Strava API call on session restoration
  */
 export async function updateUserTokens(
   stravaId: number,
   tokens: TokenData,
-  username?: string
+  username?: string,
+  athleteInfo?: CachedAthleteInfo
 ): Promise<number> {
   const database = getDatabase();
   
@@ -1104,24 +1175,52 @@ export async function updateUserTokens(
   if (existing.length > 0 && existing[0].values.length > 0) {
     // Update existing user
     const userId = existing[0].values[0][0] as number;
-    await executeWrite(
-      `UPDATE users 
-       SET access_token = ?, refresh_token = ?, token_expires_at = ?, username = COALESCE(?, username)
-       WHERE strava_id = ?`,
-      [tokens.access_token, tokens.refresh_token, tokens.token_expires_at, username || null, stravaId]
-    );
-    console.log(`[DB] Updated tokens for user ${stravaId}`);
+    
+    // WHY: If athlete info provided, update it alongside tokens
+    // This ensures cache is fresh after OAuth or when explicitly updated
+    if (athleteInfo) {
+      await executeWrite(
+        `UPDATE users 
+         SET access_token = ?, refresh_token = ?, token_expires_at = ?, 
+             username = COALESCE(?, username),
+             firstname = ?, lastname = ?, profile = ?
+         WHERE strava_id = ?`,
+        [
+          tokens.access_token, tokens.refresh_token, tokens.token_expires_at,
+          username || null,
+          athleteInfo.firstname, athleteInfo.lastname, athleteInfo.profile,
+          stravaId
+        ]
+      );
+    } else {
+      await executeWrite(
+        `UPDATE users 
+         SET access_token = ?, refresh_token = ?, token_expires_at = ?, username = COALESCE(?, username)
+         WHERE strava_id = ?`,
+        [tokens.access_token, tokens.refresh_token, tokens.token_expires_at, username || null, stravaId]
+      );
+    }
+    console.log(`[DB] Updated tokens for user ${stravaId}${athleteInfo ? ' (with athlete cache)' : ''}`);
     return userId;
   } else {
     // Create new user
     await executeWrite(
-      `INSERT INTO users (strava_id, username, access_token, refresh_token, token_expires_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [stravaId, username || null, tokens.access_token, tokens.refresh_token, tokens.token_expires_at]
+      `INSERT INTO users (strava_id, username, access_token, refresh_token, token_expires_at, firstname, lastname, profile)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        stravaId, 
+        username || null, 
+        tokens.access_token, 
+        tokens.refresh_token, 
+        tokens.token_expires_at,
+        athleteInfo?.firstname || null,
+        athleteInfo?.lastname || null,
+        athleteInfo?.profile || null
+      ]
     );
     const newUser = database.exec('SELECT id FROM users WHERE strava_id = ?', [stravaId]);
     const userId = newUser[0].values[0][0] as number;
-    console.log(`[DB] Created user ${stravaId} with tokens`);
+    console.log(`[DB] Created user ${stravaId} with tokens${athleteInfo ? ' and athlete cache' : ''}`);
     return userId;
   }
 }
@@ -1139,6 +1238,41 @@ export async function clearUserTokens(stravaId: number): Promise<void> {
     [stravaId]
   );
   console.log(`[DB] Cleared tokens for user ${stravaId}`);
+}
+
+/**
+ * Get cached athlete info for a user.
+ * WHY: Used during session restoration to avoid extra Strava API call.
+ * If athlete info is cached, client can send it to restore-session endpoint
+ * and skip the /api/v3/athlete API call.
+ * See ADR 013 (2026-02-17 Update) and TICKET-024.
+ * 
+ * @param stravaId - Strava athlete ID
+ * @returns Cached athlete info if all fields are present, null otherwise
+ */
+export function getCachedAthleteInfo(stravaId: number): CachedAthleteInfo | null {
+  const database = getDatabase();
+  
+  const result = database.exec(
+    'SELECT firstname, lastname, profile FROM users WHERE strava_id = ? LIMIT 1',
+    [stravaId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return null;
+  }
+
+  const row = result[0].values[0];
+  const firstname = row[0] as string | null;
+  const lastname = row[1] as string | null;
+  const profile = row[2] as string | null;
+
+  // WHY: Only return if all fields are present to ensure complete cache
+  if (firstname && lastname && profile) {
+    return { firstname, lastname, profile };
+  }
+
+  return null;
 }
 
 /**
