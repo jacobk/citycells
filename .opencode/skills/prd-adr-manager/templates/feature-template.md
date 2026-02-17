@@ -27,6 +27,7 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 | File | Purpose |
 |------|---------|
 | `src/...` | {Description} |
+| `src/lib/__tests__/...` | Unit tests for business logic |
 
 ### Data Flow
 
@@ -70,3 +71,4 @@ Before finalizing feature doc:
 - [ ] Current limitations documented
 - [ ] File name follows pattern: `{kebab-case-name}.md`
 - [ ] Feature index (`README.md`) updated
+- [ ] Test file locations identified (if business logic in `src/lib/`)

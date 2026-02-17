@@ -30,6 +30,7 @@ Enable any developer (human or AI agent) to:
 | Distance-to-Boundary Indicator | [distance-indicator.md](./distance-indicator.md) | Implemented | [ADR 002](../ADR/002-exclusive-activity-matching.md), [ADR 003](../ADR/003-multi-metric-completion-scoring.md), [ADR 017](../ADR/017-live-walking-mode.md) |
 | Branding & Visual Identity | [branding-visual-identity.md](./branding-visual-identity.md) | Planned | [ADR 018](../ADR/018-branding-design-system.md) |
 | Achievement System | [achievements.md](./achievements.md) | Planned | [ADR 019](../ADR/019-achievement-system.md) |
+| Agent Build Verification | [agent-build-verification.md](./agent-build-verification.md) | Planned | [ADR 020](../ADR/020-agent-build-verification.md) |
 
 ## Document Template
 

@@ -46,7 +46,34 @@ Before implementing, review for:
 - [ ] **Modularity** - Can new code be isolated for testing/reuse?
 - [ ] **Debt impact** - Does this create or reduce technical debt?
 
+**Specific refactoring tasks:**
 {Document specific refactoring or cleanup tasks discovered during planning}
+
+## Testing Requirements
+
+**Reference:** [AGENTS.md Section 2](../../AGENTS.md#2-build-verification-checklist-required), [ADR 020](../ADR/020-agent-build-verification.md)
+
+### Unit Tests Required
+
+{Identify which new/modified functions need unit tests. Tests are REQUIRED for:}
+- Functions in `src/lib/` with business logic
+- Scoring algorithms and calculations
+- Data transformation utilities
+
+| Function | Test File | Test Cases |
+|----------|-----------|------------|
+| `{functionName}` | `src/lib/__tests__/{file}.test.ts` | {Brief description of what to test} |
+
+{If no unit tests needed, explain why (e.g., "UI-only changes, no business logic")}
+
+### Verification Checklist
+
+Implementation agent MUST run before marking complete:
+```bash
+npm run lint   # Must pass
+npm run build  # Must pass
+npm run test   # Must pass
+```
 
 ## Acceptance Criteria
 
@@ -82,3 +109,5 @@ Before finalizing ticket:
 - [ ] Files to modify list includes both existing and new files
 - [ ] No content is duplicated from ADR/PRD (only references)
 - [ ] Maintainability section reviewed (refactoring, DRY, modularity)
+- [ ] Testing requirements section filled in (identify functions needing tests, or explain why none needed)
+- [ ] Verification checklist included (lint, build, test commands)

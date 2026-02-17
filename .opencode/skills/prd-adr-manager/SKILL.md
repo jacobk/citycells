@@ -27,8 +27,18 @@ Every feature and change is an opportunity to improve code quality. When documen
 - **DRY violations** - Does similar logic exist elsewhere that should be unified?
 - **Modularity** - Can this be designed for easy testing and reuse?
 - **Technical debt** - Will this change create or reduce debt?
+- **Testing requirements** - Does this add business logic that needs unit tests?
 
 These considerations should surface in ADRs, tickets, and feature docs—not be an afterthought.
+
+### Testing Integration
+
+Per [ADR 020](../../docs/ADR/020-agent-build-verification.md), unit tests are **required** for:
+- Functions in `src/lib/` with business logic
+- Scoring algorithms and calculations
+- Data transformation utilities
+
+When creating tickets, always identify which functions need tests and where test files should go (`src/lib/__tests__/*.test.ts`).
 
 ---
 
@@ -112,6 +122,7 @@ Based on answers:
 5. List specific files to modify based on feature doc
 6. **Do NOT duplicate ADR/PRD content** - only reference them
 7. **Identify refactoring scope**: Note any DRY violations to fix, code to modularize, or technical debt to address as part of this work
+8. **Identify testing requirements**: List functions needing unit tests (see Testing Requirements section in template)
 
 ### Step 4: Summary
 
@@ -193,6 +204,7 @@ Ask the user which existing feature is being changed. Offer options from `docs/f
 6. Include acceptance criteria that verify the change
 7. **Do NOT duplicate ADR/PRD content** - only reference them
 8. **Identify refactoring scope**: Note any DRY violations to fix, code to modularize, or technical debt to address as part of this work
+9. **Identify testing requirements**: List functions needing unit tests (see Testing Requirements section in template)
 
 ### Step 5: Summary
 
@@ -207,6 +219,8 @@ Provide summary listing:
 ## Important Reminders
 
 - **Maintainability first** - Every ticket and ADR must address refactoring opportunities, DRY violations, and modularity
+- **Testing requirements** - Every ticket must identify which functions need unit tests (per ADR 020)
+- **Verification checklist** - Tickets must remind implementation agent to run: `npm run lint && npm run build && npm run test`
 - **No implementation analysis** - This skill documents WHAT and WHY, not HOW
 - **Leave placeholders** - Implementation sections are filled by implementation agent
 - **Link ADRs** - Always reference relevant ADRs in feature docs

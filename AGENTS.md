@@ -63,7 +63,90 @@ Maintain `CHANGELOG.md` so future agents can compare implementation against PRD/
 
 ---
 
-## 2. Project Overview & Architecture
+## 2. Build Verification Checklist (REQUIRED)
+
+**Reference:** [ADR 020](docs/ADR/020-agent-build-verification.md)
+
+> **CRITICAL**: You MUST complete this checklist before marking ANY task as done.
+> Skipping verification leads to broken builds and wasted debugging time.
+
+### 2.1 Mandatory Verification Steps
+
+Run these commands **in order** after making code changes:
+
+```bash
+# Step 1: Code quality check
+npm run lint
+
+# Step 2: Build verification (catches ~80% of runtime errors)
+npm run build
+
+# Step 3: Unit tests
+npm run test
+```
+
+**All three commands must pass with zero errors.**
+
+### 2.2 What Each Step Catches
+
+| Step | Command | Catches |
+|------|---------|---------|
+| 1 | `npm run lint` | Code style, unused imports, formatting issues |
+| 2 | `npm run build` | TypeScript errors, import errors, SSR issues, syntax errors |
+| 3 | `npm run test` | Business logic bugs, regressions in analysis functions |
+
+### 2.3 When Verification Fails
+
+**If `npm run lint` fails:**
+1. Read the error messages carefully
+2. Fix the identified issues (most are auto-fixable patterns)
+3. Re-run `npm run lint` until it passes
+
+**If `npm run build` fails:**
+1. Read the TypeScript/Next.js error messages
+2. Common issues: missing imports, type mismatches, undefined variables
+3. Fix the errors in the identified files
+4. Re-run `npm run build` until it passes
+
+**If `npm run test` fails:**
+1. Read which tests failed and why
+2. If you broke existing functionality, fix your code
+3. If test expectations are outdated, update the test (with justification)
+4. Re-run `npm run test` until all tests pass
+
+### 2.4 Unit Test Guidelines
+
+**Tests are REQUIRED for:**
+- Functions in `src/lib/` with business logic
+- Scoring algorithms and calculations
+- Data transformation utilities
+
+**Tests are NOT required for:**
+- React components (high maintenance, low ROI)
+- Simple pass-through functions
+- UI styling
+
+**Test file locations:**
+- Unit tests: `src/lib/__tests__/*.test.ts`
+- Integration tests: `src/__tests__/**/*.test.ts`
+
+### 2.5 Verification Workflow Summary
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  BEFORE completing any task, you MUST verify:          │
+│                                                         │
+│  1. npm run lint    → Must pass                        │
+│  2. npm run build   → Must pass                        │
+│  3. npm run test    → Must pass                        │
+│                                                         │
+│  Only then can you mark the task as complete.          │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Project Overview & Architecture
 
 **CityCells** is a Next.js application visualizing Strava activities over city sub-areas (delområden).
 
@@ -88,7 +171,7 @@ src/
 └── lib/                 # Utilities, config, types (camelCase)
 ```
 
-## 3. Development Commands
+## 4. Development Commands
 
 Use `npm` for all operations.
 
@@ -98,36 +181,40 @@ Use `npm` for all operations.
 - **Lint**: `npm run lint` (ESLint + Next.js config)
 
 ### Testing
-*Note: No test framework is currently configured in `package.json`.*
-If/When tests are added (e.g., Jest/Vitest):
-- **Run All**: `npm test`
+Vitest is configured for unit and integration testing.
+
+- **Run All (Watch Mode)**: `npm test`
+- **Run All (Single Run)**: `npm run test:run`
+- **With UI**: `npm run test:ui`
+- **With Coverage**: `npm run test:coverage`
 - **Single File**: `npm test -- path/to/file.test.ts`
-- **Single Test**: `npm test -- -t 'test name'`
 
-*Agent Action*: If asked to write tests, check if a framework is installed. If not, ask the user before installing one.
+**Test Locations:**
+- Unit tests for lib functions: `src/lib/__tests__/*.test.ts`
+- Integration tests: `src/__tests__/**/*.test.ts`
 
-## 4. Code Style & Conventions
+## 5. Code Style & Conventions
 
-### 4.1 Formatting & Syntax
+### 5.1 Formatting & Syntax
 - **Indentation**: 2 spaces.
 - **Semicolons**: Always.
 - **Quotes**: Single quotes (`'`) for JS/TS, Double quotes (`"`) for JSX attributes.
 - **Trailing Commas**: ES5/Prettier standard.
 
-### 4.2 Naming
+### 5.2 Naming
 - **Components**: `PascalCase` (e.g., `Map.tsx`).
 - **Hooks/Utils**: `camelCase` (e.g., `useStrava.ts`).
 - **Constants**: `UPPER_SNAKE_CASE` (e.g., `MALMO_CENTER`).
 - **Interfaces**: `PascalCase`. **Do not** use `I` prefix (e.g., `MapProps`, not `IMapProps`).
 
-### 4.3 TypeScript
+### 5.3 TypeScript
 - **Strict Mode**: Enabled.
 - **Explicit Types**: Define interfaces for all props and API responses.
 - **Avoid Any**: Do not use `any` unless absolutely necessary (e.g., external lib without types).
   - *Refactor Goal*: Replace existing `any` usage with proper types when touching legacy code.
 - **Assertions**: Avoid non-null assertions (`!`) unless guaranteed by runtime checks.
 
-### 4.4 Imports
+### 5.4 Imports
 - **Aliases**: ALWAYS use `@/` for `src/` imports.
   - ✅ `import Map from '@/components/Map';`
   - ❌ `import Map from '../../components/Map';`
@@ -137,19 +224,19 @@ If/When tests are added (e.g., Jest/Vitest):
   3. Relative imports
   4. Styles
 
-### 4.5 React Patterns
+### 5.5 React Patterns
 - **Functional Components**: `export default function Name() { ... }`
 - **Client Components**: Add `'use client';` at the very top if using hooks/state.
 - **Data Fetching**: Prefer server-side fetching in `page.tsx` where possible, or use `useEffect`/SWR for client-side updates.
 
-### 4.6 Commit Messages
+### 5.6 Commit Messages
 - **Convention**: Strictly follow [Conventional Commits](https://www.conventionalcommits.org/).
 - **Format**: `type(scope): description`
   - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
   - **Scope**: Optional, but recommended (e.g., `map`, `auth`, `api`).
 - **Enforcement**: This repo uses `husky` and `commitlint` to enforce this convention.
 
-## 5. Error Handling
+## 6. Error Handling
 - **API Routes**: Wrap all logic in `try/catch`. Return structured JSON errors:
   ```typescript
   return NextResponse.json({ error: 'Message' }, { status: 500 });

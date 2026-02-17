@@ -18,6 +18,16 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Agent Build Verification**: Automated verification workflow for AI coding agents with mandatory lint/build/test checklist and 61 new unit tests. (PRD 001 §3.16, ADR 020, TICKET-025)
+  - Key files: `AGENTS.md` (Section 2), `src/lib/__tests__/analysis.test.ts`, `src/lib/__tests__/tiers.test.ts`, `src/lib/__tests__/geo-distance.test.ts`, `src/lib/__tests__/format-utils.test.ts`, `scripts/smoke-test.ts`
+  - New Section 2 in AGENTS.md: "Build Verification Checklist (REQUIRED)" with lint → build → test workflow
+  - 22 unit tests for analysis functions (perimeter coverage, alignment error, efficiency, quality score)
+  - 15 unit tests for tier assignment (critical: potato tier bug regression guard)
+  - 16 unit tests for geo-distance utilities (distanceToLine, nearestPointOnLine, checkPerimeterProximity)
+  - 8 unit tests for format-utils (formatDistance)
+  - Playwright smoke test script for runtime verification
+  - Updated prd-adr-manager skill: tickets now require "Testing Requirements" section
+  - Total test count: 185 tests (61 new + 124 existing)
 - **Athlete Info Caching**: Session restoration now uses 1 Strava API call instead of 2 by caching athlete profile in SQLite. (ADR 013 2026-02-17 Update, TICKET-024)
   - Key files: `src/lib/db.ts` (schema v7), `src/lib/auth-persistence.ts`, `src/app/api/auth/restore-session/route.ts`, `src/app/api/auth/callback/route.ts`
   - Database: Added `firstname`, `lastname`, `profile` columns to `users` table with migration to schema v7

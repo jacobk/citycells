@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-16)  
+**Date:** 2026-02-02 (Updated: 2026-02-17)  
 **Status:** In Progress
 
-*Latest update: Achievement System - gamification with 40 unlockable achievements (Section 3.15)*
+*Latest update: Agent Build Verification - automated testing strategy for AI-first development (Section 3.16)*
 
 ## 1. Overview
 
@@ -70,6 +70,15 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want hidden achievements to show as "???" until unlocked, so there's an element of surprise and discovery.
 *   **As a user,** I want to see a celebratory modal when I earn new achievements after analyzing walks, so I feel the accomplishment immediately.
 *   **As a user,** I want my achievements to persist across browser sessions, so I don't lose my progress.
+
+### Agent Build Verification Stories (Added: 2026-02-17)
+*   **As an AI agent,** I want a clear verification checklist to follow after making code changes, so I can ensure my work is correct before marking it complete.
+*   **As an AI agent,** I want `npm run build` to catch type errors and import issues, so I can fix them without human intervention.
+*   **As an AI agent,** I want `npm run lint` to catch code quality issues, so I maintain project standards.
+*   **As an AI agent,** I want `npm run test` to verify business logic, so I know my changes don't break existing functionality.
+*   **As an AI agent,** I want clear guidelines on what to unit test (lib/ functions) vs. what not to test (React components), so I spend time wisely.
+*   **As a developer,** I want AI agents to verify their own work, so I don't have to manually test every change and paste errors back.
+*   **As a developer,** I want a smoke test script that can verify the app renders without crashing, so I can catch runtime errors automatically.
 
 ### Subarea Visual Context Stories (Added: 2026-02-07)
 *   **As a user,** I want to see a mini-map of the selected subarea in the details panel, so I can study the area and plan my walking route.
@@ -792,6 +801,62 @@ Provide a gamification layer with unlockable achievements based on various accom
 *   Persists across page reloads and browser sessions
 *   Included in database export/import (backup feature)
 *   Achievement checking runs as separate process after analysis
+
+### 3.16 Agent Build Verification (Added: 2026-02-17)
+
+*Reference: ADR 020 (Agent Build Verification Testing Strategy)*
+
+Provide automated verification workflows for AI coding agents to ensure code quality without manual intervention.
+
+#### Mandatory Verification Checklist
+
+AI agents MUST complete these steps before considering any task done:
+
+| Step | Command | Purpose |
+|------|---------|---------|
+| 1 | `npm run lint` | Code quality and style verification |
+| 2 | `npm run build` | Type errors, imports, syntax, SSR issues |
+| 3 | `npm run test` | Unit test verification (if tests exist) |
+
+**All commands must pass with zero errors.** If any command fails, the agent must fix the issues before proceeding.
+
+#### Unit Test Guidelines
+
+**Required tests for:**
+*   Functions in `src/lib/` containing business logic
+*   Data transformation utilities (Strava → GeoJSON)
+*   Scoring algorithms (coverage, RMSE, efficiency)
+*   Any function with non-trivial logic
+
+**Not required for:**
+*   React components (high maintenance, low ROI)
+*   UI layout and styling
+*   Simple pass-through functions
+
+**Test file conventions:**
+*   Location: `src/lib/__tests__/*.test.ts` or adjacent `*.test.ts`
+*   Framework: Vitest (already configured)
+*   Focus: Pure functions with clear inputs/outputs
+*   Coverage: Edge cases (empty arrays, null values, boundaries)
+
+#### Smoke Test Script (Optional)
+
+For comprehensive runtime verification:
+
+**Purpose:** Verify application renders without crashing and no console errors
+
+**Implementation:**
+*   Use Playwright for headless browser automation
+*   Start dev server programmatically
+*   Navigate to key pages (/, /docs/metrics/*)
+*   Check for console errors
+*   Verify critical elements render (map, panels)
+
+**Run as:** `npm run smoke-test` (after implementation)
+
+#### AGENTS.md Integration
+
+The verification workflow is documented in `AGENTS.md` Section 4 (Development Commands). Agents must follow this checklist for every task.
 
 ## 4. Non-Functional Requirements
 
