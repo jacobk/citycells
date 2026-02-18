@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useEffect } from 'react';
 import type { Theme } from '@/hooks/useTheme';
 
@@ -181,6 +182,19 @@ export default function HamburgerMenu({
               </span>
             )}
           </button>
+          
+          {/* WHY: How Scoring Works per ADR 021 Section 7 - links to /docs/scoring */}
+          <Link
+            href="/docs/scoring"
+            onClick={() => onOpenChange(false)}
+            className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-secondary flex items-center gap-3"
+          >
+            {/* Question/Info icon */}
+            <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>How Scoring Works</span>
+          </Link>
           
           {/* WHY: Divider separates navigation items from settings toggles */}
           <div className="border-t border-border my-1" />

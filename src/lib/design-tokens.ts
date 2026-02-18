@@ -9,6 +9,7 @@
  */
 
 import type { Tier } from '@/lib/analysis';
+import { assignDistanceTier } from '@/lib/distance-tiers';
 
 // =============================================================================
 // TIER FILL COLORS (Purple-Pink Gradient)
@@ -69,6 +70,7 @@ export const UNWALKED_AREA_STYLE = {
 // WHY: Binary threshold coloring provides clear visual feedback on walk quality.
 // Green = on-track (within 25m buffer), Red = deviation (outside 25m buffer).
 // 25m threshold matches perimeter coverage buffer in ADR 002/003.
+// @deprecated Use DISTANCE_TIER_COLORS instead (ADR 021)
 // =============================================================================
 
 export const ROUTE_DEVIATION_COLORS = {
@@ -76,6 +78,24 @@ export const ROUTE_DEVIATION_COLORS = {
   deviation: '#ef4444',   // Red - outside 25m buffer
   unmatched: '#94a3b8',   // Slate - activity not assigned to any area
 } as const;
+
+// =============================================================================
+// DISTANCE TIER COLORS (ADR 021)
+// WHY: 6-tier gradient from violet (best) to red (missed) for route segments.
+// Extends existing purple-pink gradient (ADR 010) for visual consistency.
+// Colorblind accessible (uses luminance contrast, not red-green).
+// =============================================================================
+
+export const DISTANCE_TIER_COLORS = {
+  platinum: '#7c3aed',  // Deep Violet - GPS-perfect tracking
+  gold: '#a855f7',      // Vibrant Purple - Excellent precision
+  silver: '#d946ef',    // Magenta Pink - Good precision
+  bronze: '#f0abfc',    // Soft Pink - Acceptable
+  potato: '#a1a1aa',    // Warm Gray - Minimal credit
+  missed: '#fca5a5',    // Light Red - Too far to count (solid, dashed deferred)
+} as const;
+
+export type DistanceTierColor = keyof typeof DISTANCE_TIER_COLORS;
 
 // WHY: 25m threshold matches the buffer used for perimeter coverage calculation
 // See ADR 002 and ADR 003 for rationale
@@ -179,9 +199,23 @@ export function getTierIconConfig(tier: Tier): { emoji: string; size: number } |
 /**
  * Get route segment color based on distance from boundary.
  * WHY: Binary threshold provides clear visual feedback (green = good, red = deviation).
+ * @deprecated Use getRouteSegmentColorByTier() instead (ADR 021)
  */
 export function getRouteSegmentColor(distanceMeters: number): string {
   return distanceMeters <= ROUTE_DEVIATION_THRESHOLD_METERS
     ? ROUTE_DEVIATION_COLORS.onTrack
     : ROUTE_DEVIATION_COLORS.deviation;
+}
+
+/**
+ * Get route segment color based on distance from boundary using tiered system.
+ * WHY: Provides graduated visual feedback instead of binary green/red.
+ * See ADR 021 Section 6 for color rationale.
+ * 
+ * @param distanceMeters - Distance from segment midpoint to boundary in meters
+ * @returns Hex color string for the appropriate distance tier
+ */
+export function getRouteSegmentColorByTier(distanceMeters: number): string {
+  const { tier } = assignDistanceTier(distanceMeters);
+  return DISTANCE_TIER_COLORS[tier];
 }

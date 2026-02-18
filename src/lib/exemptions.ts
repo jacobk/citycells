@@ -8,11 +8,19 @@
  */
 
 import { getDatabase, executeWrite, persistDatabase } from './db';
-import { 
-  SCORE_WEIGHTS, 
-  RMSE_NORMALIZATION_METERS,
-} from './analysis';
 import { assignTier, type Tier } from './tiers';
+
+// WHY: Import constants directly to avoid HMR issues with large analysis.ts module
+// The exemptions system still uses the legacy 4-metric formula for adjusted scores
+// TODO: Update to use TIERED_SCORE_WEIGHTS when exemptions are reworked for ADR 021
+const SCORE_WEIGHTS = {
+  perimeterCoverage: 0.40,
+  areaCoverage: 0.25,
+  alignment: 0.20,
+  efficiency: 0.15,
+} as const;
+
+const RMSE_NORMALIZATION_METERS = 50;
 
 // Re-export types from exemption-types.ts for convenience
 export { 

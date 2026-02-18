@@ -23,7 +23,8 @@ const INDEXEDDB_STORE = 'database';
 // v5: Added last_activity_sync_at and last_synced_activity_id columns for incremental sync (TICKET-016)
 // v6: Added achievements and user_achievements tables for gamification (TICKET-023)
 // v7: Added athlete info columns (firstname, lastname, profile) for caching (TICKET-024)
-const SCHEMA_VERSION = 7;
+// v8: Added tier_distribution and tiered_border_score columns for ADR 021 tiered scoring (TICKET-026)
+const SCHEMA_VERSION = 8;
 
 // ============================================
 // Types
@@ -259,6 +260,10 @@ CREATE TABLE IF NOT EXISTS walk_analyses (
   quality_score REAL,
   tier TEXT CHECK(tier IN ('platinum', 'gold', 'silver', 'bronze', 'potato')),
   
+  -- Tiered scoring (ADR 021)
+  tiered_border_score REAL,
+  tier_distribution TEXT,
+  
   -- Exclusive assignment (from ADR 002)
   is_primary_match INTEGER DEFAULT 0,
   
@@ -408,6 +413,10 @@ export async function initDatabase(): Promise<Database> {
   // Check and update schema version
   const versionResult = db.exec('SELECT version FROM schema_version LIMIT 1');
   const currentVersion = versionResult.length > 0 ? versionResult[0].values[0][0] as number : 0;
+  
+  // WHY: Capture db reference to avoid race condition where closeDatabase()
+  // sets module-level db to null during React Strict Mode cleanup while migrations run
+  const database = db;
   
   if (currentVersion < SCHEMA_VERSION) {
     if (currentVersion < 2) {
@@ -601,20 +610,47 @@ export async function initDatabase(): Promise<Database> {
       console.log('[DB Migration] Athlete info cache columns added successfully');
     }
 
+    // WHY: Schema version 8 adds tier distribution storage for ADR 021 tiered scoring
+    // Stores JSON like: {"platinum": 0.15, "gold": 0.28, "silver": 0.22, "bronze": 0.12, "potato": 0.08, "missed": 0.15}
+    if (currentVersion < 8) {
+      console.log('[DB Migration] Adding tier_distribution column for tiered scoring...');
+      
+      const columnsResult = db.exec("PRAGMA table_info(walk_analyses)");
+      const columnNames = new Set(
+        columnsResult.length > 0
+          ? columnsResult[0].values.map(row => row[1] as string)
+          : []
+      );
+
+      if (!columnNames.has('tier_distribution')) {
+        db.run('ALTER TABLE walk_analyses ADD COLUMN tier_distribution TEXT');
+      }
+      
+      // WHY: Also add tiered_border_score column for the new composite metric
+      if (!columnNames.has('tiered_border_score')) {
+        db.run('ALTER TABLE walk_analyses ADD COLUMN tiered_border_score REAL');
+      }
+      
+      console.log('[DB Migration] Tier distribution columns added successfully');
+    }
+
     // WHY: Final null check before persisting - db may have been closed during migrations
-    if (!db) {
-      console.warn('[DB] Database closed during migrations, aborting initialization');
+    // Use captured 'database' reference since it's still valid even if module-level db was nulled
+    if (!database) {
+      console.warn('[DB] Database reference lost during migrations, aborting initialization');
       throw new Error('Database closed during initialization');
     }
 
-    db.run('INSERT OR REPLACE INTO schema_version (version) VALUES (?)', [SCHEMA_VERSION]);
+    database.run('INSERT OR REPLACE INTO schema_version (version) VALUES (?)', [SCHEMA_VERSION]);
     await persistDatabase();
   }
 
   // WHY: Re-check db after async migrations - it may have been closed during HMR/Strict Mode
+  // In this case, don't throw - just abort silently as a new initialization will follow
   if (!db) {
-    console.warn('[DB] Database closed during migration, aborting initialization');
-    throw new Error('Database closed during initialization');
+    console.warn('[DB] Database closed during migration (likely Strict Mode cleanup), aborting');
+    isInitialized = false;
+    return null as unknown as Database; // Return will be ignored, new init will start
   }
 
   // Seed areas if empty

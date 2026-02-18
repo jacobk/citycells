@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { getTierColor, getTierDisplayName, type Tier, type AnalysisMetrics, SCORE_WEIGHTS } from '@/lib/analysis';
+import { getTierColor, getTierDisplayName, type Tier, type AnalysisMetrics, TIERED_SCORE_WEIGHTS } from '@/lib/analysis';
+import { DISTANCE_TIER_THRESHOLDS, type DistanceTier } from '@/lib/distance-tiers';
+import { DISTANCE_TIER_COLORS } from '@/lib/design-tokens';
 import type { DeviationWithExemption } from '@/lib/exemption-types';
 import type { ReactNode } from 'react';
 import type { ReAnalysisMode } from '@/lib/analysis-persistence';
@@ -449,6 +451,7 @@ export default function AreaDetailsPanel({
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 min-h-0">
           
           {/* Score Breakdown (if completed) */}
+          {/* WHY: Updated from 4 metrics to 3 per ADR 021 - tiered border score absorbs alignment */}
           {details.tier && (
             <section>
               <h3 className="text-sm font-semibold text-foreground mb-2">Score Breakdown</h3>
@@ -462,29 +465,31 @@ export default function AreaDetailsPanel({
                     </tr>
                   </thead>
                   <tbody>
+                    {/* WHY: Boundary Coverage (tieredBorderScore) replaces Border Traced per ADR 021 Section 5 */}
                     <tr className="border-b border-border">
                       <td className="py-2 px-3 text-foreground">
                         <Link
-                          href="/docs/metrics/border-traced"
+                          href="/docs/scoring/boundary-coverage"
                           className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
-                          Border Traced
+                          Boundary Coverage
                           <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 dark:border-blue-700 text-[10px] text-blue-500 dark:text-blue-400">
                             i
                           </span>
                         </Link>
                       </td>
                       <td className="text-right py-2 px-3 text-foreground font-medium">
-                        {(details.metrics.perimeterCoveragePercent * 100).toFixed(0)}%
+                        {(details.metrics.tieredBorderScore * 100).toFixed(0)}%
                       </td>
                       <td className="text-right py-2 px-3 text-muted-foreground">
-                        {(SCORE_WEIGHTS.perimeterCoverage * 100).toFixed(0)}%
+                        {(TIERED_SCORE_WEIGHTS.tieredBorder * 100).toFixed(0)}%
                       </td>
                     </tr>
+                    {/* Area Enclosed - unchanged per ADR 021 */}
                     <tr className="border-b border-border">
                       <td className="py-2 px-3 text-foreground">
                         <Link
-                          href="/docs/metrics/area-enclosed"
+                          href="/docs/scoring/area-enclosed"
                           className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           Area Enclosed
@@ -497,45 +502,27 @@ export default function AreaDetailsPanel({
                         {(details.metrics.areaCoveragePercent * 100).toFixed(0)}%
                       </td>
                       <td className="text-right py-2 px-3 text-muted-foreground">
-                        {(SCORE_WEIGHTS.areaCoverage * 100).toFixed(0)}%
+                        {(TIERED_SCORE_WEIGHTS.areaCoverage * 100).toFixed(0)}%
                       </td>
                     </tr>
-                    <tr className="border-b border-border">
-                      <td className="py-2 px-3 text-foreground">
-                        <Link
-                          href="/docs/metrics/path-precision"
-                          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                          Path Precision
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 dark:border-blue-700 text-[10px] text-blue-500 dark:text-blue-400">
-                            i
-                          </span>
-                        </Link>
-                      </td>
-                      <td className="text-right py-2 px-3 text-foreground font-medium">
-                        {details.metrics.rmseMeters.toFixed(1)}m
-                      </td>
-                      <td className="text-right py-2 px-3 text-muted-foreground">
-                        {(SCORE_WEIGHTS.alignment * 100).toFixed(0)}%
-                      </td>
-                    </tr>
+                    {/* WHY: Walk Focus replaces Route Efficiency per ADR 021 Section 5 - clearer name */}
                     <tr>
                       <td className="py-2 px-3 text-foreground">
                         <Link
-                          href="/docs/metrics/route-efficiency"
+                          href="/docs/scoring/walk-focus"
                           className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
-                          Route Efficiency
+                          Walk Focus
                           <span className="flex h-4 w-4 items-center justify-center rounded-full border border-blue-200 dark:border-blue-700 text-[10px] text-blue-500 dark:text-blue-400">
                             i
                           </span>
                         </Link>
                       </td>
                       <td className="text-right py-2 px-3 text-foreground font-medium">
-                        {(details.metrics.efficiency * 100).toFixed(0)}%
+                        {(details.metrics.walkFocus * 100).toFixed(0)}%
                       </td>
                       <td className="text-right py-2 px-3 text-muted-foreground">
-                        {(SCORE_WEIGHTS.efficiency * 100).toFixed(0)}%
+                        {(TIERED_SCORE_WEIGHTS.walkFocus * 100).toFixed(0)}%
                       </td>
                     </tr>
                   </tbody>
@@ -549,6 +536,52 @@ export default function AreaDetailsPanel({
                   </tfoot>
                 </table>
               </div>
+
+              {/* WHY: Tier distribution shows exactly where quality was gained/lost per ADR 021 Section 8 */}
+              {details.metrics.tierDistribution && (
+                <section className="mt-4">
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2">
+                    Precision Breakdown
+                  </h4>
+                  <div className="space-y-1.5">
+                    {(['platinum', 'gold', 'silver', 'bronze', 'potato', 'missed'] as DistanceTier[]).map((tier) => {
+                      const percentage = (details.metrics.tierDistribution[tier] || 0) * 100;
+                      // WHY: Get threshold label - missed is >50m, others use DISTANCE_TIER_THRESHOLDS
+                      const thresholdLabel = tier === 'missed' 
+                        ? '>50m' 
+                        : `≤${DISTANCE_TIER_THRESHOLDS[tier]}m`;
+                      return (
+                        <div key={tier} className="flex items-center gap-2">
+                          {/* Color swatch */}
+                          <div 
+                            className="w-3 h-3 rounded-sm shrink-0"
+                            style={{ backgroundColor: DISTANCE_TIER_COLORS[tier] }}
+                          />
+                          {/* Tier name and threshold */}
+                          <div className="flex items-center gap-1 min-w-[90px] shrink-0">
+                            <span className="text-xs font-medium text-foreground capitalize">{tier}</span>
+                            <span className="text-[10px] text-muted-foreground">({thresholdLabel})</span>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{ 
+                                width: `${percentage}%`,
+                                backgroundColor: DISTANCE_TIER_COLORS[tier],
+                              }}
+                            />
+                          </div>
+                          {/* Percentage */}
+                          <span className="text-xs text-muted-foreground w-10 text-right shrink-0">
+                            {percentage.toFixed(0)}%
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </section>
           )}
 

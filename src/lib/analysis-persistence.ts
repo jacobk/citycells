@@ -12,6 +12,7 @@ import { getDatabase, executeWrite, getWalkStreams, saveWalkStreams } from './db
 import type { FullAnalysisResult, StravaMetadata } from './analysis';
 import { analyzeWalk } from './analysis';
 import { assignTier, TIER_THRESHOLDS } from './tiers';
+import type { TierDistribution } from './distance-tiers';
 import type { StravaActivity } from '@/hooks/useStrava';
 import type { Position, Feature, Polygon, MultiPolygon } from 'geojson';
 import type { CachedStreams } from '@/lib/types/strava-streams';
@@ -101,8 +102,9 @@ export async function saveWalkAnalysis(
       perimeter_coverage_percent, covered_distance_meters,
       rmse_meters, max_deviation_meters, p90_deviation_meters, efficiency,
       area_coverage_percent, enclosed_area_sqm, is_closed_loop, loop_gap_meters,
-      raw_quality_score, quality_score, tier, is_primary_match
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      raw_quality_score, quality_score, tier, is_primary_match,
+      tiered_border_score, tier_distribution
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       walkId,
       areaId,
@@ -120,6 +122,9 @@ export async function saveWalkAnalysis(
       metrics.rawQualityScore, // quality_score same as raw initially; recalculated if exemptions exist
       metrics.tier || null,
       isPrimaryMatch ? 1 : 0,
+      // WHY: ADR 021 tiered scoring fields
+      metrics.tieredBorderScore,
+      JSON.stringify(metrics.tierDistribution),
     ]
   );
 
@@ -234,6 +239,10 @@ export interface CachedMetrics {
   efficiency: number;
   enclosedAreaSqm: number;
   loopGapMeters: number;
+  // WHY: ADR 021 tiered scoring fields
+  tieredBorderScore: number;
+  tierDistribution: TierDistribution;
+  walkFocus: number;
 }
 
 /**
@@ -277,7 +286,9 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
       wa.efficiency,
       wa.enclosed_area_sqm,
       wa.loop_gap_meters,
-      GROUP_CONCAT(DISTINCT w.strava_activity_id) as activity_ids
+      GROUP_CONCAT(DISTINCT w.strava_activity_id) as activity_ids,
+      wa.tiered_border_score,
+      wa.tier_distribution
     FROM area_completions ac
     JOIN areas a ON ac.area_id = a.id
     JOIN walk_analyses wa ON ac.best_walk_analysis_id = wa.id
@@ -295,9 +306,13 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
       const analysisId = row[1] as number;
       const adjustedScore = row[4] as number; // COALESCE(quality_score, raw_quality_score)
       const storedTier = row[6] as string | null;
-      // WHY: activity_ids is now at index 15 after adding score_for_tier column
       const activityIdsStr = row[15] as string;
       const activityIds = activityIdsStr ? activityIdsStr.split(',').map(Number) : [];
+      
+      // WHY: ADR 021 tiered scoring fields (indices 16, 17)
+      const tieredBorderScore = row[16] as number | null;
+      const tierDistributionJson = row[17] as string | null;
+      const tierDistribution = tierDistributionJson ? JSON.parse(tierDistributionJson) : null;
 
       // WHY: Use centralized assignTier() to ensure consistency
       // The stored tier might be from raw_quality_score, but we're displaying adjusted score
@@ -326,6 +341,10 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
           efficiency: row[12] as number,
           enclosedAreaSqm: row[13] as number,
           loopGapMeters: row[14] as number,
+          // WHY: ADR 021 tiered scoring fields
+          tieredBorderScore: tieredBorderScore ?? 0,
+          tierDistribution: tierDistribution ?? { platinum: 0, gold: 0, silver: 0, bronze: 0, potato: 0, missed: 0 },
+          walkFocus: row[12] as number, // Same as efficiency, renamed per ADR 021
         },
         activityIds,
       });

@@ -1,8 +1,10 @@
 # ADR 003: Multi-Metric Completion Scoring
 
 **Date:** 2026-02-03 (Updated: 2026-02-13)
-**Status:** Accepted
+**Status:** Partially Superseded by ADR 021
 **Supersedes:** Partial update to ADR 002 (completion threshold changes from 75% to 50%)
+
+> **Note (2026-02-17):** The scoring formula (Sections 1-3: metrics, composite score, and tier system) is superseded by [ADR 021: Tiered Distance-Based Boundary Scoring](./021-tiered-distance-scoring.md). This ADR remains authoritative for: deviation detection algorithm (Section 5), exemption system (Section 6), and UI display patterns.
 
 ## Updates
 

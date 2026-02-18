@@ -57,6 +57,18 @@ const EMPTY_METRICS: AnalysisMetrics = {
   efficiency: 0,
   borderAlignedLengthMeters: 0,
   totalWalkLengthMeters: 0,
+  // NEW: Tiered scoring (ADR 021)
+  tieredBorderScore: 0,
+  tierDistribution: {
+    platinum: 0,
+    gold: 0,
+    silver: 0,
+    bronze: 0,
+    potato: 0,
+    missed: 1, // All distance counted as missed when empty
+  },
+  tieredSegments: [],
+  walkFocus: 0,
   rawQualityScore: 0,
   tier: null,
 };

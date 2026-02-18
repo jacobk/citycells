@@ -4,6 +4,8 @@
 
 The analysis engine calculates multi-metric scores for walks around Malmö's sub-areas. It evaluates how well a walk traces the border of an area and assigns quality tiers (Platinum/Gold/Silver/Bronze/Potato). The same pipeline can be re-run on cached walks via the [Re-Analysis](../features/re-analysis.md) feature (user-initiated), so scores stay correct when the algorithm or source data changes.
 
+> **Update (2026-02-17):** The scoring system has been upgraded from binary 25m threshold to a 6-tier distance-based system. See [ADR 021](../ADR/021-tiered-distance-scoring.md) for full details. Phase 1 (core scoring logic) is complete.
+
 ## User Stories
 
 From [PRD 001](../PRD/001-mvp-mobile-walker.md):
@@ -16,13 +18,18 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 
 | File | Purpose |
 |------|---------|
-| `src/lib/analysis.ts` | Core metric calculations and scoring |
+| `src/lib/analysis.ts` | Core metric calculations and scoring (uses tiered scoring) |
+| `src/lib/distance-tiers.ts` | **NEW:** 6-tier distance classification and weighted scoring |
+| `src/lib/geo-distance.ts` | Distance-to-geometry utilities |
+| `src/lib/tiers.ts` | Overall tier assignment (Platinum/Gold/Silver/Bronze/Potato) |
 | `src/lib/db.ts` | Storage of analysis results (walk_analyses table) |
 | `src/app/api/activities/streams/route.ts` | Fetch Strava streams for high-fidelity GPS |
 | `src/components/Map/Map.tsx` | Streams-aware analysis orchestration |
 | `src/lib/types/strava-streams.ts` | Stream type definitions |
 
 ### Metrics Overview
+
+> **Implemented (Phase 1):** The new tiered scoring formula is active: Tiered Border Score (45%), Area Coverage (25%), Walk Focus (30%).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -37,13 +44,13 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 │  │         Metric Calculations            │                │
 │  │                                        │                │
 │  │  ┌─────────────────────────────────┐  │                │
-│  │  │ 1. Perimeter Coverage (40%)    │  │                │
+│  │  │ 1. Tiered Border Score (45%)   │  │  ← NEW (ADR 021)
 │  │  │ 2. Area Coverage (25%)         │  │                │
-│  │  │ 3. Alignment Score (20%)       │  │                │
-│  │  │ 4. Efficiency (15%)            │  │                │
+│  │  │ 3. Walk Focus (30%)            │  │  ← Renamed    │
 │  │  └─────────────────────────────────┘  │                │
 │  │                                        │                │
 │  │  ┌─────────────────────────────────┐  │                │
+│  │  │ Distance Tier Classification    │  │  ← NEW (ADR 021)
 │  │  │ Deviation Detection             │  │                │
 │  │  └─────────────────────────────────┘  │                │
 │  └────────────────────────────────────────┘                │
@@ -51,14 +58,51 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 │                        ▼                                    │
 │  ┌────────────────────────────────────────┐                │
 │  │    Quality Score (0.0 - 1.0)           │                │
-│  │    Tier Assignment                     │                │
+│  │    Tier Assignment + Distribution      │  ← NEW output │
 │  └────────────────────────────────────────┘                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Metric Details
 
-### 1. Perimeter Coverage (Weight: 40%)
+### 1. Tiered Border Score (Weight: 45%) — NEW (ADR 021)
+
+**Key Functions:**
+- `assignDistanceTier(distanceMeters)` - Returns tier name and point value
+- `calculateTieredBorderScore(walkCoordinates, boundaryLines)` - Returns weighted score, tier distribution, and per-segment data
+- Located in `src/lib/distance-tiers.ts`
+
+**Replaces:** Perimeter Coverage (40%) + Alignment Score (20%)
+
+**Formula:** `Σ(tier_points × segment_length) / Σ(segment_length)`
+
+**Distance Tiers:**
+
+| Tier | Distance | Points |
+|------|----------|--------|
+| Platinum | ≤ 10m | 1.00 |
+| Gold | ≤ 20m | 0.80 |
+| Silver | ≤ 30m | 0.55 |
+| Bronze | ≤ 40m | 0.30 |
+| Potato | ≤ 50m | 0.10 |
+| Missed | > 50m | 0.00 |
+
+**How it works:**
+1. For each walk segment, calculate midpoint
+2. Find minimum distance from midpoint to any boundary line
+3. Assign distance tier based on thresholds above
+4. Weight contribution by segment length
+5. Aggregate into single 0-1 score
+
+**WHY tiered approach:**
+- Rewards precision (walking at 5m scores higher than 24m)
+- Provides graduated feedback instead of binary
+- Captures both coverage AND precision in single metric
+- See ADR 021 for detailed rationale
+
+### 1-LEGACY. Perimeter Coverage (Weight: 40%) — SUPERSEDED
+
+> **Note:** This metric is superseded by Tiered Border Score (ADR 021). Kept for reference.
 
 **Formula:** `covered_perimeter_length / total_perimeter_length`
 
@@ -132,21 +176,54 @@ For each GPS point, compute perpendicular distance to nearest border segment.
 - A walk averaging 50m from border gets alignment_score = 0
 - Typical good walks are 5-15m from border (score 0.7-0.9)
 
-### 4. Efficiency (Weight: 15%)
+### 4. Walk Focus (Weight: 30%) — RENAMED + REWEIGHTED (ADR 021)
+
+**Implementation:** Uses existing `calculateEfficiency()` function. The value is stored as both `efficiency` (legacy) and `walkFocus` (new name) in `AnalysisMetrics`.
+
+**Previously:** Efficiency (15%)
 
 **Formula:** `border_aligned_length / total_walk_length`
 
 **How it works:**
 - Measure total walk distance
-- Measure distance spent within 25m buffer of perimeter
+- Measure distance spent within qualifying tiers (≤50m from perimeter)
 - Compute ratio
 
-**Purpose:** Penalizes unnecessary detours and backtracking.
+**Purpose:** Penalizes unnecessary detours and backtracking. Renamed to "Walk Focus" for clarity—measures what portion of your walk was actually tracing the boundary.
+
+**Weight increase (15% → 30%):**
+- With Tiered Border Score absorbing alignment, Walk Focus gets more weight
+- Stronger incentive to avoid detours
+- See ADR 021 for rationale
 
 **Strava privacy zones:**
 Strava's `summary_polyline` can be truncated near start/end due to privacy/anonymization zones, which under-reports walk length. The analysis engine uses Strava's `distance` field (full GPS stream) for total walk length when available to keep efficiency and UI distance accurate.
 
 ## Quality Score Calculation
+
+**Key Functions:**
+- `calculateTieredQualityScore(tieredBorderScore, areaCoverage, walkFocus)` - NEW formula (ADR 021)
+- `calculateQualityScore(...)` - Legacy formula (kept for reference)
+- Located in `src/lib/analysis.ts`
+
+### NEW Formula (ADR 021) — ACTIVE
+
+```typescript
+quality_score = (
+  0.45 × tiered_border_score +
+  0.25 × area_coverage +
+  0.30 × walk_focus
+)
+```
+
+**Weight Rationale (from ADR 021):**
+- **Tiered Border Score (45%)**: Captures both coverage AND precision
+- **Area Coverage (25%)**: Rewards closing the loop (unchanged)
+- **Walk Focus (30%)**: Penalizes detours more strongly
+
+**Note:** Open paths (area_coverage = 0) can achieve max score of 0.75, sufficient for Silver tier.
+
+### LEGACY Formula (ADR 003) — SUPERSEDED
 
 ```typescript
 quality_score = (
@@ -156,14 +233,6 @@ quality_score = (
   0.15 × efficiency
 )
 ```
-
-**Weight Rationale (from ADR 003):**
-- **Perimeter Coverage (40%)**: Primary goal—walk the border
-- **Area Coverage (25%)**: Rewards closing the loop
-- **Alignment (20%)**: Rewards staying close to border
-- **Efficiency (15%)**: Minor penalty for detours
-
-**Note:** Open paths (area_coverage = 0) can achieve max score of 0.75, sufficient for Silver tier.
 
 ## Tier System
 
@@ -236,21 +305,30 @@ if (detour_ratio >= 2.0 && return_accuracy < 50m) {
 
 | Value | Meaning | Source |
 |-------|---------|--------|
-| 25m | Perimeter buffer | ADR 002, GPS accuracy |
+| 10m/20m/30m/40m/50m | Distance tier thresholds | ADR 021 |
+| 1.0/0.8/0.55/0.3/0.1/0 | Tier point values | ADR 021 |
 | 100m | Loop closure threshold | ADR 003 |
-| 50m | RMSE normalization | ADR 003 |
-| 30m | Deviation threshold | ADR 003 |
-| 0.40/0.25/0.20/0.15 | Score weights | ADR 003 |
-| 0.95/0.85/0.70/0.50 | Tier thresholds (Bronze+) | ADR 003 |
-| < 0.50 | Potato tier threshold | ADR 003 (Updated 2026-02-13) |
+| 30m | Deviation detection threshold | ADR 003 |
+| 0.45/0.25/0.30 | Score weights (NEW) | ADR 021 |
+| 0.95/0.85/0.70/0.50 | Overall tier thresholds | ADR 003, ADR 021 |
+| < 0.50 | Potato tier threshold | ADR 003 |
+
+### Legacy Values (Superseded)
+
+| Value | Meaning | Source |
+|-------|---------|--------|
+| 25m | Binary perimeter buffer | ADR 002 (superseded by tiers) |
+| 50m | RMSE normalization | ADR 003 (superseded by tiers) |
+| 0.40/0.25/0.20/0.15 | Old score weights | ADR 003 (superseded) |
 
 ## ADR References
 
-- [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - 25m buffer, exclusive assignment
-- [ADR 003: Multi-Metric Completion Scoring](../ADR/003-multi-metric-completion-scoring.md) - Full scoring system
+- [ADR 002: Exclusive Activity Matching](../ADR/002-exclusive-activity-matching.md) - Exclusive assignment rules
+- [ADR 003: Multi-Metric Completion Scoring](../ADR/003-multi-metric-completion-scoring.md) - Deviation detection, exemption system (scoring formula superseded)
 - [ADR 005: Strava Privacy Zones and Truncated Polylines](../ADR/005-strava-privacy-zones.md) - Data limitations and distance handling
 - [ADR 006: Strava Activity Streams](../ADR/006-strava-activity-streams.md) - High-fidelity GPS source
 - [ADR 007: Interactive Metrics Documentation](../ADR/007-interactive-metrics-documentation.md) - User-facing metric explanations
+- **[ADR 021: Tiered Distance-Based Boundary Scoring](../ADR/021-tiered-distance-scoring.md)** - NEW: 6-tier distance scoring system
 
 ## Testing Infrastructure
 
@@ -305,10 +383,21 @@ These metrics are clickable links to in-app documentation (see [Metrics Document
 
 | Internal Name | User-Friendly Name | Weight |
 |---------------|-------------------|--------|
-| Perimeter Coverage | **Border Traced** | 40% |
+| Tiered Border Score | **Boundary Coverage** | 45% |
 | Area Coverage | **Area Enclosed** | 25% |
-| Alignment Score | **Path Precision** | 20% |
-| Efficiency | **Route Efficiency** | 15% |
+| Efficiency | **Walk Focus** | 30% |
+
+### Tier Distribution Display
+
+**Implementation:** `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` (lines ~540-584)
+
+Below the score breakdown, the AreaDetailsPanel displays a "Precision Breakdown" section showing the percentage of walk distance in each distance tier. Each tier is displayed with:
+- Color swatch using `DISTANCE_TIER_COLORS` from `src/lib/design-tokens.ts`
+- Tier name and threshold label (e.g., "Platinum (≤10m)")
+- Progress bar showing percentage
+- Numeric percentage value
+
+This visualization shows users exactly where their quality score came from—how much of their walk was GPS-perfect (Platinum) vs. too far from the boundary (Missed).
 
 ## Exemption-Adjusted Scoring
 

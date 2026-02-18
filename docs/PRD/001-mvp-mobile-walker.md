@@ -3,7 +3,7 @@
 **Date:** 2026-02-02 (Updated: 2026-02-17)  
 **Status:** In Progress
 
-*Latest update: Agent Build Verification - automated testing strategy for AI-first development (Section 3.16)*
+*Latest update: Tiered Distance Scoring - graduated boundary matching with 6-tier precision system (Sections 3.3, 3.4, 3.7, 3.10)*
 
 ## 1. Overview
 
@@ -123,22 +123,25 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 
 ### 3.3 Analysis Logic (The "CityCells" Algorithm)
 
-*Reference: ADR 002 (Exclusive Matching), ADR 003 (Multi-Metric Scoring)*
+*Reference: ADR 002 (Exclusive Matching), ADR 003 (Multi-Metric Scoring), ADR 021 (Tiered Distance Scoring)*
 
 For each eligible activity:
 1.  Decode Strava `summary_polyline` for GPS points and use Strava metadata for accuracy.
-2.  Create a buffer (validity zone) of **25 meters** around the perimeter of each sub-area.
-3.  **Exclusive Assignment**: Assign the walk to the *one* sub-area where it has the highest perimeter coverage (must be > 50%).
-4.  **Multi-Metric Analysis**: Calculate all metrics (see ADR 003):
-    *   Perimeter coverage (%)
+2.  **Tiered Distance Analysis**: For each walk segment, calculate distance to nearest boundary and assign tier (see ADR 021):
+    *   Platinum (≤10m), Gold (≤20m), Silver (≤30m), Bronze (≤40m), Potato (≤50m), Missed (>50m)
+3.  **Exclusive Assignment**: Assign the walk to the *one* sub-area where it has the highest tiered border score (must have sufficient coverage).
+4.  **Multi-Metric Analysis**: Calculate all metrics (see ADR 021):
+    *   Tiered Border Score (weighted by segment length)
     *   Area coverage (m²) - if walk forms a closed loop
-    *   RMSE alignment error (meters)
-    *   Maximum deviation (meters)
-    *   Efficiency (%)
-5.  **Deviation Detection**: Identify segments where walker deviated >30m from border.
-6.  **Quality Score**: Compute composite score (0.0 - 1.0).
+    *   Walk Focus (% of walk on boundary)
+    *   Tier distribution (% in each distance tier)
+5.  **Deviation Detection**: Identify segments where walker deviated >30m from border (unchanged from ADR 003).
+6.  **Quality Score**: Compute composite score (0.0 - 1.0) using updated formula:
+    ```
+    quality_score = 0.45 × tiered_border_score + 0.25 × area_coverage + 0.30 × walk_focus
+    ```
 7.  **Tier Assignment**: Assign tier based on score (Platinum ≥0.95, Gold ≥0.85, Silver ≥0.70, Bronze ≥0.50, Potato <0.50).
-8.  **Persistence**: Store analysis results in SQLite.
+8.  **Persistence**: Store analysis results including tier distribution in SQLite.
 
 ### 3.4 Area Status Visualization (Updated: 2026-02-13)
 
@@ -175,19 +178,27 @@ Display completed areas using a **sequential heat map color gradient** for impro
 *   Label: "Show Walk Routes" or route icon
 *   Default: OFF
 
-**When Visible — Deviation-Based Coloring:**
+**When Visible — Tiered Distance Coloring (Updated: 2026-02-17):**
 
-| Condition | Color | Hex | Description |
-|-----------|-------|-----|-------------|
-| Within 25m buffer | Green | `#22c55e` | On-track, following boundary |
-| Outside 25m buffer | Red | `#ef4444` | Deviation from boundary |
+*Reference: ADR 021 (Tiered Distance Scoring)*
+
+| Distance Tier | Color | Hex | Pattern | Description |
+|---------------|-------|-----|---------|-------------|
+| Platinum (≤10m) | Deep Violet | `#7c3aed` | Solid | Excellent precision |
+| Gold (≤20m) | Vibrant Purple | `#a855f7` | Solid | Good precision |
+| Silver (≤30m) | Magenta Pink | `#d946ef` | Solid | Acceptable |
+| Bronze (≤40m) | Soft Pink | `#f0abfc` | Solid | Marginal |
+| Potato (≤50m) | Warm Gray | `#a1a1aa` | Solid | Minimal credit |
+| Missed (>50m) | Light Red | `#fca5a5` | Dashed | Did not count |
 
 | Element | Width | Opacity |
 |---------|-------|---------|
 | Route Segment | 3px | 0.85 |
 
-*   Binary threshold coloring: green = on boundary, red = deviation
-*   Thinner lines reduce visual clutter (3px vs. previous 7px glow layer)
+*   Tiered coloring: gradient from violet (best) to red (missed)
+*   Dashed pattern for "Missed" segments provides additional visual distinction
+*   Extends existing purple-pink design system (ADR 010)
+*   Colorblind accessible (no red-green dependency; uses luminance contrast)
 *   Routes render **above area fills** so they are visible on completed areas
 *   Uses stream data (ADR 006) for full path visibility including privacy zone segments
 
@@ -259,17 +270,34 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
     *   Default selection: Best walk (highest quality score)
 *   **Single Walk:** When only one walk matches, it displays automatically when toggle is ON
 
-#### Score Breakdown (if completed)
+#### Score Breakdown (if completed) (Updated: 2026-02-17)
 
-Each metric name is a clickable link to its documentation page (see Section 3.9).
+*Reference: ADR 021 (Tiered Distance Scoring)*
+
+Each metric name is a clickable link to its documentation page (see Section 3.10).
 
 | Metric | User-Friendly Name | Value | Weight |
 |--------|-------------------|-------|--------|
-| Perimeter Coverage | Border Traced | 78% | 40% |
+| Tiered Border Score | Boundary Coverage | 72% | 45% |
 | Area Coverage | Area Enclosed | 65% | 25% |
-| Alignment (RMSE) | Path Precision | 12m | 20% |
-| Efficiency | Route Efficiency | 89% | 15% |
-| **Quality Score** | — | **0.76** | — |
+| Efficiency | Walk Focus | 89% | 30% |
+| **Quality Score** | — | **0.74** | — |
+
+**Tier Distribution Display (NEW):**
+
+Below the score breakdown, show per-segment tier distribution:
+
+```
+Precision Breakdown:
+├── Platinum (≤10m): 15%  ████░░░░░░
+├── Gold (≤20m):     28%  ███████░░░
+├── Silver (≤30m):   22%  ██████░░░░
+├── Bronze (≤40m):   12%  ███░░░░░░░
+├── Potato (≤50m):    8%  ██░░░░░░░░
+└── Missed (>50m):   15%  ████░░░░░░
+```
+
+This shows users exactly where they gained/lost points and how to improve.
 
 #### Area & Perimeter Info
 *   Total area: X m² (or km² for large areas)
@@ -330,9 +358,9 @@ List of all matched walks for this area:
 *   Exempted detour distance is excluded from efficiency calculation.
 *   Users can view all exemptions in the details panel.
 
-### 3.10 Metrics Documentation (Updated: 2026-02-03)
+### 3.10 Metrics Documentation (Updated: 2026-02-17)
 
-*Reference: ADR 007 (Interactive Metrics Documentation)*
+*Reference: ADR 007 (Interactive Metrics Documentation), ADR 021 (Tiered Distance Scoring)*
 
 Provide in-app documentation for each analysis metric accessible via clickable links.
 
@@ -340,10 +368,9 @@ Provide in-app documentation for each analysis metric accessible via clickable l
 
 | Technical Name | Display Name | Slug |
 |----------------|--------------|------|
-| Perimeter Coverage | Border Traced | `border-traced` |
+| Tiered Border Score | Boundary Coverage | `boundary-coverage` |
 | Area Coverage | Area Enclosed | `area-enclosed` |
-| Alignment Score | Path Precision | `path-precision` |
-| Efficiency | Route Efficiency | `route-efficiency` |
+| Efficiency | Walk Focus | `walk-focus` |
 
 **Documentation Pages:**
 
@@ -357,16 +384,27 @@ Provide in-app documentation for each analysis metric accessible via clickable l
     *   Visual examples (good vs. poor scores)
     *   Tips to improve
 
+**Precision Tiers Documentation (NEW):**
+
+*   **Location:** `/docs/scoring/precision-tiers/`
+*   **Access:** Hamburger menu → "How Scoring Works" → "Precision Tiers"
+*   **Content:**
+    *   What each tier means (Platinum through Missed)
+    *   Interactive distance slider showing tier boundaries
+    *   Color legend matching route visualization
+    *   GPS accuracy considerations
+    *   Tips for achieving higher tiers
+
 **Interactive Visualizations (D3.js):**
 
 All visualizations are **mobile-first** (touch-optimized) and use **static example data** to clearly illustrate algorithms.
 
 | Metric | Visualization Type |
 |--------|-------------------|
-| Border Traced | Animated path tracing with 25m buffer zone |
+| Boundary Coverage | Animated path with **tiered color gradient** showing distance tiers |
 | Area Enclosed | Polygon intersection with toggle for open/closed paths |
-| Path Precision | Heat map of distance from border with RMSE animation |
-| Route Efficiency | Side-by-side efficient vs. inefficient path comparison |
+| Walk Focus | Side-by-side efficient vs. inefficient path comparison |
+| Precision Tiers (NEW) | Interactive distance slider with tier color preview |
 
 ### 3.9 Data Persistence (Updated: 2026-02-15)
 
@@ -457,6 +495,8 @@ Provide a browsable list of all sub-areas with sorting and filtering capabilitie
 **Menu Options:**
 *   **Areas** - Opens sub-area list in bottom sheet
 *   **Stats** - Opens existing ProgressDashboard (right drawer)
+*   **How Scoring Works** (NEW) - Opens scoring documentation in bottom sheet
+*   **Achievements** - Opens achievement browser (per ADR 019)
 
 **Mutual Exclusivity:** Opening the hamburger menu automatically collapses the profile card if expanded.
 

@@ -265,6 +265,48 @@
 - [x] Integrate into page.tsx (check after analysis, render components)
 - [x] Update feature documentation with implementation details
 
+## Phase 6.8: Tiered Distance Scoring (ADR 021, TICKET-026)
+
+*Reference: [ADR 021](docs/ADR/021-tiered-distance-scoring.md) | [Feature Docs](docs/features/analysis-engine.md)*
+
+### Phase 1: Core Scoring Logic
+- [x] Create `src/lib/distance-tiers.ts` with tier constants and functions
+- [x] Implement `assignDistanceTier(distanceMeters)` - tier + points assignment
+- [x] Implement `calculateTieredBorderScore()` - segment-length weighted scoring
+- [x] Update `TIERED_SCORE_WEIGHTS` in analysis.ts (45/25/30)
+- [x] Update `AnalysisMetrics` interface with new fields
+- [x] Implement `calculateTieredQualityScore()` function
+- [x] Update `analyzeWalk()` to use tiered scoring
+- [x] Create `src/lib/__tests__/distance-tiers.test.ts` (39 tests)
+- [x] Update real-activity test expectations for new formula
+- [x] Update feature documentation (analysis-engine.md)
+
+### Phase 2: Database Schema Update
+- [ ] Add `tiered_border_score` column to walk_analyses table
+- [ ] Add `tier_distribution` JSON column
+- [ ] Create migration to schema v8
+- [ ] Update persistence layer to store/retrieve new fields
+
+### Phase 3: Route Visualization
+- [ ] Add per-segment tier coloring to route visualization
+- [ ] Implement tier color palette (Platinum→Missed gradient)
+- [ ] Add dashed pattern for "Missed" segments
+
+### Phase 4: UI Updates
+- [ ] Display tier distribution in AreaDetailsPanel
+- [ ] Add tier breakdown progress bars
+- [ ] Update metrics documentation pages
+
+### Phase 5: Documentation Pages
+- [ ] Create /docs/scoring/ app routes
+- [ ] Add "How Scoring Works" section to hamburger menu
+- [ ] Create interactive tier explainer
+
+### Phase 6: Comparison Testing
+- [ ] Re-analyze sample walks with both formulas
+- [ ] Document score differences
+- [ ] Verify tier assignments match expectations
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

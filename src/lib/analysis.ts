@@ -25,6 +25,18 @@ import {
   PERIMETER_BUFFER_METERS,
 } from './geo-distance';
 
+// WHY: Import tiered distance scoring from new module per ADR 021
+// This replaces the binary 25m threshold with 6-tier graduated scoring
+import {
+  calculateTieredBorderScore,
+  type TierDistribution,
+  type TieredSegment,
+} from './distance-tiers';
+
+// Re-export for convenience
+export type { TierDistribution, TieredSegment } from './distance-tiers';
+export { DISTANCE_TIER_THRESHOLDS, TIER_POINTS, assignDistanceTier } from './distance-tiers';
+
 // Re-export for backwards compatibility
 export { PERIMETER_BUFFER_METERS } from './geo-distance';
 
@@ -40,7 +52,7 @@ export const RMSE_NORMALIZATION_METERS = 50;
 // Balances catching real detours vs GPS noise
 export const DEVIATION_THRESHOLD_METERS = 30;
 
-// WHY: Quality score weights from ADR 003
+// WHY: Quality score weights from ADR 003 (legacy - kept for backward compatibility)
 // Perimeter coverage is primary goal (40%), area coverage rewards closure (25%),
 // alignment rewards precision (20%), efficiency penalizes detours (15%)
 export const SCORE_WEIGHTS = {
@@ -48,6 +60,17 @@ export const SCORE_WEIGHTS = {
   areaCoverage: 0.25,
   alignment: 0.20,
   efficiency: 0.15,
+} as const;
+
+// WHY: New weights per ADR 021 - tiered border score absorbs alignment
+// The tiered border score captures both coverage AND precision, so alignment
+// is removed as a separate component. Walk focus (efficiency) gets increased
+// weight to provide stronger penalty for detours.
+// See ADR 021 Section 4 for rationale.
+export const TIERED_SCORE_WEIGHTS = {
+  tieredBorder: 0.45,   // Captures both coverage AND precision
+  areaCoverage: 0.25,   // Unchanged - rewards closing the loop
+  walkFocus: 0.30,      // Renamed from efficiency, increased weight
 } as const;
 
 // ============================================
@@ -65,16 +88,26 @@ export interface AnalysisMetrics {
   isClosedLoop: boolean;
   loopGapMeters: number;
   
-  // Alignment metrics
+  // Alignment metrics (legacy - kept for backward compatibility)
   rmseMeters: number;
   maxDeviationMeters: number;
   p90DeviationMeters: number;
   alignmentScore: number; // 0-1 normalized
   
-  // Efficiency metric
+  // Efficiency metric (legacy field name kept for backward compatibility)
   efficiency: number; // 0-1
   borderAlignedLengthMeters: number;
   totalWalkLengthMeters: number;
+  
+  // NEW: Tiered scoring (ADR 021)
+  // WHY: Replaces binary 25m threshold with 6-tier graduated scoring
+  tieredBorderScore: number;           // 0-1, weighted aggregate
+  tierDistribution: TierDistribution;  // % of walk in each tier (sum to 1.0)
+  tieredSegments: TieredSegment[];     // Per-segment classification for visualization
+  
+  // WHY: Renamed for clarity per ADR 021 Section 5 - same value as efficiency
+  // "Walk Focus" better describes what it measures: % of walk on the edge
+  walkFocus: number;  // Same as efficiency, renamed per ADR 021
   
   // Composite score
   rawQualityScore: number;
@@ -387,13 +420,15 @@ export function calculateEfficiency(
 }
 
 /**
- * Calculate composite quality score and assign tier.
+ * Calculate composite quality score and assign tier (legacy formula).
  * 
  * WHY: Weighted combination from ADR 003:
  * - 40% perimeter coverage (primary goal)
  * - 25% area coverage (rewards closure)
  * - 20% alignment (rewards precision)
  * - 15% efficiency (penalizes detours)
+ * 
+ * @deprecated Use calculateTieredQualityScore for new code (ADR 021)
  */
 export function calculateQualityScore(
   perimeterCoverage: number,
@@ -406,6 +441,35 @@ export function calculateQualityScore(
     SCORE_WEIGHTS.areaCoverage * areaCoverage +
     SCORE_WEIGHTS.alignment * alignmentScore +
     SCORE_WEIGHTS.efficiency * efficiency;
+  
+  // WHY: Use centralized assignTier() for consistent tier assignment
+  // See TICKET-016 for why this was centralized (potato tier bug)
+  const tier = assignTier(score);
+  
+  return { score, tier };
+}
+
+/**
+ * Calculate composite quality score using tiered border scoring (ADR 021).
+ * 
+ * WHY: New scoring formula per ADR 021 Section 4:
+ * - 45% tiered border score (captures both coverage AND precision)
+ * - 25% area coverage (unchanged - rewards closing the loop)
+ * - 30% walk focus (renamed from efficiency, increased weight)
+ * 
+ * This replaces the legacy formula that had separate alignment scoring.
+ * The tiered border score inherently captures precision, so alignment
+ * is no longer needed as a separate component.
+ */
+export function calculateTieredQualityScore(
+  tieredBorderScore: number,
+  areaCoverage: number,
+  walkFocus: number
+): { score: number; tier: Tier } {
+  const score = 
+    TIERED_SCORE_WEIGHTS.tieredBorder * tieredBorderScore +
+    TIERED_SCORE_WEIGHTS.areaCoverage * areaCoverage +
+    TIERED_SCORE_WEIGHTS.walkFocus * walkFocus;
   
   // WHY: Use centralized assignTier() for consistent tier assignment
   // See TICKET-016 for why this was centralized (potato tier bug)
@@ -568,49 +632,75 @@ export function analyzeWalk(
   // Convert coordinates to LineString
   const walkLine = turf.lineString(analysisCoordinates);
   
+  // Get boundary lines for distance calculations (used by multiple metrics)
+  // WHY: Pre-compute once and reuse - avoids redundant polygon-to-line conversion
+  const boundaryLines = polygonToPerimeterLines(areaPolygon);
+  
   // 1. Loop detection (uses override if provided, otherwise Strava metadata, otherwise coordinates)
   // WHY: During re-analysis without streams, the polyline is too compressed for accurate loop detection.
   // We use the previous loop status from the database instead.
   const loopResult = loopStatusOverride ?? detectLoop(analysisCoordinates, stravaMetadata);
 
-  // 2. Perimeter coverage
+  // 2. Perimeter coverage (legacy metric)
   const perimeterResult = calculatePerimeterCoverage(walkLine, areaPolygon, perimeterLengthMeters);
   
   // 3. Area coverage
   const areaResult = calculateAreaCoverage(analysisCoordinates, areaPolygon, areaSqm, loopResult.isClosedLoop);
 
-  // 4. Alignment error
+  // 4. Alignment error (legacy metric - kept for backward compatibility)
   const alignmentResult = calculateAlignmentError(analysisCoordinates, areaPolygon);
   
-  // 5. Efficiency
+  // 5. Efficiency (also used as walkFocus per ADR 021)
   const efficiencyResult = calculateEfficiency(walkLine, areaPolygon, stravaMetadata?.distance);
   
-  // 6. Quality score and tier
-  const scoreResult = calculateQualityScore(
-    perimeterResult.coveragePercent,
+  // 6. NEW: Tiered border score (ADR 021)
+  // WHY: Replaces binary 25m threshold with 6-tier graduated scoring
+  // This captures both coverage AND precision in a single metric
+  const tieredResult = calculateTieredBorderScore(analysisCoordinates, boundaryLines);
+  
+  // 7. Quality score and tier using NEW tiered formula (ADR 021)
+  // WHY: Uses tiered border score instead of separate perimeter coverage + alignment
+  const scoreResult = calculateTieredQualityScore(
+    tieredResult.score,
     areaResult.coveragePercent,
-    alignmentResult.alignmentScore,
-    efficiencyResult.efficiency
+    efficiencyResult.efficiency  // walkFocus = efficiency
   );
   
-  // 7. Deviation detection
+  // 8. Deviation detection
   const deviations = detectDeviations(analysisCoordinates, areaPolygon);
   
   return {
     metrics: {
+      // Legacy perimeter metrics (kept for backward compatibility)
       perimeterCoveragePercent: perimeterResult.coveragePercent,
       coveredDistanceMeters: perimeterResult.coveredMeters,
+      
+      // Area metrics
       areaCoveragePercent: areaResult.coveragePercent,
       enclosedAreaSqm: areaResult.enclosedSqm,
       isClosedLoop: loopResult.isClosedLoop,
       loopGapMeters: loopResult.gapMeters,
+      
+      // Legacy alignment metrics (kept for backward compatibility)
       rmseMeters: alignmentResult.rmseMeters,
       maxDeviationMeters: alignmentResult.maxMeters,
       p90DeviationMeters: alignmentResult.p90Meters,
       alignmentScore: alignmentResult.alignmentScore,
+      
+      // Legacy efficiency (kept for backward compatibility)
       efficiency: efficiencyResult.efficiency,
       borderAlignedLengthMeters: efficiencyResult.borderAlignedMeters,
       totalWalkLengthMeters: efficiencyResult.totalWalkMeters,
+      
+      // NEW: Tiered scoring (ADR 021)
+      tieredBorderScore: tieredResult.score,
+      tierDistribution: tieredResult.tierDistribution,
+      tieredSegments: tieredResult.segments,
+      
+      // WHY: walkFocus is same value as efficiency, renamed for clarity per ADR 021
+      walkFocus: efficiencyResult.efficiency,
+      
+      // Composite score (now uses tiered formula)
       rawQualityScore: scoreResult.score,
       tier: scoreResult.tier,
     },

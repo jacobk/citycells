@@ -51,7 +51,11 @@ export function useDatabase(): UseDatabaseReturn {
     
     try {
       const database = await initDatabase();
-      setDb(database);
+      // WHY: initDatabase may return null if closed during React Strict Mode cleanup.
+      // In this case, don't update state - a new initialization will follow.
+      if (database) {
+        setDb(database);
+      }
     } catch (e) {
       console.error('[useDatabase] Initialization failed:', e);
       setError(e instanceof Error ? e.message : 'Failed to initialize database');

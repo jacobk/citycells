@@ -10,9 +10,12 @@
 
 import type { Feature, Polygon, MultiPolygon, Position } from 'geojson';
 import {
+  DISTANCE_TIER_COLORS,
   ROUTE_DEVIATION_COLORS,
   ROUTE_DEVIATION_THRESHOLD_METERS,
   ROUTE_SEGMENT_STYLE,
+  getRouteSegmentColorByTier,
+  // Keep for backward compatibility
   getRouteSegmentColor,
 } from '@/lib/design-tokens';
 // WHY: Import consolidated distance utilities from geo-distance.ts
@@ -96,9 +99,10 @@ export function prepareDeviationColoredRoute(
     const end = coordinates[i + 1];
     
     // Calculate midpoint and distance to boundary
+    // WHY: Use tiered colors (ADR 021) instead of binary green/red (ADR 010)
     const midpoint = segmentMidpoint(start, end);
     const distance = distanceToPerimeterLines(midpoint, boundaryLines);
-    const color = getRouteSegmentColor(distance);
+    const color = getRouteSegmentColorByTier(distance);
     
     // Convert to Leaflet [lat, lng] format
     const startLatLng: [number, number] = [start[1], start[0]];
@@ -170,6 +174,7 @@ export function getRoutePathOptions(color: string) {
 // =============================================================================
 
 export {
+  DISTANCE_TIER_COLORS,
   ROUTE_DEVIATION_COLORS,
   ROUTE_DEVIATION_THRESHOLD_METERS,
   ROUTE_SEGMENT_STYLE,

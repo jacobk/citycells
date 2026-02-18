@@ -18,6 +18,42 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Tiered Distance Scoring**: Complete implementation replacing binary 25m threshold with 6-tier distance classification system. (ADR 021, TICKET-026)
+  - **Phase 1 - Core Scoring Logic**: 
+    - Key files: `src/lib/distance-tiers.ts` (NEW), `src/lib/analysis.ts`, `src/lib/__tests__/distance-tiers.test.ts` (NEW)
+    - New module `distance-tiers.ts` with `assignDistanceTier()` and `calculateTieredBorderScore()` functions
+    - 6 distance tiers: Platinum (≤10m, 1.0 pts), Gold (≤20m, 0.80 pts), Silver (≤30m, 0.55 pts), Bronze (≤40m, 0.30 pts), Potato (≤50m, 0.10 pts), Missed (>50m, 0 pts)
+    - Segment-length weighted scoring: `score = Σ(tier_points × segment_length) / Σ(segment_length)`
+    - New score weights: Tiered Border (45%), Area Coverage (25%), Walk Focus (30%)
+    - `AnalysisMetrics` interface extended with `tieredBorderScore`, `tierDistribution`, `tieredSegments`, `walkFocus`
+    - 39 new unit tests for tier assignment and scoring functions
+    - Legacy fields (`perimeterCoveragePercent`, `alignmentScore`, `efficiency`) kept for backward compatibility
+  - **Phase 2 - Database Schema**:
+    - Key files: `src/lib/db.ts`
+    - Added `tier_distribution` JSON column to `walk_analyses` table for storing per-segment tier breakdown
+    - Schema migration maintains backward compatibility with existing data
+  - **Phase 3 - Route Visualization**:
+    - Key files: `src/lib/design-tokens.ts`, `src/lib/route-visualization.ts`
+    - 6 distinct route segment colors based on distance tier (purple-pink gradient extending ADR 010)
+    - Colors: Platinum (#7c3aed), Gold (#a855f7), Silver (#d946ef), Bronze (#f0abfc), Potato (#a1a1aa), Missed (#fca5a5)
+    - `getRouteSegmentColorByTier()` function replaces binary green/red coloring
+  - **Phase 4 - UI Updates**:
+    - Key files: `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/HamburgerMenu/HamburgerMenu.tsx`
+    - Score breakdown shows new metric names: Boundary Coverage (45%), Area Enclosed (25%), Walk Focus (30%)
+    - Tier distribution display with progress bars showing percentage per tier
+    - "How Scoring Works" menu item in hamburger menu linking to documentation
+  - **Phase 5 - Documentation Pages**:
+    - Key files: `src/app/docs/scoring/page.tsx` (NEW), `src/app/docs/scoring/precision-tiers/page.tsx` (NEW), `src/app/docs/scoring/boundary-coverage/page.tsx` (NEW), `src/app/docs/scoring/area-enclosed/page.tsx` (NEW), `src/app/docs/scoring/walk-focus/page.tsx` (NEW)
+    - `/docs/scoring/` route with metric explanations and interactive examples
+    - Precision Tiers page explaining the 6-tier system with color swatches
+  - **Phase 6 - Test Updates**:
+    - Key files: `src/__tests__/analysis/real-activity.test.ts`, `src/lib/__tests__/analysis.test.ts`
+    - Real-activity test expectations updated for new formula
+    - Score impact analysis comparing ADR 003 vs ADR 021 scores for all 11 test activities
+    - Average score improvement of +1.9% across all activities, 2 tier upgrades (Fågelbacken to platinum, Videdal to silver)
+  - **Phase 7 - Feature Documentation**:
+    - Key files: `docs/features/analysis-engine.md`
+    - Updated `[TO BE UPDATED]` sections with actual code references and new formula details
 - **Agent Build Verification**: Automated verification workflow for AI coding agents with mandatory lint/build/test checklist and 61 new unit tests. (PRD 001 §3.16, ADR 020, TICKET-025)
   - Key files: `AGENTS.md` (Section 2), `src/lib/__tests__/analysis.test.ts`, `src/lib/__tests__/tiers.test.ts`, `src/lib/__tests__/geo-distance.test.ts`, `src/lib/__tests__/format-utils.test.ts`, `scripts/smoke-test.ts`
   - New Section 2 in AGENTS.md: "Build Verification Checklist (REQUIRED)" with lint → build → test workflow

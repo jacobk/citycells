@@ -186,6 +186,18 @@ function convertCachedToFullMetrics(cached: CachedMetrics): AnalysisMetrics {
     // They're only used for detailed analysis display, not tier calculation
     borderAlignedLengthMeters: 0,
     totalWalkLengthMeters: 0,
+    // WHY: ADR 021 tiered scoring - use cached values from database
+    tieredBorderScore: cached.tieredBorderScore ?? 0,
+    tierDistribution: cached.tierDistribution ?? {
+      platinum: 0,
+      gold: 0,
+      silver: 0,
+      bronze: 0,
+      potato: 0,
+      missed: 1,
+    },
+    tieredSegments: [],
+    walkFocus: cached.walkFocus ?? cached.efficiency, // Same value as efficiency
     rawQualityScore: cached.rawQualityScore,
     tier: cached.tier as Tier,
   };
