@@ -121,6 +121,10 @@ Provide summary listing:
 - What sections implementation agent needs to complete
 - Any follow-up decisions needed
 
+### Step 5: Requirements Review
+- Use the task tool and delegate to a requirement engineering expert @explore agent that should review the entire proposal based on all existing PRD requirements and userstories. The agent should look for inconsistent or contradicting requirements. 
+- If the agent finds that the new proposal breaks existing requirements you should ask the user for clarification. After clarification you need to revisit all the documents based on the new input.
+
 ---
 
 ## Feature Change Workflow
@@ -204,6 +208,11 @@ Provide summary listing:
 - What ADRs were affected and how
 - Implementation ticket created (with ticket number)
 - What implementation agent needs to update
+
+### Step 6: Requirements Review
+- Use the task tool and delegate to a requirement engineering expert @explore agent that should review the entire proposal based on all existing PRD requirements and userstories. The agent should look for inconsistent or contradicting requirements. 
+- If the agent finds that the new proposal breaks existing requirements you should ask the user for clarification. After clarification you need to revisit all the documents based on the new input.
+
 
 ---
 
