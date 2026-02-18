@@ -202,7 +202,8 @@ This design reduces visual clutter while maintaining quick access to profile inf
 - [ADR 009: UI Navigation Layout](../ADR/009-ui-navigation-layout.md) - Current navigation layout (hamburger left, collapsible profile right)
 - [ADR 008: Panel Navigation Architecture](../ADR/008-panel-navigation-architecture.md) - Original panel navigation (superseded by ADR 009)
 - [ADR 010: Map Visual Design System](../ADR/010-map-visual-design-system.md) - Heat map colors, grayscale base, route styling (deviation coloring), tier icons
-- [ADR 012: Details Panel Mini-Map](../ADR/012-details-panel-mini-map.md) - Mini-map in details panel, circumference in tooltip
+- [ADR 012: Details Panel Mini-Map](../ADR/012-details-panel-mini-map.md) - Original mini-map design (superseded by ADR 022)
+- [ADR 022: Scrollable Mini-Map with Maximize](../ADR/022-scrollable-minimap-with-maximize.md) - Scrollable mini-map with maximize modal, walk toggles, legend
 
 ## Current Limitations
 
@@ -278,29 +279,34 @@ Panel Container (flex column)
 ├── Drag Handle (fixed height)
 ├── Breadcrumbs (optional)
 ├── Header (fixed height)
-├── Mini-Map Section (flex-grow, min-height: 200px)
-│   ├── Route Toggle (if walks exist)
-│   └── AreaMiniMap component
-├── Area Stats (fixed height, border-top)
 └── Scrollable Content (overflow-y: auto)
+    ├── Mini-Map Section (fixed ~180-200px, with maximize button)
+    ├── Area Stats
     ├── Score Breakdown
     ├── Area Information
     ├── Walk History
     └── Deviations
 ```
 
+**Maximized Map Modal:** (NEW - ADR 022)
+- Opens via maximize button on compact mini-map
+- ~90% viewport coverage (modal-style)
+- Contains: full-size map, per-walk route toggles, distance tier legend
+- Dismissed via X button in corner
+
 **Key Implementation Files:**
 
 | File | Purpose |
 |------|---------|
 | `src/lib/geo-utils.ts` | Shared perimeter calculation and walk time formatting (single source of truth) |
-| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Interactive mini-map component with flex-grow height |
+| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Compact scrollable mini-map with maximize button |
 | `src/components/AreaMiniMap/index.tsx` | Dynamic import wrapper (SSR) |
-| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Panel with flex layout, stats section, scrollable content |
+| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Panel with scrollable content |
+| `src/components/MaximizedMapModal/MaximizedMapModal.tsx` | NEW: Full-size map modal with walk toggles and legend |
 
 **Refactoring Note:** Perimeter calculation was previously duplicated in Map.tsx and db.ts. Both now use `calculatePerimeterMeters()` from `geo-utils.ts` to ensure a single source of truth.
 
-**Reference:** [ADR 012](../ADR/012-details-panel-mini-map.md) | [Ticket 015](../tickets/015-details-panel-boundary-view.md)
+**Reference:** [ADR 022](../ADR/022-scrollable-minimap-with-maximize.md) (supersedes ADR 012) | [Ticket 027](../tickets/027-scrollable-minimap-maximize.md)
 
 ### Walk Route Visualization (Implemented - ADR 010)
 
@@ -344,46 +350,58 @@ Route visualization with deviation-based coloring to show walk quality at a glan
 
 **Reference:** [ADR 010](../ADR/010-map-visual-design-system.md) Section 3 | [Ticket 007](../tickets/007-walk-route-visualization.md)
 
-### Mini-Map Walk Route Visualization (Planned - 2026-02-07)
+### Mini-Map Walk Route Visualization (Updated: 2026-02-18)
 
-Extension of route visualization to the area details panel mini-map, enabling users to view matched walk routes in context:
+Extension of route visualization to the **Maximized Map Modal**, enabling users to view matched walk routes in full detail:
 
-1. **Toggle Control Above Mini-Map**
-   - Toggle button/switch positioned above the mini-map (within AreaDetailsPanel)
-   - Label: "Show Walk Route" or icon-only
-   - Default state: OFF (routes hidden)
-   - Independent state from main map route toggle
+> **Note:** ADR 022 changed mini-map behavior. Walk routes are now displayed in the Maximized Map Modal (not the compact scrollable mini-map). This provides better space for route visualization and comparison.
 
-2. **Route Rendering on Mini-Map**
-   - Uses same deviation-based coloring as main map (green/red segments)
-   - Reuses `prepareDeviationColoredRoute()` from `route-visualization.ts`
-   - Routes render above area boundary polygon (same z-order as main map)
+1. **Access via Maximize Button**
+   - User taps maximize button on compact mini-map
+   - Opens Maximized Map Modal (~90% viewport)
+   - Walk route controls are in the modal, not the panel
+
+2. **Per-Walk Toggle Controls (Multi-Select)**
+   - Each walk has its own toggle in the modal control panel
+   - Users can show/hide each walk independently
+   - Can display multiple walks simultaneously for comparison
+   - Default state: All toggles OFF (routes hidden)
+
+3. **Distance Tier Coloring (ADR 021)**
+   - Walk segments colored by distance from boundary (not deviation-based)
+   - Uses tier colors from `design-tokens.ts`:
+     - Platinum (0-10m): Deep Green
+     - Gold (10-20m): Light Green
+     - Silver (20-30m): Yellow
+     - Bronze (30-40m): Orange
+     - Potato (40-50m): Light Red
+     - Missed (>50m): Red
+
+4. **Distance Tier Legend**
+   - Displayed in modal (collapsible section or overlay)
+   - Explains what each segment color means
+   - Helps users understand their walk quality
+
+5. **Route Rendering**
+   - Reuses `prepareDeviationColoredRoute()` from `route-visualization.ts` (updated for tier colors)
+   - Routes render above area boundary polygon
    - Uses cached stream data from database (no additional API calls)
-
-3. **Multiple Walk Selection**
-   - When multiple walks match an area, Walk History section shows all walks
-   - Each walk item in Walk History is selectable (click/tap)
-   - Selected walk highlighted visually (border or background color)
-   - Selected walk's route displayed on mini-map when toggle is ON
-   - Default selection: Best walk (highest quality score, `isBest: true`)
-
-4. **Single Walk Behavior**
-   - When only one walk matches, it displays automatically when toggle is ON
-   - No selection UI needed (Walk History still shows the single walk)
 
 **Key Implementation Files:**
 
 | File | Purpose |
 |------|---------|
-| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Add route rendering with Polyline components |
-| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Add toggle control, walk selection state, pass route data to mini-map |
-| `src/lib/route-visualization.ts` | Reuse existing route preparation utilities |
+| `src/components/MaximizedMapModal/MaximizedMapModal.tsx` | NEW: Modal with full-size map, walk toggles, legend |
+| `src/components/AreaMiniMap/AreaMiniMap.tsx` | Compact map with maximize button (no routes) |
+| `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Opens modal on maximize button click |
+| `src/lib/route-visualization.ts` | Route preparation utilities |
+| `src/lib/design-tokens.ts` | Distance tier colors for legend |
 | `src/lib/db.ts` | Retrieve walk stream data for selected walk ID |
 
 **Design Rationale:**
-- Reuses existing route visualization patterns for consistency
-- Independent toggle allows users to focus on boundary or route as needed
-- Walk selection enables comparison of multiple attempts
-- Stream data already cached, so no performance impact
+- Modal provides ample space for route visualization and controls
+- Multi-select toggles enable walk comparison (new capability)
+- Legend educates users about distance tier system
+- Compact mini-map scrolls with content, doesn't block panel details
 
-**Reference:** [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 3.6 (Mini-Map) | [Ticket 011](../tickets/011-mini-map-walk-routes.md)
+**Reference:** [ADR 022](../ADR/022-scrollable-minimap-with-maximize.md) | [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 3.5 | [Ticket 027](../tickets/027-scrollable-minimap-maximize.md)

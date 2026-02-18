@@ -18,6 +18,15 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Scrollable Mini-Map with Maximize View**: Refactored Area Details Panel mini-map from fixed viewport-filling to scrollable compact with maximize modal. (ADR 022, TICKET-027)
+  - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/MaximizedMapModal/MaximizedMapModal.tsx` (NEW), `src/components/DistanceTierLegend/DistanceTierLegend.tsx` (NEW)
+  - Mini-map now scrolls with panel content (fixed 180px height) instead of filling available viewport
+  - Maximize button opens full-size modal (~90% viewport) with interactive map
+  - Per-walk toggle controls (multi-select checkboxes) to compare different walk attempts
+  - Distance tier legend explaining segment colors (Platinum through Missed)
+  - Walk routes colored by distance tier (reuses existing tier coloring from ADR 021)
+  - Breaking change: Users see smaller scrollable mini-map instead of large fixed map; detail view is opt-in via maximize button
+
 - **Tiered Distance Scoring**: Complete implementation replacing binary 25m threshold with 6-tier distance classification system. (ADR 021, TICKET-026)
   - **Phase 1 - Core Scoring Logic**: 
     - Key files: `src/lib/distance-tiers.ts` (NEW), `src/lib/analysis.ts`, `src/lib/__tests__/distance-tiers.test.ts` (NEW)

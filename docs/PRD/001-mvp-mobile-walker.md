@@ -89,6 +89,10 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want to see my matched walk route overlaid on the mini-map in the details panel, so I can compare my actual path to the area boundary.
 *   **As a user,** I want to toggle walk route visibility on the mini-map, so I can choose when to see the route overlay.
 *   **As a user,** I want to select which walk to view when multiple walks match an area, so I can compare different attempts.
+*   **As a user,** I want to scroll the mini-map away with other content, so I can access all panel details without the map blocking my view. (Added: 2026-02-18)
+*   **As a user,** I want a maximize button on the mini-map, so I can view the map in full detail when I need to plan a route. (Added: 2026-02-18)
+*   **As a user,** I want to see multiple walk routes simultaneously in the maximized view, so I can compare different attempts. (Added: 2026-02-18)
+*   **As a user,** I want a legend explaining the walk segment colors, so I understand what the distance tiers mean. (Added: 2026-02-18)
 
 ### Re-Analysis Stories (Added: 2026-02-06)
 *   **As a user,** I want to re-analyze my cached walks so that scores stay correct when the app's scoring formula changes.
@@ -239,18 +243,29 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
 *   Tier badge and quality score (if completed)
 *   "Not yet walked" indicator (if incomplete)
 
-#### Mini-Map (Added: 2026-02-07, Updated: 2026-02-13)
+#### Mini-Map (Added: 2026-02-07, Updated: 2026-02-18)
 
-*Reference: ADR 012 (Details Panel Mini-Map)*
+*Reference: ADR 022 (Scrollable Mini-Map with Maximize View) - supersedes ADR 012*
 
-*   **Location:** Below header, optimized to fill available viewport height
-*   **Dimensions:** Full panel width, **dynamic height** filling available space above the fold (minimum ~200px)
-*   **Purpose:** Enable users to inspect area boundaries and plan walking routes - **maximize map visibility**
-*   **Base Map:** Full street-level tiles (same provider as main map) showing streets, paths, landmarks
-*   **Boundary Overlay:** Subarea polygon with prominent stroke and low-opacity tier-colored fill (streets visible through fill)
-*   **Interactivity:** Pan and zoom enabled for detailed exploration
+**Compact Scrollable Mini-Map:**
+*   **Location:** Below header, at top of scrollable panel content
+*   **Dimensions:** Full panel width, **fixed compact height** (~180-200px)
+*   **Scrolling:** Mini-map scrolls with content - user can scroll it out of view to access other details
+*   **Base Map:** Full street-level tiles (same provider as main map)
+*   **Boundary Overlay:** Subarea polygon with prominent stroke and low-opacity tier-colored fill
+*   **Interactivity:** Pan and zoom enabled
 *   **Bounds:** Auto-fit to polygon with padding on initial load
-*   **Panel Scrolling:** Content below the map (stats, score breakdown, walk history) is scrollable within the panel
+*   **Maximize Button:** Small expand icon in corner opens maximized view
+
+**Maximized Map Modal:**
+*   **Trigger:** Tap maximize button on mini-map
+*   **Coverage:** ~90% viewport (modal-style with small margin)
+*   **Dismiss:** X button in top-right corner
+*   **Contents:**
+    *   Full-size interactive map with boundary polygon
+    *   Walk route toggles (per-walk multi-select when multiple walks exist)
+    *   Distance tier legend explaining walk segment colors (see ADR 021)
+*   **Walk Selection:** Each walk has independent toggle - can show multiple walks simultaneously for comparison
 
 #### Area Stats (Added: 2026-02-13)
 
@@ -259,16 +274,19 @@ Tooltip dismisses on mouse-out (desktop) or tap elsewhere (mobile).
     *   Circumference with estimated walk time (e.g., "2.3 km (~28 min)")
 *   **Rationale:** Users should see these stats without closing the panel to hover
 
-**Walk Route Visualization (Added: 2026-02-07):**
-*   **Toggle Control:** Toggle button above mini-map to show/hide matched walk routes
-*   **Default State:** Routes hidden (toggle OFF)
-*   **Route Styling:** Same deviation-based coloring as main map (green = within 25m of boundary, red = deviation)
-*   **Multiple Walks:** When multiple walks match the area:
-    *   All matched walks listed at bottom of card in Walk History section
-    *   Walk selection control allows choosing which walk to display on mini-map
-    *   Selected walk highlighted in Walk History list
-    *   Default selection: Best walk (highest quality score)
-*   **Single Walk:** When only one walk matches, it displays automatically when toggle is ON
+**Walk Route Visualization (Added: 2026-02-07, Updated: 2026-02-18):**
+
+*Reference: ADR 022 (Scrollable Mini-Map with Maximize View)*
+
+*   **Location:** Walk routes are displayed in the **Maximized Map Modal** (not the compact scrollable mini-map)
+*   **Access:** User taps maximize button on mini-map to open modal with walk route controls
+*   **Toggle Controls:** Per-walk toggles in modal control panel (multi-select)
+*   **Default State:** Routes hidden (all toggles OFF)
+*   **Route Styling:** Distance tier coloring per ADR 021 (Platinum green → Missed red)
+*   **Multiple Walks:** Each walk has its own toggle - can show multiple simultaneously for comparison
+*   **Single Walk:** Single toggle for the one matched walk
+*   **Distance Tier Legend:** Shown in modal explaining segment colors:
+    *   Platinum (0-10m), Gold (10-20m), Silver (20-30m), Bronze (30-40m), Potato (40-50m), Missed (>50m)
 
 #### Score Breakdown (if completed) (Updated: 2026-02-17)
 

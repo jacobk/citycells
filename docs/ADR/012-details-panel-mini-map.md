@@ -1,7 +1,9 @@
 # ADR 012: Details Panel Mini-Map Component
 
 **Date:** 2026-02-07 (Updated: 2026-02-13)  
-**Status:** Accepted
+**Status:** Superseded by [ADR 022](./022-scrollable-minimap-with-maximize.md)
+
+> **Note:** This ADR introduced a fixed viewport-filling mini-map. ADR 022 changes this to a scrollable mini-map with an opt-in maximize view, addressing UX issues with content accessibility.
 
 ## Context
 
