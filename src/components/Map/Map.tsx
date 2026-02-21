@@ -378,11 +378,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             areaDetails.tier = cached.metrics.tier as Tier;
             areaDetails.qualityScore = cached.metrics.rawQualityScore;
             areaDetails.metrics = convertCachedToFullMetrics(cached.metrics);
+            // WHY: Include summaryPolyline from cache for share feature (ADR 023)
             areaDetails.walks = cached.activityIds.map(id => ({
               id,
               name: '',
               qualityScore: cached.metrics.rawQualityScore,
-              isBest: true
+              isBest: true,
+              summaryPolyline: cached.activityPolylines.get(id),
             }));
           }
         });

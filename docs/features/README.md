@@ -31,6 +31,7 @@ Enable any developer (human or AI agent) to:
 | Branding & Visual Identity | [branding-visual-identity.md](./branding-visual-identity.md) | Planned | [ADR 018](../ADR/018-branding-design-system.md) |
 | Achievement System | [achievements.md](./achievements.md) | Planned | [ADR 019](../ADR/019-achievement-system.md) |
 | Agent Build Verification | [agent-build-verification.md](./agent-build-verification.md) | Planned | [ADR 020](../ADR/020-agent-build-verification.md) |
+| Share Walk | [share-walk.md](./share-walk.md) | Planned | [ADR 023](../ADR/023-share-walk-feature.md) |
 
 ## Document Template
 

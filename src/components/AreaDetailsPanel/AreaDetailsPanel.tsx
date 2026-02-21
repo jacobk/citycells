@@ -19,6 +19,11 @@ import { useExpandablePanel } from '@/hooks/useExpandablePanel';
 import { formatDistance } from '@/lib/format-utils';
 // WHY: Reuse shared perimeter/walk time formatting per ADR 012 and Ticket 015
 import { formatCircumferenceWithTime } from '@/lib/geo-utils';
+// WHY: Share modal for sharing walk achievements (ADR 023)
+import { ShareModal } from '@/components/ShareModal';
+import { buildShareableWalkData, type ShareableWalkData } from '@/lib/share';
+// WHY: Encode geometry to polyline for sharing
+import polyline from '@mapbox/polyline';
 
 // ============================================
 // Types
@@ -114,6 +119,8 @@ export default function AreaDetailsPanel({
   });
   // WHY: Track maximized map modal state (ADR 022)
   const [isMaximizedMapOpen, setIsMaximizedMapOpen] = useState(false);
+  // WHY: Track share modal state (ADR 023)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Handle per-walk re-analyze
   const handleReAnalyzeWalk = async (walkId: number, mode: ReAnalysisMode) => {
@@ -199,6 +206,48 @@ export default function AreaDetailsPanel({
     summaryPolyline: walk.summaryPolyline,
   }));
 
+  // WHY: Build shareable walk data for share modal (ADR 023)
+  // Only compute when there are walks to share
+  const shareableData: ShareableWalkData | null = (() => {
+    if (details.walks.length === 0 || !details.geometry) return null;
+    
+    // Get the best walk (or first if no best)
+    const bestWalk = details.walks.find(w => w.isBest) || details.walks[0];
+    if (!bestWalk.summaryPolyline) return null;
+    
+    try {
+      // Encode boundary geometry to polyline
+      // WHY: Extract coordinates from geometry for polyline encoding
+      let boundaryCoords: number[][] = [];
+      if (details.geometry.type === 'Polygon') {
+        boundaryCoords = details.geometry.coordinates[0] as number[][];
+      } else if (details.geometry.type === 'MultiPolygon') {
+        // Use first polygon for simplicity
+        boundaryCoords = details.geometry.coordinates[0][0] as number[][];
+      }
+      
+      // Convert from [lng, lat] to [lat, lng] for polyline encoding
+      const boundaryLatLng = boundaryCoords.map(([lng, lat]) => [lat, lng]);
+      const boundaryPolyline = polyline.encode(boundaryLatLng as [number, number][]);
+      
+      return buildShareableWalkData({
+        areaId: details.areaId,
+        areaName: details.areaName,
+        walkDate: bestWalk.date || new Date().toISOString().split('T')[0],
+        stravaActivityId: bestWalk.id,
+        boundaryPolyline,
+        walkPathPolyline: bestWalk.summaryPolyline,
+        metrics: details.metrics,
+        tier: details.tier,
+        circumferenceMeters: details.totalPerimeterMeters,
+        areaSqm: details.totalAreaSqm,
+      });
+    } catch (e) {
+      console.error('[AreaDetailsPanel] Failed to build shareable data:', e);
+      return null;
+    }
+  })();
+
   // WHY: Calculate backdrop opacity based on panel state (more opaque when expanded)
   const backdropOpacity = panelState === 'fullscreen' ? 'bg-black/40' : 
                           panelState === 'expanded' ? 'bg-black/30' : 
@@ -258,15 +307,31 @@ export default function AreaDetailsPanel({
                 <div className="text-sm text-muted-foreground italic mt-1">Not yet walked</div>
               )}
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-muted-foreground hover:text-foreground -mr-2 -mt-1"
-              aria-label="Close panel"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1 -mr-2 -mt-1">
+              {/* WHY: Share button per ADR 023 - only show when shareableData is available
+                  This ensures summaryPolyline exists for the best walk, not just that walks exist */}
+              {shareableData && (
+                <button
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
+                  aria-label="Share walk"
+                  title="Share walk"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 text-muted-foreground hover:text-foreground"
+                aria-label="Close panel"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -688,6 +753,15 @@ export default function AreaDetailsPanel({
           tier={details.tier}
           walks={walksForModal}
           areaName={details.areaName}
+        />
+      )}
+
+      {/* Share Modal (ADR 023) */}
+      {shareableData && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          data={shareableData}
         />
       )}
     </>

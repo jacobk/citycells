@@ -307,6 +307,24 @@
 - [ ] Document score differences
 - [ ] Verify tier assignments match expectations
 
+## Phase 6.9: Share Walk Feature (ADR 023, TICKET-029)
+
+*Reference: [ADR 023](docs/ADR/023-share-walk-feature.md) | [PRD §3.17](docs/PRD/001-mvp-mobile-walker.md#317-share-walk) | [Feature Docs](docs/features/share-walk.md)*
+
+- [x] Create `src/lib/share/types.ts` - ShareableWalkData interface with version field
+- [x] Create `src/lib/share/encode.ts` - pako compression + base64url encoding
+- [x] Create `src/lib/share/decode.ts` - version-aware decoder with decodeV1()
+- [x] Create `src/lib/share/image.ts` - html2canvas integration
+- [x] Create `src/lib/share/__fixtures__/v1-sample.ts` - frozen V1 test fixture
+- [x] Create `src/lib/__tests__/share.test.ts` - 18 unit tests for encode/decode/versioning
+- [x] Create `src/app/share/walk/page.tsx` - public viewer page (no auth required)
+- [x] Create `src/app/share/walk/SharedWalkMap.tsx` - map component with tiered route
+- [x] Create `src/components/ShareModal/` - modal with Copy Link, Download Image, Preview
+- [x] Create `src/components/SharePreview/` - image layout for canvas capture
+- [x] Add share button to AreaDetailsPanel header
+- [x] Install dependencies: pako, html2canvas, @types/pako
+- [x] Update feature documentation and changelog
+
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [ ] Offline support testing

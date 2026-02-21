@@ -3,7 +3,7 @@
 **Date:** 2026-02-02 (Updated: 2026-02-21)  
 **Status:** In Progress
 
-*Latest update: Live Walking Mode Tiered Indicator - real-time tier colors, tier name in status text, enlarged indicator for outdoor visibility (Section 3.13)*
+*Latest update: Share Walk feature - shareable URLs with encoded walk data, image export in multiple formats for social sharing (Section 3.17)*
 
 ## 1. Overview
 
@@ -60,6 +60,15 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want to see a recognizable logo and app icon (favicon) so I can easily identify the app in my browser tabs and home screen.
 *   **As a user,** I want the app to have a consistent color scheme and typography that makes it pleasant to use.
 *   **As a user,** I want to toggle between light, dark, and system theme modes so I can use my preferred visual style regardless of my device settings. (Added: 2026-02-16)
+
+### Share Walk Stories (Added: 2026-02-21)
+*   **As a competitive walker,** I want to share my walk achievements with friends, so they can see my stats and precision.
+*   **As a user,** I want to generate a shareable URL that anyone can view without logging in, so sharing is frictionless.
+*   **As a user,** I want the shared view to include all stats from the details panel (map, walk route, tier breakdowns, scores), so recipients get the full picture.
+*   **As a user,** I want to generate a shareable image of my walk stats, so I can post it on social media or send via messaging apps.
+*   **As a user,** I want multiple image formats (square, wide, story), so I can share on different platforms optimally.
+*   **As a user,** I want to copy the shareable image directly to my clipboard, so I can paste it into other apps without downloading.
+*   **As a user,** I want the shared URL to show an interactive map with my walk route colored by tier, so recipients can explore my walk.
 
 ### Achievement System Stories (Added: 2026-02-16)
 *   **As a user,** I want to earn achievements for reaching milestones (like completing 10, 50, or all 136 areas), so I feel rewarded for my progress.
@@ -934,6 +943,93 @@ For comprehensive runtime verification:
 
 The verification workflow is documented in `AGENTS.md` Section 4 (Development Commands). Agents must follow this checklist for every task.
 
+### 3.17 Share Walk (Added: 2026-02-21)
+
+*Reference: ADR 023 (Share Walk Feature)*
+
+Provide sharing capabilities for walk achievements via URL and image export.
+
+#### Share Entry Point
+
+**Location:** Area Details Panel, visible when viewing an area with a matched walk
+
+**Trigger:** Share icon button (near mini-map controls or in header)
+
+**Availability:** Only shown when the selected area has at least one matched walk
+
+#### Shareable URL
+
+**URL Structure:**
+```
+https://citycells.app/share/walk?d={encoded_data}
+```
+
+**Data Encoding:**
+*   Compress walk data using pako (gzip in browser)
+*   Encode with base64url for URL safety
+*   Include schema version (`v` field) for backwards compatibility
+
+**Versioning (CRITICAL):**
+*   All encoded URLs include version field (initial: `v: 1`)
+*   Old URLs must remain functional indefinitely - users bookmark and share links
+*   Decoder supports all previous versions via version-specific decode functions
+*   See ADR 023 Section 1.1 for full versioning strategy
+
+**Shared View Contents:**
+*   Interactive map showing subarea boundary
+*   Walk route overlay colored by distance tier (per ADR 021)
+*   All stats from details panel:
+    *   Area name and tier badge
+    *   Circumference and estimated walk time
+    *   Walk distance and perimeter walked
+    *   Quality score breakdown (Boundary Coverage, Area Enclosed, Walk Focus)
+    *   Tier distribution bar chart
+*   No login required to view
+
+**URL Length Handling:**
+*   Target: URLs under 2000 characters
+*   If walk data exceeds limit, show warning suggesting image export
+
+#### Image Export
+
+**Formats Available:**
+
+| Format | Dimensions | Use Case |
+|--------|------------|----------|
+| Square | 1080x1080 | Instagram, general sharing |
+| Wide | 1200x630 | Twitter/X, Open Graph previews |
+| Story | 1080x1920 | Instagram/Facebook Stories |
+
+**Image Contents:**
+*   CityCells branding/logo
+*   Area name and tier badge
+*   Map snapshot with walk route (tier-colored)
+*   All stats from details panel
+*   Tier distribution visualization
+*   App URL watermark (citycells.app)
+
+**Export Options:**
+*   "Download Image" - Saves PNG to device
+*   "Copy Image" - Copies to clipboard (Clipboard API, where supported)
+
+**Generation:**
+*   Client-side using html2canvas
+*   No server-side rendering required
+
+#### Share Modal
+
+**Trigger:** Tap share button in Area Details Panel
+
+**Options:**
+1. **Copy Link** - Generates shareable URL and copies to clipboard
+2. **Download Image** - Opens format selector, then downloads PNG
+3. **Copy Image** - Copies image to clipboard (with browser support indicator)
+
+**Feedback:**
+*   Show "Copied!" confirmation on successful copy
+*   Show "Downloaded!" confirmation on successful download
+*   Show error message if URL too long (with suggestion to use image)
+
 ## 4. Non-Functional Requirements
 
 *   **Mobile First:** UI controls (buttons, drawers, panels) must be touch-friendly and positioned for thumb usage.
@@ -946,7 +1042,7 @@ The verification workflow is documented in `AGENTS.md` Section 4 (Development Co
 ## 5. Future Considerations (Post-MVP)
 
 *   **Leaderboards:** Compare scores with other users (requires server component).
-*   **Social Sharing:** Share achievements on social media with generated images.
+*   ~~**Social Sharing:** Share achievements on social media with generated images.~~ *(Implemented: See Section 3.17)*
 *   **Route Suggestions:** Suggest optimal walking routes for incomplete areas.
 *   **Multi-city Support:** Expand beyond Malmö to other cities.
 *   **Sync Across Devices:** Cloud storage for progress (requires authentication backend).

@@ -18,6 +18,21 @@ Each entry should reference:
 
 ## Unreleased
 ### Added
+- **Share Walk Feature**: Share walk achievements via URL and image export. (ADR 023, TICKET-029)
+  - Key files: `src/lib/share/` (NEW module), `src/app/share/walk/` (NEW page), `src/components/ShareModal/` (NEW), `src/components/SharePreview/` (NEW), `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`
+  - Shareable URL: Encodes all walk data in URL using pako compression + base64url
+  - Schema versioning: `v: 1` field enables backwards-compatible evolution; old URLs work forever
+  - Version-aware decoder: `decodeV1()`, with switch statement for future versions
+  - Shared walk viewer: `/share/walk?d=...` renders Leaflet map with tiered route coloring, all stats, tier distribution
+  - Image export: Three formats (Square 1080x1080, Wide 1200x630, Story 1080x1920)
+  - modern-screenshot integration for client-side image generation (supports Tailwind CSS v4 oklch/lab colors)
+  - SVG-based StaticRouteMap component for share image map rendering
+  - Share button in Area Details Panel header (only shows when area has valid polyline data)
+  - ShareModal with Copy Link, Download Image, Preview options
+  - Cache loading enhanced to include summaryPolyline for sharing cached walks
+  - 18 unit tests including frozen V1 fixture for regression testing
+  - Dependencies added: pako, modern-screenshot, @types/pako
+
 - **Scrollable Mini-Map with Maximize View**: Refactored Area Details Panel mini-map from fixed viewport-filling to scrollable compact with maximize modal. (ADR 022, TICKET-027)
   - Key files: `src/components/AreaMiniMap/AreaMiniMap.tsx`, `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`, `src/components/MaximizedMapModal/MaximizedMapModal.tsx` (NEW), `src/components/DistanceTierLegend/DistanceTierLegend.tsx` (NEW)
   - Mini-map now scrolls with panel content (fixed 180px height) instead of filling available viewport

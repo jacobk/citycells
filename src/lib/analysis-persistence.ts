@@ -253,6 +253,9 @@ export interface CachedAnalysis {
   analysisId: number;
   metrics: CachedMetrics;
   activityIds: number[];
+  // WHY: Include polylines for share feature (ADR 023 - Share Walk)
+  // Maps activity ID to its summary polyline
+  activityPolylines: Map<number, string>;
 }
 
 /**
@@ -269,6 +272,8 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
   // WHY: Use COALESCE to prefer quality_score (adjusted with exemptions) over raw_quality_score
   // This ensures displayed scores match the tier that was calculated with exemptions applied
   // WHY: Calculate tier from the adjusted score to ensure consistency
+  // WHY: Include polyline data for share feature (ADR 023)
+  // GROUP_CONCAT with custom separator to combine activity_id:polyline pairs
   const result = db.exec(
     `SELECT 
       a.fid as area_fid,
@@ -288,7 +293,8 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
       wa.loop_gap_meters,
       GROUP_CONCAT(DISTINCT w.strava_activity_id) as activity_ids,
       wa.tiered_border_score,
-      wa.tier_distribution
+      wa.tier_distribution,
+      GROUP_CONCAT(DISTINCT w.strava_activity_id || '::' || COALESCE(w.polyline, '')) as activity_polylines
     FROM area_completions ac
     JOIN areas a ON ac.area_id = a.id
     JOIN walk_analyses wa ON ac.best_walk_analysis_id = wa.id
@@ -313,6 +319,21 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
       const tieredBorderScore = row[16] as number | null;
       const tierDistributionJson = row[17] as string | null;
       const tierDistribution = tierDistributionJson ? JSON.parse(tierDistributionJson) : null;
+      
+      // WHY: Parse activity polylines for share feature (ADR 023)
+      // Format: "activityId1::polyline1,activityId2::polyline2,..."
+      const activityPolylinesStr = row[18] as string | null;
+      const activityPolylines = new Map<number, string>();
+      if (activityPolylinesStr) {
+        const pairs = activityPolylinesStr.split(',');
+        for (const pair of pairs) {
+          const [idStr, polyline] = pair.split('::');
+          const id = parseInt(idStr, 10);
+          if (!isNaN(id) && polyline) {
+            activityPolylines.set(id, polyline);
+          }
+        }
+      }
 
       // WHY: Use centralized assignTier() to ensure consistency
       // The stored tier might be from raw_quality_score, but we're displaying adjusted score
@@ -347,6 +368,7 @@ export function loadCachedAnalyses(userId: number): Map<number, CachedAnalysis> 
           walkFocus: row[12] as number, // Same as efficiency, renamed per ADR 021
         },
         activityIds,
+        activityPolylines,
       });
     }
   }
