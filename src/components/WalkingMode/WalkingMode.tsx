@@ -33,8 +33,9 @@ import type { Tier } from '@/lib/analysis';
 import {
   polygonToPerimeterLines,
   distanceToPerimeterLines,
-  PERIMETER_BUFFER_METERS,
 } from '@/lib/geo-distance';
+// WHY: Import tier assignment for real-time tiered feedback per ADR 021/TICKET-028
+import { assignDistanceTier, type DistanceTier } from '@/lib/distance-tiers';
 import type { Feature, Polygon, MultiPolygon, LineString } from 'geojson';
 
 import LivePositionMarker from './LivePositionMarker';
@@ -208,9 +209,12 @@ export default function WalkingMode({
     setDistanceToBoundary(Math.round(distance));
   }, [position, perimeterLines]);
   
-  // WHY: Compute derived state for color coding - within 25m tolerance means "on track"
-  // 25m threshold defined in ADR 002 and ADR 003
-  const withinTolerance = distanceToBoundary !== null && distanceToBoundary <= PERIMETER_BUFFER_METERS;
+  // WHY: Compute current distance tier for real-time feedback per ADR 021/TICKET-028
+  // Replaces binary withinTolerance with 6-tier graduated system
+  const currentTier = useMemo<DistanceTier | null>(() => {
+    if (distanceToBoundary === null) return null;
+    return assignDistanceTier(distanceToBoundary).tier;
+  }, [distanceToBoundary]);
   
   // WHY: Use tier colors for fill/stroke, fall back to unwalked style (matches AreaMiniMap)
   const fillColor = tier ? TIER_FILL_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
@@ -249,6 +253,8 @@ export default function WalkingMode({
         animate: true,
         duration: 0.5,
       });
+      // WHY: Re-enable auto-follow when user taps center button per ADR 017 Section 4
+      // User can zoom while following; only manual panning disables auto-follow
       setAutoCenter(true);
     }
   }, [position]);
@@ -299,10 +305,11 @@ export default function WalkingMode({
         />
         
         {/* Live Position Marker */}
+        {/* WHY: Pass tier for 6-tier color coding per ADR 021/TICKET-028 */}
         <LivePositionMarker
           position={position}
           autoCenter={autoCenter}
-          withinTolerance={withinTolerance}
+          tier={currentTier}
         />
         
         {/* Map utilities */}
@@ -314,6 +321,7 @@ export default function WalkingMode({
       </MapContainer>
       
       {/* Controls Overlay */}
+      {/* WHY: Pass tier for tiered status indicator per ADR 021/TICKET-028 */}
       <WalkingControls
         onExit={handleExit}
         onCenterOnMe={handleCenterOnMe}
@@ -325,7 +333,7 @@ export default function WalkingMode({
         gpsAccuracy={accuracy}
         areaName={areaName}
         distanceToBoundary={distanceToBoundary}
-        withinTolerance={withinTolerance}
+        tier={currentTier}
       />
       
       {/* Permission Error Overlay */}

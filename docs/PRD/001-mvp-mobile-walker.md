@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-02-17)  
+**Date:** 2026-02-02 (Updated: 2026-02-21)  
 **Status:** In Progress
 
-*Latest update: Tiered Distance Scoring - graduated boundary matching with 6-tier precision system (Sections 3.3, 3.4, 3.7, 3.10)*
+*Latest update: Live Walking Mode Tiered Indicator - real-time tier colors, tier name in status text, enlarged indicator for outdoor visibility (Section 3.13)*
 
 ## 1. Overview
 
@@ -42,7 +42,7 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want breadcrumb navigation to return from area details to the list.
 *   **As a user,** I want a hamburger menu to access different app sections without cluttering the map interface.
 
-### Live Walking Mode Stories (Added: 2026-02-15, Updated: 2026-02-16)
+### Live Walking Mode Stories (Added: 2026-02-15, Updated: 2026-02-21)
 *   **As a user,** I want to start a live walking session for a selected sub-area, so I can see my real-time position relative to the boundary.
 *   **As a user,** I want to see a full-screen map showing the sub-area boundary while walking, so I know exactly where to go.
 *   **As a user,** I want my GPS position to update continuously on the map, so I can see how I move relative to the boundary.
@@ -50,8 +50,10 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want the screen to stay on during active walking (where supported), so I don't have to keep waking my phone.
 *   **As a user,** I want to exit walking mode and return to the normal app view when I'm done, so I can review my progress.
 *   **As a user,** I want to see my real-time distance from the boundary while walking, so I know how far I need to adjust my path. (Added: 2026-02-16)
-*   **As a user,** I want a clear visual indicator when I'm within the 25m tolerance zone, so I know I'm walking correctly. (Added: 2026-02-16)
-*   **As a user,** I want my position marker to change color based on my distance from the boundary, so I can see at a glance whether I'm on track. (Added: 2026-02-16)
+*   **As a user,** I want my position marker to use the same tier colors as the scoring system (Platinum/Gold/Silver/Bronze/Potato/Missed), so I know exactly which tier I'm walking at in real-time. (Updated: 2026-02-21)
+*   **As a user,** I want to see my current distance tier name in the status indicator (e.g., "12m - Gold"), so I understand how my walking precision translates to my final score. (Added: 2026-02-21)
+*   **As a user,** I want the distance indicator to be large and easy to read while walking outdoors, so I can quickly glance at it without stopping. (Added: 2026-02-21)
+*   **As a user,** I want the map to follow my position when I zoom in, so I can see detail while walking without manually re-centering. (Added: 2026-02-21)
 
 ### Branding Stories (Added: 2026-02-16)
 *   **As a user,** I want the app to have a professional and sleek look so that I trust the quality of the service.
@@ -645,38 +647,54 @@ Provide a real-time navigation view for walking sub-area boundaries.
 | GPS signal lost | Show "Acquiring GPS..." indicator, keep last known position |
 | Wake Lock unavailable | Continue without it, no user-facing error |
 
-#### Distance-to-Boundary Indicator (Added: 2026-02-16)
+#### Distance-to-Boundary Indicator (Added: 2026-02-16, Updated: 2026-02-21)
 
-Real-time feedback showing walker's distance from the boundary line.
+*Reference: ADR 017 (Live Walking Mode - Updates Section), ADR 021 (Tiered Distance Scoring)*
+
+Real-time feedback showing walker's distance from the boundary line using the 6-tier distance system.
 
 **Display Location:** Bottom status bar, next to GPS accuracy display
 
-**Numeric Distance:**
-*   Show distance in meters: "12m from boundary"
+**Numeric Distance with Tier:**
+*   Show distance and tier: "12m - Gold tier"
 *   Update in real-time with GPS position changes
 *   Only display when GPS position is available
 
-**Color-Coded Position Marker:**
+**Tiered Color-Coded Position Marker:**
 
-| Condition | Marker Color | Hex |
-|-----------|--------------|-----|
-| Within 25m tolerance | Green | `#22c55e` |
-| Outside 25m tolerance | Blue (default) | `#3b82f6` |
+| Distance | Tier | Marker Color | Hex |
+|----------|------|--------------|-----|
+| ≤10m | Platinum | Deep Violet | `#7c3aed` |
+| ≤20m | Gold | Vibrant Purple | `#a855f7` |
+| ≤30m | Silver | Magenta Pink | `#d946ef` |
+| ≤40m | Bronze | Soft Pink | `#f0abfc` |
+| ≤50m | Potato | Warm Gray | `#a1a1aa` |
+| >50m | Missed | Light Red | `#fca5a5` |
 
-*   Position marker (blue dot) color changes based on distance
-*   25m threshold matches existing analysis tolerance (ADR 002, ADR 003)
+*   Position marker color reflects current distance tier (same colors as route analysis)
+*   Provides continuous precision feedback aligned with scoring system (ADR 021)
 
 **Status Bar Indicator:**
 
-| Condition | Display | Style |
-|-----------|---------|-------|
-| Within tolerance | "✓ On track (12m)" | Green text/background |
-| Outside tolerance | "23m from boundary" | Neutral text |
+| Distance | Display | Style |
+|----------|---------|-------|
+| ≤10m | "8m - Platinum" | Deep violet text/background |
+| ≤20m | "15m - Gold" | Purple text/background |
+| ≤30m | "25m - Silver" | Magenta text/background |
+| ≤40m | "35m - Bronze" | Pink text/background |
+| ≤50m | "45m - Potato" | Gray text/background |
+| >50m | "65m - Missed" | Red text/background |
+
+**Enlarged for Outdoor Visibility:**
+*   Indicator is approximately **2x larger** than default UI elements
+*   Optimized for visibility in bright sunlight
+*   Readable at arm's length or in armband mount
 
 **Calculation:**
-*   Use existing `distanceToLine()` pattern from `src/lib/analysis.ts`
+*   Use existing `distanceToLine()` pattern from `src/lib/geo-distance.ts`
 *   Calculate distance from current position to nearest point on boundary polygon perimeter
 *   Recalculate on each GPS position update
+*   Assign tier based on ADR 021 thresholds
 
 #### Exit Behavior
 *   Tap exit button → Confirm if tracking > 1 minute

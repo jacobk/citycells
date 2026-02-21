@@ -1,7 +1,7 @@
 # ADR 017: Live Walking Mode
 
 **Date:** 2026-02-15
-**Status:** Accepted
+**Status:** Accepted (Updated: 2026-02-21)
 **Supersedes:** N/A
 
 ## Context
@@ -111,3 +111,52 @@ Triggered from **Area Details Panel** via a "Start Walking" button, positioned a
 - Reuses tile layer configuration from main map
 - Geolocation logic can be extracted to a reusable hook (`useGeolocationTracking`)
 - Clear separation: walking mode is a distinct view, not modification of main map
+
+---
+
+## Updates
+
+### 2026-02-21: Tiered Distance Indicator Enhancements
+
+The original ADR mentioned "distance-to-boundary indicator" as a future enhancement. This update documents decisions for improved real-time feedback during walking.
+
+#### 1. Tiered Color System for Position Marker
+
+**Previous behavior:** Binary coloring (green when within 25m tolerance, blue otherwise).
+
+**New behavior:** Position marker color reflects the 6-tier distance system from ADR 021:
+
+| Distance | Tier | Marker Color | Hex |
+|----------|------|--------------|-----|
+| ≤10m | Platinum | Deep Violet | `#7c3aed` |
+| ≤20m | Gold | Vibrant Purple | `#a855f7` |
+| ≤30m | Silver | Magenta Pink | `#d946ef` |
+| ≤40m | Bronze | Soft Pink | `#f0abfc` |
+| ≤50m | Potato | Warm Gray | `#a1a1aa` |
+| >50m | Missed | Light Red | `#fca5a5` |
+
+**Rationale:** Aligns real-time walking feedback with post-walk analysis scoring. Users see the same tier colors during walking that they'll see in their analyzed route segments, creating a consistent experience.
+
+#### 2. Tier-Aware Status Text
+
+**Previous behavior:** "✓ On track (12m)" or "23m from boundary"
+
+**New behavior:** Status text includes tier name: "12m - Gold tier" or "45m - Potato tier"
+
+**Rationale:** Users learn the tier system during walks, improving understanding of post-walk scores.
+
+#### 3. Enlarged Indicator for Outdoor Visibility
+
+The distance indicator and position marker are approximately **2x larger** than the original design for improved visibility during outdoor use. This addresses:
+- Bright sunlight reducing screen visibility
+- Phone held at arm's length or in armband
+- Quick glances while actively walking
+
+#### 4. Map Follow Mode Clarification
+
+The existing "Center-on-me" button behavior is documented as enabling auto-follow mode:
+- When pressed, map centers on user and **re-enables continuous following**
+- User can zoom in/out while following is active
+- Panning the map manually disables auto-follow (requires pressing center button again)
+
+This is the existing behavior from the original ADR; no implementation change needed, only documentation clarification.

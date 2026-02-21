@@ -81,14 +81,16 @@ User taps Exit button:
 
 **WalkingControls component:**
 - Exit button with confirmation if tracking > 1 minute
-- Center-on-me button re-centers map and re-enables auto-center
+- Center-on-me button re-centers map and re-enables auto-follow mode
 - Zoom in/out buttons
 - Status indicators: GPS acquiring spinner, wake lock active badge, accuracy display
+- **Distance indicator (2x enlarged)**: Shows distance and tier (e.g., "12m - Gold") with tier-colored styling
 
 **LivePositionMarker component:**
-- Renders blue dot (`CircleMarker`) at current position
+- Renders tier-colored dot (`CircleMarker`) at current position (color based on distance tier per ADR 021)
 - Renders accuracy circle (`Circle`) showing GPS uncertainty
-- Auto-centers map when `autoCenter` prop is true
+- Auto-centers map when `autoCenter` prop is true (re-enabled by center-on-me button)
+- **Marker size 2x enlarged** for outdoor visibility
 
 ## Rationale
 
@@ -122,7 +124,8 @@ Browsers cannot track location in background or with screen off. This is accepte
 
 ### ADR References
 
-- [ADR 017: Live Walking Mode](../ADR/017-live-walking-mode.md) - Technical approach decision, comparing in-app vs. Google export options
+- [ADR 017: Live Walking Mode](../ADR/017-live-walking-mode.md) - Technical approach decision, comparing in-app vs. Google export options. Updated 2026-02-21 with tiered distance indicator enhancements.
+- [ADR 021: Tiered Distance Scoring](../ADR/021-tiered-distance-scoring.md) - Defines the 6-tier color system used by the distance indicator
 
 ## Current Limitations
 

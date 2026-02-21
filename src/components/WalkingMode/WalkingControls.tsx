@@ -6,12 +6,18 @@
  * Control buttons for Walking Mode: exit, center-on-me, zoom, and status indicators.
  * Positioned as floating controls over the full-screen map.
  * 
- * Includes distance-to-boundary indicator showing real-time proximity feedback.
+ * Includes distance-to-boundary indicator showing real-time tiered feedback:
+ * - Display format: "{distance}m - {Tier}" (e.g., "12m - Gold")
+ * - Background color matches tier (ADR 021 colors)
+ * - 2x larger than standard UI for outdoor visibility
  * 
  * @see docs/ADR/017-live-walking-mode.md
- * @see docs/tickets/017-live-walking-mode.md
- * @see docs/tickets/018-distance-indicator.md
+ * @see docs/ADR/021-tiered-distance-scoring.md
+ * @see docs/tickets/028-tiered-walking-indicator.md
  */
+
+import type { DistanceTier } from '@/lib/distance-tiers';
+import { DISTANCE_TIER_COLORS } from '@/lib/design-tokens';
 
 
 
@@ -40,8 +46,21 @@ interface WalkingControlsProps {
   areaName: string;
   /** Distance to boundary in meters, or null if GPS unavailable */
   distanceToBoundary: number | null;
-  /** Whether within 25m tolerance of boundary - see ADR 002 */
-  withinTolerance: boolean;
+  /** Current distance tier per ADR 021 - determines indicator color and text */
+  tier: DistanceTier | null;
+}
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+// WHY: Light tiers need dark text for readability; dark tiers need white text
+// See TICKET-028 for contrast requirements
+const LIGHT_TIERS: DistanceTier[] = ['bronze', 'potato', 'missed'];
+
+// WHY: Capitalize tier names for display (e.g., "platinum" → "Platinum")
+function formatTierName(tier: DistanceTier): string {
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
 // =============================================================================
@@ -59,7 +78,7 @@ export default function WalkingControls({
   gpsAccuracy,
   areaName,
   distanceToBoundary,
-  withinTolerance,
+  tier,
 }: WalkingControlsProps) {
   return (
     <>
@@ -150,35 +169,28 @@ export default function WalkingControls({
       
       {/* Bottom Status Bar - Distance to Boundary and GPS Accuracy */}
       {/* WHY: Show distance feedback only when GPS is available and not acquiring
-           Distance indicator is primary; GPS accuracy is secondary info - see TICKET-018 */}
+           Distance indicator is primary; GPS accuracy is secondary info
+           Enlarged 2x for outdoor visibility per TICKET-028 */}
       {gpsAccuracy !== null && !isAcquiringGPS && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[610]">
-          <div className="flex items-center gap-2">
-            {/* Distance to Boundary Indicator */}
-            {distanceToBoundary !== null && (
+          <div className="flex items-center gap-3">
+            {/* Distance to Boundary Indicator - Tiered per ADR 021 */}
+            {/* WHY: 2x larger (px-6 py-3 text-lg vs px-4 py-2 text-sm) for outdoor visibility */}
+            {distanceToBoundary !== null && tier && (
               <div
-                className={`backdrop-blur-sm rounded-full px-4 py-2 text-sm font-medium flex items-center gap-2 ${
-                  withinTolerance
-                    ? 'bg-green-600/90 text-white'
-                    : 'bg-black/60 text-white'
-                }`}
+                className="backdrop-blur-sm rounded-full px-6 py-3 text-lg font-semibold flex items-center gap-2 shadow-lg"
+                style={{
+                  backgroundColor: DISTANCE_TIER_COLORS[tier],
+                  // WHY: Light tiers (bronze/potato/missed) need dark text for contrast
+                  color: LIGHT_TIERS.includes(tier) ? '#1f2937' : '#ffffff',
+                }}
               >
-                {withinTolerance ? (
-                  <>
-                    {/* WHY: Checkmark icon reinforces "on track" status */}
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    On track ({distanceToBoundary}m)
-                  </>
-                ) : (
-                  <>{distanceToBoundary}m from boundary</>
-                )}
+                {distanceToBoundary}m - {formatTierName(tier)}
               </div>
             )}
             
             {/* GPS Accuracy Indicator */}
-            <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-2 text-white/80 text-xs">
+            <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-2 text-white/80 text-sm">
               ±{Math.round(gpsAccuracy)}m GPS
             </div>
           </div>
