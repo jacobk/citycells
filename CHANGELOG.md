@@ -17,6 +17,20 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Fixed
+- **Lint Cleanup**: Resolved all 17 ESLint warnings (ADR 020)
+  - Key files: `src/lib/analysis.ts`, `src/components/Map/Map.tsx`, `src/components/ProfileCard/ProfileCard.tsx`, `src/components/ProgressDashboard/ProgressDashboard.tsx`
+  - Removed 7 unused variables/imports across analysis and component files
+  - Converted 4 `<img>` tags to `next/image` for ProfileCard and ProgressDashboard (Strava avatars + connect button)
+  - Added `images.remotePatterns` to `next.config.ts` for Strava CDN optimization
+  - Added documented eslint-disable comments for ShareModal/SharePreview data URL images (cannot be optimized)
+
+### Changed
+- **Documentation Status Updates**: Corrected feature implementation statuses in docs
+  - Key files: `docs/features/README.md`, `PROJECT_PLAN.md`
+  - Updated 8 features from "Planned" to "Implemented" in README.md (Re-Analysis, Offline Support, Deployment, Branding, Achievement System, Agent Build Verification, Share Walk, Scrollable Mini-Map)
+  - Checked off 18 completed items in PROJECT_PLAN.md Phase 6.8 (Tiered Distance Scoring phases 2-6)
+
 ### Added
 - **Share Walk Feature**: Share walk achievements via URL and image export. (ADR 023, TICKET-029)
   - Key files: `src/lib/share/` (NEW module), `src/app/share/walk/` (NEW page), `src/components/ShareModal/` (NEW), `src/components/SharePreview/` (NEW), `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx`

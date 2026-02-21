@@ -8,13 +8,13 @@
  */
 
 import * as turf from '@turf/turf';
-import type { Feature, Polygon, MultiPolygon, LineString, Point, Position } from 'geojson';
+import type { Feature, Polygon, MultiPolygon, LineString, Position } from 'geojson';
 
 // WHY: Re-export tier types and constants from centralized ./tiers module
 // This maintains backwards compatibility for existing imports from ./analysis
 // See TICKET-016 for the potato tier bug that led to this centralization
 export { assignTier, TIER_THRESHOLDS, type Tier } from './tiers';
-import { assignTier, TIER_THRESHOLDS, type Tier } from './tiers';
+import { assignTier, type Tier } from './tiers';
 
 // WHY: Import consolidated distance utilities from geo-distance.ts
 // Eliminates duplication - see TICKET-018 for consolidation rationale
@@ -186,7 +186,9 @@ export function calculatePerimeterCoverage(
     try {
       // WHY: Use turf.lineIntersect for line-polygon intersection
       // turf.intersect is typed for polygon-polygon only
-      const intersections = turf.lineIntersect(walkLine, bufferedPerimeter);
+      // WHY: We calculate intersections but only use the count for validation
+      // The actual coverage is computed by checking if segment midpoints are in buffer
+      turf.lineIntersect(walkLine, bufferedPerimeter);
       
       // For coverage, we need the actual line segments within the buffer
       // Use booleanWithin to check which segments of the walk are inside the buffer

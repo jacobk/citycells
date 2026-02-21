@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import Image from 'next/image';
 import { getTierColor } from '@/lib/analysis';
 import type { ProgressInfo } from '@/components/Map';
 import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
@@ -166,9 +167,11 @@ export default function ProfileCard({
         aria-expanded={isExpanded}
       >
         {athlete ? (
-          <img 
+          <Image 
             src={athlete.profile} 
             alt="Profile" 
+            width={48}
+            height={48}
             className="w-full h-full rounded-full object-cover"
           />
         ) : loading ? (
@@ -208,7 +211,7 @@ export default function ProfileCard({
         ) : athlete ? (
           <div>
             <div className="flex items-center gap-3 mb-3">
-              <img src={athlete.profile} alt="Profile" className="w-10 h-10 rounded-full border border-border" />
+              <Image src={athlete.profile} alt="Profile" width={40} height={40} className="w-10 h-10 rounded-full border border-border" />
               <div>
                 <p className="text-sm font-semibold text-foreground">{athlete.firstname} {athlete.lastname}</p>
                 <p className="text-xs text-green-600 dark:text-green-400 font-medium">{activitiesCount} Walks Found</p>
@@ -483,11 +486,13 @@ export default function ProfileCard({
             >
               {/* WHY: Use official Strava "Connect with Strava" button per Strava API Brand Guidelines
                   Button height: 48px @1x, 96px @2x per guidelines */}
-              <img
+              <Image
                 src="/strava/btn_strava_connect_with_orange.svg"
                 alt="Connect with Strava"
+                width={193}
+                height={48}
                 className="h-12 w-auto"
-                style={{ maxWidth: '100%' }}
+                priority
               />
             </button>
           </div>

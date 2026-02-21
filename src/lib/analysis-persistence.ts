@@ -843,7 +843,7 @@ export async function reAnalyzeWalk(
       distance: walkData.distance ?? undefined,
     };
 
-    const analysisId =     await saveWalkAnalysis(
+    await saveWalkAnalysis(
       walkData.userId,
       activity,
       bestAreaId,

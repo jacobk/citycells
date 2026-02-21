@@ -42,9 +42,9 @@ export default function ExemptionModal({
       // WHY: Reset form state when modal opens - necessary for UX
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedReason(null);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setCustomReason('');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setError(null);
     }
   }, [isOpen]);

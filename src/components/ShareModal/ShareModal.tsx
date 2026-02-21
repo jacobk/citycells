@@ -309,6 +309,7 @@ export default function ShareModal({ isOpen, onClose, data }: ShareModalProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+            {/* eslint-disable-next-line @next/next/no-img-element -- WHY: previewImage is a data URL from html2canvas, next/image doesn't optimize data URLs */}
             <img
               src={previewImage}
               alt="Share preview"

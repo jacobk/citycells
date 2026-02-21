@@ -152,7 +152,7 @@ export default function MaximizedMapModal({
     if (isOpen && !prevIsOpenRef.current) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setEnabledWalkIds(new Set());
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setRouteSegmentsMap(new Map());
     }
     prevIsOpenRef.current = isOpen;

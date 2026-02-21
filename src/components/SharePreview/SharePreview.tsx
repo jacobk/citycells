@@ -207,6 +207,7 @@ const SharePreview = forwardRef<HTMLDivElement, SharePreviewProps>(
           minHeight: isWide ? 280 : isVertical ? 600 : 400,
         }}>
           {mapSnapshot ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- WHY: mapSnapshot is a data URL from html2canvas, next/image doesn't optimize data URLs */
             <img 
               src={mapSnapshot} 
               alt="Walk route map"

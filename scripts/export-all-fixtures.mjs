@@ -134,6 +134,8 @@ async function fetchActivities(accessToken) {
   return filtered;
 }
 
+// WHY: Keeping this function for potential future use in detailed activity exports
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function fetchActivityDetail(activityId, accessToken) {
   const response = await fetch(
     `https://www.strava.com/api/v3/activities/${activityId}`,

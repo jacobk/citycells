@@ -282,30 +282,30 @@
 - [x] Update feature documentation (analysis-engine.md)
 
 ### Phase 2: Database Schema Update
-- [ ] Add `tiered_border_score` column to walk_analyses table
-- [ ] Add `tier_distribution` JSON column
-- [ ] Create migration to schema v8
-- [ ] Update persistence layer to store/retrieve new fields
+- [x] Add `tiered_border_score` column to walk_analyses table
+- [x] Add `tier_distribution` JSON column
+- [x] Create migration to schema v8
+- [x] Update persistence layer to store/retrieve new fields
 
 ### Phase 3: Route Visualization
-- [ ] Add per-segment tier coloring to route visualization
-- [ ] Implement tier color palette (Platinum→Missed gradient)
-- [ ] Add dashed pattern for "Missed" segments
+- [x] Add per-segment tier coloring to route visualization
+- [x] Implement tier color palette (Platinum→Missed gradient)
+- [x] Add dashed pattern for "Missed" segments
 
 ### Phase 4: UI Updates
-- [ ] Display tier distribution in AreaDetailsPanel
-- [ ] Add tier breakdown progress bars
-- [ ] Update metrics documentation pages
+- [x] Display tier distribution in AreaDetailsPanel
+- [x] Add tier breakdown progress bars
+- [x] Update metrics documentation pages
 
 ### Phase 5: Documentation Pages
-- [ ] Create /docs/scoring/ app routes
-- [ ] Add "How Scoring Works" section to hamburger menu
-- [ ] Create interactive tier explainer
+- [x] Create /docs/scoring/ app routes
+- [x] Add "How Scoring Works" section to hamburger menu
+- [x] Create interactive tier explainer
 
 ### Phase 6: Comparison Testing
-- [ ] Re-analyze sample walks with both formulas
-- [ ] Document score differences
-- [ ] Verify tier assignments match expectations
+- [x] Re-analyze sample walks with both formulas
+- [x] Document score differences
+- [x] Verify tier assignments match expectations
 
 ## Phase 6.9: Share Walk Feature (ADR 023, TICKET-029)
 

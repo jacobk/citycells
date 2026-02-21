@@ -15,8 +15,6 @@ import {
   ROUTE_DEVIATION_THRESHOLD_METERS,
   ROUTE_SEGMENT_STYLE,
   getRouteSegmentColorByTier,
-  // Keep for backward compatibility
-  getRouteSegmentColor,
 } from '@/lib/design-tokens';
 // WHY: Import consolidated distance utilities from geo-distance.ts
 // Eliminates duplication - see TICKET-018 for consolidation rationale

@@ -606,7 +606,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       const areaActivityScores = new Map<number, Array<{ activityId: number; name: string; score: number; metrics: AnalysisMetrics; result: FullAnalysisResult; summaryPolyline?: string }>>();
 
       // WHY: Save each analysis result to database as we compute it
-      for (const [activityId, { areaId, score }] of activityBestArea.entries()) {
+      for (const [activityId, { areaId }] of activityBestArea.entries()) {
         const activity = processedActivities.find(p => p.original.id === activityId);
         const areaDetail = allAreaDetails.get(areaId);
         

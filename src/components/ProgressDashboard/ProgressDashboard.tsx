@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { getTierColor } from '@/lib/analysis';
 import { formatDistance } from '@/lib/format-utils';
 import { TIER_ORDER, TIER_LABELS, type TierCounts, type TierKey } from '@/lib/types/tiers';
@@ -108,9 +109,11 @@ export default function ProgressDashboard({
           {athleteName && (
             <div className="flex items-center gap-3">
               {athleteProfile && (
-                <img 
+                <Image 
                   src={athleteProfile} 
                   alt={athleteName}
+                  width={48}
+                  height={48}
                   className="w-12 h-12 rounded-full border border-border"
                 />
               )}

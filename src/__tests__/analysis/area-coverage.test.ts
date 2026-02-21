@@ -11,7 +11,7 @@
  * 3. Walk polygon is invalid (self-intersecting)
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { calculateAreaCoverage, detectLoop, analyzeWalk } from '@/lib/analysis';
 import { visualizeAreaCoverage, saveSVG } from '../utils/visualization';
 import * as turf from '@turf/turf';
