@@ -1,6 +1,6 @@
 # ADR 010: Map Visual Design System
 
-**Date:** 2026-02-04 (Updated: 2026-02-07)
+**Date:** 2026-02-04 (Updated: 2026-03-19)
 **Status:** Accepted
 **Supersedes:** N/A (refines visual aspects of ADR 003)
 
@@ -49,6 +49,8 @@ We will implement a **Map Visual Design System** that applies accessibility-firs
    - Reserved for future if tile options insufficient
 
 **Rationale:** A muted base ensures walked areas "pop" without being drowned by colorful roads, buildings, and parks.
+
+**Satellite Mode Exception (Added: 2026-03-19):** When the satellite tile layer is active (ADR 025), the grayscale filter MUST be disabled. Satellite imagery renders in full color — users switch to satellite specifically for real-world color context. The CSS selector uses `:not(.satellite-tiles)` to conditionally scope the filter. Additionally, boundary strokes switch to white (`#ffffff`) at full opacity in satellite mode for maximum contrast against varied terrain. See ADR 025 for the full satellite boundary styling specification.
 
 ### 2. Walked Area Color System (Heat Map Style)
 

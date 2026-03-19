@@ -21,11 +21,15 @@ import 'leaflet/dist/leaflet.css';
 
 import { useGeolocationTracking } from '@/hooks/useGeolocationTracking';
 import { useWakeLock, isIOSSafari } from '@/hooks/useWakeLock';
-import { TILE_LAYER_URL, WALKING_MODE_DEFAULT_ZOOM, FIT_BOUNDS_PADDING } from '@/lib/map-config';
+import { WALKING_MODE_DEFAULT_ZOOM, FIT_BOUNDS_PADDING } from '@/lib/map-config';
+import { useMapTileLayer } from '@/hooks/useMapTileLayer';
+import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
 import {
   TIER_FILL_COLORS,
-  TIER_BORDER_COLORS,
   UNWALKED_AREA_STYLE,
+  getBorderColor,
+  getBorderWeight,
+  getFillOpacity,
 } from '@/lib/design-tokens';
 import type { Tier } from '@/lib/analysis';
 // WHY: Import distance utilities for real-time boundary proximity feedback
@@ -120,6 +124,7 @@ export default function WalkingMode({
   tier,
   onExit,
 }: WalkingModeProps) {
+  const { tileUrl, mapStyle, isSatellite } = useMapTileLayer();
   const mapRef = useRef<L.Map | null>(null);
   const [autoCenter, setAutoCenter] = useState(true);
   const [showIOSTip, setShowIOSTip] = useState(false);
@@ -217,16 +222,16 @@ export default function WalkingMode({
   }, [distanceToBoundary]);
   
   // WHY: Use tier colors for fill/stroke, fall back to unwalked style (matches AreaMiniMap)
+  // Satellite mode: white borders, +1px weight, boosted fill opacity (ADR 025)
   const fillColor = tier ? TIER_FILL_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
-  const borderColor = tier ? TIER_BORDER_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
-  
+
   const boundaryStyle = useMemo(() => ({
-    color: borderColor,
-    weight: WALKING_BOUNDARY_STROKE_WEIGHT,
+    color: getBorderColor(tier, isSatellite),
+    weight: getBorderWeight(WALKING_BOUNDARY_STROKE_WEIGHT, isSatellite),
     opacity: 1,
     fillColor,
-    fillOpacity: WALKING_BOUNDARY_FILL_OPACITY,
-  }), [fillColor, borderColor]);
+    fillOpacity: getFillOpacity(null, WALKING_BOUNDARY_FILL_OPACITY, isSatellite),
+  }), [fillColor, tier, isSatellite]);
   
   // ==========================================================================
   // Event Handlers
@@ -291,11 +296,12 @@ export default function WalkingMode({
       <MapContainer
         center={[55.59, 13.00]} // Default center, will be overridden by FitBounds
         zoom={WALKING_MODE_DEFAULT_ZOOM}
-        className="h-full w-full"
+        className="h-full w-full grayscale-tiles"
         zoomControl={false}
         attributionControl={false}
       >
-        <TileLayer url={TILE_LAYER_URL} />
+        <MapStyleClass mapStyle={mapStyle} />
+        <TileLayer url={tileUrl} />
         
         {/* Area Boundary */}
         <GeoJSON
@@ -320,6 +326,11 @@ export default function WalkingMode({
         <MapDragDetector onDrag={handleMapDrag} />
       </MapContainer>
       
+      {/* Map style toggle - below right-side zoom controls */}
+      <div className="absolute right-4 bottom-1/3 z-[610]">
+        <MapStyleToggle />
+      </div>
+
       {/* Controls Overlay */}
       {/* WHY: Pass tier for tiered status indicator per ADR 021/TICKET-028 */}
       <WalkingControls

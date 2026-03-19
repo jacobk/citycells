@@ -195,11 +195,14 @@
    making walked areas and routes the visual focus.
    ============================================================================= */
 
-.leaflet-container .leaflet-tile-pane {
+/* WHY: Grayscale filter mutes the base map to reduce visual competition with data overlays.
+   Only applied in default 'street' mode (grayscale-tiles class). Disabled for both
+   'color' (full-color street) and 'satellite' modes (ADR 025). */
+.leaflet-container.grayscale-tiles .leaflet-tile-pane {
   filter: grayscale(100%) brightness(1.1) !important;
 }
 
-/* Dark mode map adjustments */
-.dark .leaflet-container .leaflet-tile-pane {
+/* Dark mode map adjustments — only for grayscale street mode */
+.dark .leaflet-container.grayscale-tiles .leaflet-tile-pane {
   filter: grayscale(100%) brightness(0.8) invert(1) !important;
 }

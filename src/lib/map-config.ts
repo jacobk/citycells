@@ -17,6 +17,11 @@ export const TILE_LAYER_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.pn
 
 export const TILE_LAYER_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
+// WHY: Esri World Imagery provides free satellite tiles without API key (ADR 025)
+export const SATELLITE_TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+export const SATELLITE_TILE_ATTRIBUTION = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
+
 // =============================================================================
 // DEFAULT MAP CENTER (Malmö, Sweden)
 // WHY: App is focused on Malmö sub-areas. Default center provides

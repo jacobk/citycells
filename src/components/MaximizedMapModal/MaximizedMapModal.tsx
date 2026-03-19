@@ -24,10 +24,15 @@ import type { Tier } from '@/lib/analysis';
 import type { Feature, Polygon, MultiPolygon, Position } from 'geojson';
 import {
   TIER_FILL_COLORS,
-  TIER_BORDER_COLORS,
   UNWALKED_AREA_STYLE,
+  getBorderColor,
+  getBorderWeight,
+  getBorderOpacity,
+  getFillOpacity,
 } from '@/lib/design-tokens';
-import { TILE_LAYER_URL, MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
+import { MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
+import { useMapTileLayer } from '@/hooks/useMapTileLayer';
+import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
 import { getWalkStreams, getDatabase } from '@/lib/db';
 import { prepareDeviationColoredRoute, getRoutePathOptions } from '@/lib/route-visualization';
 import type { RouteSegment } from '@/lib/route-visualization';
@@ -114,6 +119,7 @@ export default function MaximizedMapModal({
   walks,
   areaName,
 }: MaximizedMapModalProps) {
+  const { tileUrl, mapStyle, isSatellite } = useMapTileLayer();
   // WHY: Track which walks are enabled for display (multi-select)
   const [enabledWalkIds, setEnabledWalkIds] = useState<Set<number>>(new Set());
   // WHY: Cache loaded route segments by walk ID
@@ -259,16 +265,16 @@ export default function MaximizedMapModal({
   }), [geometry]);
 
   // WHY: Use tier colors for fill/stroke, fall back to unwalked style
+  // Satellite mode: white borders, +1px weight, boosted fill opacity (ADR 025)
   const fillColor = tier ? TIER_FILL_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
-  const borderColor = tier ? TIER_BORDER_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
 
-  const mapStyle = useMemo(() => ({
-    color: borderColor,
-    weight: 3,
-    opacity: 0.9,
+  const boundaryStyle = useMemo(() => ({
+    color: getBorderColor(tier, isSatellite),
+    weight: getBorderWeight(3, isSatellite),
+    opacity: getBorderOpacity(0.9, isSatellite),
     fillColor,
-    fillOpacity: 0.2,
-  }), [fillColor, borderColor]);
+    fillOpacity: getFillOpacity(null, 0.2, isSatellite),
+  }), [fillColor, tier, isSatellite]);
 
   // WHY: Format walk label with name and date per user preference
   const formatWalkLabel = (walk: WalkData): string => {
@@ -319,7 +325,7 @@ export default function MaximizedMapModal({
             <MapContainer
               center={MALMO_CENTER}
               zoom={14}
-              className="h-full w-full"
+              className="h-full w-full grayscale-tiles"
               zoomControl={true}
               dragging={true}
               touchZoom={true}
@@ -327,11 +333,12 @@ export default function MaximizedMapModal({
               doubleClickZoom={true}
               attributionControl={false}
             >
-              <TileLayer url={TILE_LAYER_URL} />
+              <MapStyleClass mapStyle={mapStyle} />
+              <TileLayer url={tileUrl} />
               <GeoJSON
                 key={JSON.stringify(geometry)}
                 data={featureData}
-                style={mapStyle}
+                style={boundaryStyle}
               />
               {/* WHY: Render all enabled walk routes with tier-based coloring */}
               {allEnabledSegments.map((segment, index) => (
@@ -343,6 +350,11 @@ export default function MaximizedMapModal({
               ))}
               <FitBoundsUpdater geometry={geometry} routeSegments={allEnabledSegments} />
             </MapContainer>
+
+            {/* Map style toggle - top-right of map area */}
+            <div className="absolute top-3 right-3 z-[400]">
+              <MapStyleToggle />
+            </div>
           </div>
 
           {/* Control Panel - fixed bottom section */}

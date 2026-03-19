@@ -17,9 +17,12 @@ import {
 } from '@/lib/analysis';
 import {
   getMapTierFillColor,
-  getMapTierBorderColor,
-  getMapTierOpacity,
   UNWALKED_AREA_STYLE,
+  SATELLITE_UNWALKED_STYLE,
+  getBorderColor,
+  getBorderWeight,
+  getBorderOpacity,
+  getFillOpacity,
 } from '@/lib/design-tokens';
 import {
   prepareDeviationColoredRoute,
@@ -49,7 +52,9 @@ import type { DeviationWithExemption } from '@/lib/exemption-types';
 import type { CachedStreams } from '@/lib/types/strava-streams';
 import type { TierCounts } from '@/lib/types/tiers';
 // WHY: Shared map config for consistency across Map, AreaMiniMap, WalkingMode (ADR 017)
-import { TILE_LAYER_URL, TILE_LAYER_ATTRIBUTION, MALMO_CENTER, DEFAULT_ZOOM } from '@/lib/map-config';
+import { MALMO_CENTER, DEFAULT_ZOOM } from '@/lib/map-config';
+import { useMapTileLayer } from '@/hooks/useMapTileLayer';
+import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
 
 // Fix for default marker icon in Next.js
 // @ts-expect-error - overriding private method
@@ -211,6 +216,7 @@ interface ActivityRouteData {
 }
 
 export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, showRoutes = false }: MapProps) {
+  const { tileUrl, tileAttribution, mapStyle, isSatellite } = useMapTileLayer();
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
@@ -813,28 +819,29 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
     if (analysis && analysis.tier) {
       // WHY: Use design tokens for map-specific purple-pink gradient (ADR 010)
+      // Satellite mode: white borders, +1px weight, boosted fill opacity (ADR 025)
       const fillColor = getMapTierFillColor(analysis.tier);
-      const borderColor = getMapTierBorderColor(analysis.tier);
-      const fillOpacity = getMapTierOpacity(analysis.tier);
-      
+
       return {
-        color: borderColor,
-        weight: 2,
-        opacity: 0.8,
+        color: getBorderColor(analysis.tier, isSatellite),
+        weight: getBorderWeight(2, isSatellite),
+        opacity: getBorderOpacity(0.8, isSatellite),
         fillColor: fillColor,
-        fillOpacity: fillOpacity,
+        fillOpacity: getFillOpacity(analysis.tier, 0, isSatellite),
       };
     }
 
     // WHY: Subtle styling for unwalked areas so they don't compete with completed ones
+    // Satellite mode uses white borders for visibility (ADR 025)
+    const unwalked = isSatellite ? SATELLITE_UNWALKED_STYLE : UNWALKED_AREA_STYLE;
     return {
-      color: UNWALKED_AREA_STYLE.borderColor,
-      weight: UNWALKED_AREA_STYLE.borderWeight,
-      opacity: UNWALKED_AREA_STYLE.borderOpacity,
-      fillColor: UNWALKED_AREA_STYLE.fillColor,
-      fillOpacity: UNWALKED_AREA_STYLE.fillOpacity,
+      color: unwalked.borderColor,
+      weight: unwalked.borderWeight,
+      opacity: unwalked.borderOpacity,
+      fillColor: unwalked.fillColor,
+      fillOpacity: unwalked.fillOpacity,
     };
-  }, [areaAnalyses]);
+  }, [areaAnalyses, isSatellite]);
 
   // Create tooltip data from a feature
   // WHY: Include circumferenceMeters for walk time estimate in tooltip (ADR 012)
@@ -878,15 +885,16 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           Analyzing {newActivityCount} new {newActivityCount === 1 ? 'activity' : 'activities'}...
         </div>
       )}
-      <MapContainer 
-        center={MALMO_CENTER} 
-        zoom={DEFAULT_ZOOM} 
-        className="h-full w-full z-0"
-        zoomControl={false} 
+      <MapContainer
+        center={MALMO_CENTER}
+        zoom={DEFAULT_ZOOM}
+        className="h-full w-full z-0 grayscale-tiles"
+        zoomControl={false}
       >
+        <MapStyleClass mapStyle={mapStyle} />
         <TileLayer
-          attribution={TILE_LAYER_ATTRIBUTION}
-          url={TILE_LAYER_URL}
+          attribution={tileAttribution}
+          url={tileUrl}
         />
         <LocationMarker />
         <ZoomTracker onZoomChange={setCurrentZoom} />
@@ -973,11 +981,16 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       </MapContainer>
       
       {/* WHY: Tooltip overlay outside MapContainer for proper z-index */}
-      <AreaTooltip 
-        data={tooltipData} 
-        position={tooltipPosition} 
+      <AreaTooltip
+        data={tooltipData}
+        position={tooltipPosition}
         onClose={hideTooltip}
       />
+
+      {/* Map style toggle - bottom-right floating */}
+      <div className="absolute bottom-6 right-4 z-[400]">
+        <MapStyleToggle />
+      </div>
     </div>
   );
 }

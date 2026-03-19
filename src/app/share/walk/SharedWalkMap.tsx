@@ -21,10 +21,15 @@ import type { TieredSegment } from '@/lib/distance-tiers';
 import { DISTANCE_TIER_COLORS } from '@/lib/design-tokens';
 import {
   TIER_FILL_COLORS,
-  TIER_BORDER_COLORS,
   UNWALKED_AREA_STYLE,
+  getBorderColor,
+  getBorderWeight,
+  getBorderOpacity,
+  getFillOpacity,
 } from '@/lib/design-tokens';
-import { TILE_LAYER_URL, TILE_LAYER_ATTRIBUTION, MALMO_CENTER } from '@/lib/map-config';
+import { MALMO_CENTER } from '@/lib/map-config';
+import { useMapTileLayer } from '@/hooks/useMapTileLayer';
+import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
 
 // =============================================================================
 // Types
@@ -137,6 +142,7 @@ export default function SharedWalkMap({
   tierSegments,
   tier,
 }: SharedWalkMapProps) {
+  const { tileUrl, tileAttribution, mapStyle, isSatellite } = useMapTileLayer();
   // Convert boundary to Leaflet format [lat, lng]
   const boundaryLatLngs = useMemo(() => 
     boundaryCoords.map(([lng, lat]) => [lat, lng] as [number, number]),
@@ -144,20 +150,22 @@ export default function SharedWalkMap({
   );
 
   // Style for boundary polygon
+  // Satellite mode: white borders, +1px weight, boosted fill opacity (ADR 025)
   const boundaryStyle = useMemo(() => ({
-    color: tier ? TIER_BORDER_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor,
-    weight: 3,
-    opacity: 0.9,
+    color: getBorderColor(tier, isSatellite),
+    weight: getBorderWeight(3, isSatellite),
+    opacity: getBorderOpacity(0.9, isSatellite),
     fillColor: tier ? TIER_FILL_COLORS[tier] : UNWALKED_AREA_STYLE.fillColor,
-    fillOpacity: 0.2,
-  }), [tier]);
+    fillOpacity: getFillOpacity(null, 0.2, isSatellite),
+  }), [tier, isSatellite]);
 
   return (
+    <div className="relative h-full w-full">
     <MapContainer
       center={MALMO_CENTER}
       zoom={14}
       style={{ height: '100%', width: '100%' }}
-      className="h-full w-full"
+      className="h-full w-full grayscale-tiles"
       zoomControl={true}
       dragging={true}
       touchZoom={true}
@@ -165,9 +173,10 @@ export default function SharedWalkMap({
       doubleClickZoom={true}
       attributionControl={true}
     >
+      <MapStyleClass mapStyle={mapStyle} />
       <TileLayer
-        url={TILE_LAYER_URL}
-        attribution={TILE_LAYER_ATTRIBUTION}
+        url={tileUrl}
+        attribution={tileAttribution}
       />
       
       {/* Boundary polygon */}
@@ -182,5 +191,11 @@ export default function SharedWalkMap({
       {/* Fit to boundary bounds */}
       <FitBoundsFitter boundaryCoords={boundaryCoords} />
     </MapContainer>
+
+    {/* Map style toggle - top-right floating */}
+    <div className="absolute top-3 right-3 z-[400]">
+      <MapStyleToggle />
+    </div>
+    </div>
   );
 }

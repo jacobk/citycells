@@ -66,6 +66,25 @@ export const UNWALKED_AREA_STYLE = {
 } as const;
 
 // =============================================================================
+// SATELLITE MODE BOUNDARY STYLING (ADR 025)
+// WHY: On satellite imagery, lighter tier borders (Bronze, Potato) and subtle
+// unwalked borders blend into terrain. White borders at full opacity with +1px
+// weight ensure boundaries are clearly visible against any satellite terrain.
+// =============================================================================
+
+export const SATELLITE_BORDER_COLOR = '#ffffff';
+export const SATELLITE_BORDER_OPACITY = 1.0;
+export const SATELLITE_MAX_FILL_OPACITY = 0.75;
+
+export const SATELLITE_UNWALKED_STYLE = {
+  borderColor: '#ffffff',
+  borderWeight: 2,
+  borderOpacity: 1.0,
+  fillColor: '#94a3b8',
+  fillOpacity: 0.15,
+} as const;
+
+// =============================================================================
 // ROUTE DEVIATION COLORS (ADR 010 Section 3)
 // WHY: Binary threshold coloring provides clear visual feedback on walk quality.
 // Green = on-track (within 25m buffer), Red = deviation (outside 25m buffer).
@@ -162,6 +181,28 @@ export const TIER_ICON_MIN_ZOOM = 13;
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
+
+// --- Satellite-aware helpers (ADR 025) ---
+
+export function getBorderColor(tier: Tier | null | undefined, isSatellite: boolean): string {
+  if (isSatellite) return SATELLITE_BORDER_COLOR;
+  if (!tier) return UNWALKED_AREA_STYLE.borderColor;
+  return TIER_BORDER_COLORS[tier];
+}
+
+export function getBorderWeight(baseWeight: number, isSatellite: boolean): number {
+  return isSatellite ? baseWeight + 1 : baseWeight;
+}
+
+export function getBorderOpacity(baseOpacity: number, isSatellite: boolean): number {
+  return isSatellite ? SATELLITE_BORDER_OPACITY : baseOpacity;
+}
+
+export function getFillOpacity(tier: Tier | null | undefined, baseOpacity: number, isSatellite: boolean): number {
+  const opacity = tier ? (TIER_OPACITIES[tier] ?? baseOpacity) : baseOpacity;
+  if (isSatellite) return Math.min(opacity + 0.10, SATELLITE_MAX_FILL_OPACITY);
+  return opacity;
+}
 
 /**
  * Get map fill color for a tier.

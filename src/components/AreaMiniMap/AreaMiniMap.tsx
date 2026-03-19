@@ -22,11 +22,16 @@ import 'leaflet/dist/leaflet.css';
 import type { Tier } from '@/lib/analysis';
 import {
   TIER_FILL_COLORS,
-  TIER_BORDER_COLORS,
   UNWALKED_AREA_STYLE,
+  getBorderColor,
+  getBorderWeight,
+  getBorderOpacity,
+  getFillOpacity,
 } from '@/lib/design-tokens';
 // WHY: Shared map config for consistency across Map, AreaMiniMap, WalkingMode (ADR 017)
-import { TILE_LAYER_URL, MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
+import { MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
+import { useMapTileLayer } from '@/hooks/useMapTileLayer';
+import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
 
 // WHY: Fixed height for compact scrollable mini-map per ADR 022
 // This replaces the dynamic flex-grow height from ADR 012
@@ -73,6 +78,8 @@ function FitBoundsUpdater({ geometry }: { geometry: GeoJSON.Geometry }) {
 }
 
 export default function AreaMiniMap({ geometry, tier, className, onMaximize }: AreaMiniMapProps) {
+  const { tileUrl, mapStyle, isSatellite } = useMapTileLayer();
+
   // WHY: Wrap geometry in a GeoJSON Feature for the GeoJSON component
   const featureData = useMemo<GeoJSON.FeatureCollection>(() => ({
     type: 'FeatureCollection',
@@ -84,16 +91,16 @@ export default function AreaMiniMap({ geometry, tier, className, onMaximize }: A
   }), [geometry]);
 
   // WHY: Use tier colors for fill/stroke, fall back to unwalked style
+  // Satellite mode: white borders, +1px weight, boosted fill opacity (ADR 025)
   const fillColor = tier ? TIER_FILL_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
-  const borderColor = tier ? TIER_BORDER_COLORS[tier] : UNWALKED_AREA_STYLE.borderColor;
 
   const style = useMemo(() => ({
-    color: borderColor,
-    weight: MINI_MAP_STROKE_WEIGHT,
-    opacity: 0.9,
+    color: getBorderColor(tier, isSatellite),
+    weight: getBorderWeight(MINI_MAP_STROKE_WEIGHT, isSatellite),
+    opacity: getBorderOpacity(0.9, isSatellite),
     fillColor,
-    fillOpacity: MINI_MAP_FILL_OPACITY,
-  }), [fillColor, borderColor]);
+    fillOpacity: getFillOpacity(null, MINI_MAP_FILL_OPACITY, isSatellite),
+  }), [fillColor, tier, isSatellite]);
 
   // WHY: Fixed height per ADR 022 - mini-map scrolls with content instead of filling viewport
   return (
@@ -104,7 +111,7 @@ export default function AreaMiniMap({ geometry, tier, className, onMaximize }: A
       <MapContainer
         center={MALMO_CENTER}
         zoom={14}
-        className="h-full w-full"
+        className="h-full w-full grayscale-tiles"
         // WHY: Hide zoom controls to save space - users gesture to zoom (ADR 012)
         zoomControl={false}
         // WHY: Enable all interactions for route planning exploration (ADR 012)
@@ -115,9 +122,10 @@ export default function AreaMiniMap({ geometry, tier, className, onMaximize }: A
         // WHY: Disable attribution on mini-map to save vertical space
         attributionControl={false}
       >
+        <MapStyleClass mapStyle={mapStyle} />
         <TileLayer
           // WHY: Same tile provider as main map for visual consistency (ADR 012, 017)
-          url={TILE_LAYER_URL}
+          url={tileUrl}
         />
         <GeoJSON
           key={JSON.stringify(geometry)}
@@ -127,6 +135,11 @@ export default function AreaMiniMap({ geometry, tier, className, onMaximize }: A
         <FitBoundsUpdater geometry={geometry} />
       </MapContainer>
       
+      {/* Map style toggle - top-left, small variant */}
+      <div className="absolute top-2 left-2 z-[400]">
+        <MapStyleToggle small />
+      </div>
+
       {/* WHY: Maximize button per ADR 022 - opens full-size modal with walk toggles and legend */}
       {onMaximize && (
         <button
