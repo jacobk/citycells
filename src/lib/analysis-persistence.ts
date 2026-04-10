@@ -28,7 +28,10 @@ export async function saveWalkAnalysis(
   stravaActivity: StravaActivity,
   areaFid: number, // WHY: This is the FID from GeoJSON, not the database ID
   analysisResult: FullAnalysisResult,
-  isPrimaryMatch: boolean
+  isPrimaryMatch: boolean,
+  // WHY: skipPersist allows batching multiple saves with a single persistDatabase() call
+  // at the end, avoiding N full-DB serializations during bulk analysis. See TICKET-032.
+  options?: { skipPersist?: boolean }
 ): Promise<number> {
   const db = getDatabase();
 
@@ -67,7 +70,8 @@ export async function saveWalkAnalysis(
           stravaActivity.end_latlng?.[1] ?? null,
           stravaActivity.distance ?? null,
           walkId,
-        ]
+        ],
+        options
       );
     }
   } else {
@@ -88,7 +92,8 @@ export async function saveWalkAnalysis(
         stravaActivity.end_latlng?.[0] ?? null,
         stravaActivity.end_latlng?.[1] ?? null,
         null, // started_at - could parse from activity
-      ]
+      ],
+      options
     );
     const newWalk = db.exec('SELECT id FROM walks WHERE strava_activity_id = ?', [stravaActivity.id]);
     walkId = newWalk[0].values[0][0] as number;
@@ -125,7 +130,8 @@ export async function saveWalkAnalysis(
       // WHY: ADR 021 tiered scoring fields
       metrics.tieredBorderScore,
       JSON.stringify(metrics.tierDistribution),
-    ]
+    ],
+    options
   );
 
   // Get the analysis ID
@@ -139,7 +145,8 @@ export async function saveWalkAnalysis(
   // Delete existing deviations for this analysis
   await executeWrite(
     'DELETE FROM deviations WHERE walk_analysis_id = ?',
-    [analysisId]
+    [analysisId],
+    options
   );
 
   for (const deviation of analysisResult.deviations) {
@@ -170,7 +177,8 @@ export async function saveWalkAnalysis(
         deviation.returnAccuracyMeters,
         deviation.detourRatio,
         deviation.classification,
-      ]
+      ],
+      options
     );
   }
 
@@ -214,7 +222,8 @@ export async function saveWalkAnalysis(
         user_id, area_id, best_walk_analysis_id, best_quality_score, tier,
         total_walks, first_completed_at, best_completed_at
       ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      [userId, areaId, bestId, bestScore, bestTier, totalWalks]
+      [userId, areaId, bestId, bestScore, bestTier, totalWalks],
+      options
     );
   }
 

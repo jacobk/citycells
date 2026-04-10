@@ -174,6 +174,14 @@ Analysis runs in `setTimeout(..., 100)` to:
 - Allow the UI to show "Analyzing paths..." indicator
 - Prevent jank when processing many activities
 
+### Why Chunked Analysis Loop? (TICKET-032)
+
+The analysis loop processes activities one at a time, yielding to the main thread between each via `await new Promise(resolve => setTimeout(resolve, 0))`. This prevents the UI from freezing on mobile devices (especially iOS Safari) during heavy turf.js geometry operations. The loop supports cancellation so that if the effect re-runs mid-analysis, the old run aborts cleanly.
+
+DB writes use a `skipPersist` option to avoid N full-database serializations — a single `persistDatabase()` call at the end replaces per-write persistence.
+
+The GeoJSON component uses a stable key (`"geojson-stable"`) with refs for event handlers, so polygon styles update via `setStyle()` rather than full SVG teardown/rebuild.
+
 ### Why Hamburger Menu in Top-Left?
 
 The hamburger menu button is positioned in the top-left corner because:

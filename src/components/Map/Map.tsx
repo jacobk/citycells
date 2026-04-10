@@ -2,7 +2,7 @@
 
 import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMapEvents, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon, Position } from 'geojson';
 import L from 'leaflet';
 import * as turf from '@turf/turf';
@@ -42,11 +42,12 @@ import {
   loadActivityAreaAssignments,
   type CachedMetrics
 } from '@/lib/analysis-persistence';
-import { 
+import {
   getWalkIdByActivityId,
   getWalkStreams,
   needsStreamsFetch,
-  saveWalkStreams
+  saveWalkStreams,
+  persistDatabase
 } from '@/lib/db';
 import type { DeviationWithExemption } from '@/lib/exemption-types';
 import type { CachedStreams } from '@/lib/types/strava-streams';
@@ -236,6 +237,16 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   // This is populated during analysis and used by route visualization effect
   const [activityAreaAssignments, setActivityAreaAssignments] = useState<Map<number, number>>(new Map());
   
+  // WHY: Refs allow onEachFeature/getStyle/getTooltipData handlers to read latest state
+  // without remounting the GeoJSON component. Without these, changing the GeoJSON key
+  // forces full SVG teardown/rebuild on every analysis update. See TICKET-032.
+  const areaAnalysesRef = useRef(areaAnalyses);
+  const areaDetailsDataRef = useRef(areaDetailsData);
+  const onAreaClickRef = useRef(onAreaClick);
+  useEffect(() => { areaAnalysesRef.current = areaAnalyses; }, [areaAnalyses]);
+  useEffect(() => { areaDetailsDataRef.current = areaDetailsData; }, [areaDetailsData]);
+  useEffect(() => { onAreaClickRef.current = onAreaClick; }, [onAreaClick]);
+
   // WHY: Database hook for persistence - loads cached results and saves new analyses
   const { db, loading: dbLoading } = useDatabase();
 
@@ -324,8 +335,12 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       return;
     }
 
+    // WHY: Cancellation flag + clearTimeout prevent stale analysis runs from racing
+    // when deps change mid-analysis. See TICKET-032.
+    let cancelled = false;
+
     // WHY: Defer analysis to next tick to not block UI rendering
-    setTimeout(async () => {
+    const timeoutId = setTimeout(async () => {
       // WHY: Database is optional - get userId only if db is available
       let userId: number | null = null;
       if (db && !dbLoading && athleteId) {
@@ -556,15 +571,23 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       // WHY: Track best analysis per area for exclusive assignment (ADR 002)
       // Each walk can only count for one area (the one with best coverage)
-      const activityBestArea = new Map<number, { areaId: number; score: number }>();
+      // WHY: Cache the FullAnalysisResult to avoid redundant re-computation in the DB write loop (TICKET-032)
+      const activityBestArea = new Map<number, { areaId: number; score: number; result: FullAnalysisResult }>();
 
       console.log(`[Map] Processing ${processedActivities.length} activities against ${allAreaDetails.size} areas`);
-      
-      // Calculate coverage for each activity-area pair
-      processedActivities.forEach(pAct => {
+
+      // WHY: Process activities one at a time in an async loop, yielding to the main thread
+      // between each activity to keep the UI responsive on mobile. See TICKET-032.
+      for (const pAct of processedActivities) {
+        if (cancelled) {
+          console.log('[Map] Analysis cancelled mid-processing');
+          return;
+        }
+
         const activityId = pAct.original.id;
         let bestAreaId: number | null = null;
         let bestScore = 0;
+        let bestResult: FullAnalysisResult | null = null;
         let intersectCount = 0;
 
         allAreaDetails.forEach((areaDetail, areaId) => {
@@ -574,7 +597,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             // false negatives if streams are privacy-cropped.
             const walkLine = turf.lineString(pAct.coordinates);
             if (!turf.booleanIntersects(walkLine, areaDetail.feature)) return;
-            
+
             intersectCount++;
             // Run full analysis (pass Strava metadata for accurate loop detection)
             const result = analyzeWalk(
@@ -594,6 +617,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               if (result.metrics.rawQualityScore > bestScore) {
                 bestScore = result.metrics.rawQualityScore;
                 bestAreaId = areaId;
+                bestResult = result;
               }
             }
           } catch (e) {
@@ -602,30 +626,27 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         });
 
         console.log(`[Map] Activity ${activityId} intersected ${intersectCount} areas, best match: ${bestAreaId} with score ${(bestScore * 100).toFixed(1)}%`);
-        if (bestAreaId !== null) {
-          activityBestArea.set(activityId, { areaId: bestAreaId, score: bestScore });
+        if (bestAreaId !== null && bestResult !== null) {
+          activityBestArea.set(activityId, { areaId: bestAreaId, score: bestScore, result: bestResult });
         }
-      });
 
-      // Now run full analysis only for assigned activity-area pairs
+        // WHY: Yield to main thread after each activity to keep UI responsive (TICKET-032)
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      if (cancelled) return;
+
+      // Now use cached analysis results for assigned activity-area pairs
       // and aggregate results per area, saving to database
       const areaActivityScores = new Map<number, Array<{ activityId: number; name: string; score: number; metrics: AnalysisMetrics; result: FullAnalysisResult; summaryPolyline?: string }>>();
 
-      // WHY: Save each analysis result to database as we compute it
-      for (const [activityId, { areaId }] of activityBestArea.entries()) {
+      // WHY: Save analysis results to database with skipPersist, then persist once at the end.
+      // This avoids N full-DB serializations during bulk saves. See TICKET-032.
+      for (const [activityId, { areaId, result }] of activityBestArea.entries()) {
+        if (cancelled) return;
         const activity = processedActivities.find(p => p.original.id === activityId);
-        const areaDetail = allAreaDetails.get(areaId);
-        
-        if (!activity || !areaDetail) continue;
 
-        const result = analyzeWalk(
-          activity.coordinates,
-          areaDetail.feature,
-          areaDetail.perimeterMeters,
-          areaDetail.areaSqm,
-          activity.stravaMetadata,
-          activity.streamCoordinates ?? undefined
-        );
+        if (!activity) continue;
 
         // Save to database if available (but don't fail analysis if save fails)
         if (userId !== null) {
@@ -635,13 +656,14 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               activity.original,
               areaId,
               result,
-              true // isPrimaryMatch
+              true, // isPrimaryMatch
+              { skipPersist: true }
             );
 
             if (activity.cachedStreams && activity.shouldSaveStreams) {
               const walkId = getWalkIdByActivityId(activityId);
               if (walkId !== null) {
-                await saveWalkStreams(walkId, activity.cachedStreams);
+                await saveWalkStreams(walkId, activity.cachedStreams, { skipPersist: true });
               }
             }
           } catch (e) {
@@ -654,7 +676,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         if (!areaActivityScores.has(areaId)) {
           areaActivityScores.set(areaId, []);
         }
-        
+
         areaActivityScores.get(areaId)!.push({
           activityId,
           name: activity.original.name,
@@ -664,6 +686,15 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           // WHY: Include summary_polyline for route visualization fallback (Ticket 011)
           summaryPolyline: activity.original.map?.summary_polyline
         });
+      }
+
+      // WHY: Single persist after all writes, not N persists during the loop (TICKET-032)
+      if (userId !== null && activityBestArea.size > 0) {
+        try {
+          await persistDatabase();
+        } catch (e) {
+          console.error('[Map] Error persisting database after batch save:', e);
+        }
       }
 
       // WHY: Merge new analysis results with cached data in newAreaAnalyses
@@ -719,6 +750,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         setActivityAreaAssignments(newAssignments);
       }
 
+      if (cancelled) return;
+
       setAreaDetailsData(newAreaDetailsData);
       setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
@@ -742,6 +775,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       });
     }, 100);
 
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   // WHY: refreshCounter triggers re-load of cached analyses after re-analysis (ADR 011)
   }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
 
@@ -812,10 +849,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   }, [showRoutes, geoData, activities, activityAreaAssignments, buildAreaDetailMap, db, dbLoading, routeVisualizationData.size]);
 
   // WHY: Style function returns tier-based colors per ADR 010 (purple-pink gradient)
+  // WHY: Reads from areaAnalysesRef so GeoJSON key can be stable (no SVG teardown).
+  // areaAnalyses in deps forces a new function reference, triggering react-leaflet's setStyle.
+  // See TICKET-032.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getStyle = useCallback((feature: any) => {
     const areaId = feature?.properties?.FID || feature?.id;
-    const analysis = areaAnalyses.get(areaId as number);
+    const analysis = areaAnalysesRef.current.get(areaId as number);
 
     if (analysis && analysis.tier) {
       // WHY: Use design tokens for map-specific purple-pink gradient (ADR 010)
@@ -841,21 +881,23 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       fillColor: unwalked.fillColor,
       fillOpacity: unwalked.fillOpacity,
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- areaAnalyses forces new ref for react-leaflet setStyle (TICKET-032)
   }, [areaAnalyses, isSatellite]);
 
   // Create tooltip data from a feature
   // WHY: Include circumferenceMeters for walk time estimate in tooltip (ADR 012)
+  // WHY: Reads from refs so GeoJSON key can be stable (TICKET-032)
   const getTooltipData = useCallback((feature: Feature): TooltipData => {
     const areaId = feature.properties?.FID || feature.id;
     const areaName = feature.properties?.delomr || 'Unknown Area';
-    const analysis = areaAnalyses.get(areaId as number);
-    const areaData = areaDetailsData.get(areaId as number);
+    const analysis = areaAnalysesRef.current.get(areaId as number);
+    const areaData = areaDetailsDataRef.current.get(areaId as number);
     const circumferenceMeters = areaData?.totalPerimeterMeters;
 
     if (analysis) {
       // Find best walk (first one is used as best for now)
       const bestWalk = analysis.matchedActivities[0];
-      
+
       return {
         areaId: areaId as number,
         areaName,
@@ -876,10 +918,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       qualityScore: 0,
       walkCount: 0,
     };
-  }, [areaAnalyses, areaDetailsData]);
+  }, []);
 
   return (
-    <div className="h-screen w-full relative">
+    <div className="h-dvh w-full relative">
       {isAnalyzing && newActivityCount > 0 && (
         <div className="absolute top-20 left-4 z-[400] bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded shadow">
           Analyzing {newActivityCount} new {newActivityCount === 1 ? 'activity' : 'activities'}...
@@ -900,37 +942,40 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         <ZoomTracker onZoomChange={setCurrentZoom} />
         
         {geoData && (
-          <GeoJSON 
-            key={`geojson-${areaAnalyses.size}`}
-            data={geoData} 
+          <GeoJSON
+            key="geojson-stable"
+            data={geoData}
             style={getStyle}
             onEachFeature={(feature, layer) => {
-              // WHY: Tooltip handlers for hover (desktop) and long-press (mobile)
-              // Per PRD 001 section 3.5
-              const tooltipData = getTooltipData(feature);
+              // WHY: Tooltip/click handlers read from refs so this GeoJSON component
+              // doesn't need to remount when analysis data changes (TICKET-032).
+              // Tooltip data is computed lazily at event-fire time, not mount time.
               const areaId = feature.properties?.FID || feature.id;
 
               // WHY: Click/tap opens the AreaDetailsPanel per PRD 001 section 3.6
-              if (onAreaClick) {
-                const areaDetails = areaDetailsData.get(areaId as number);
-                if (areaDetails) {
-                  layer.on('click', () => onAreaClick(areaDetails));
+              layer.on('click', () => {
+                const currentOnAreaClick = onAreaClickRef.current;
+                if (currentOnAreaClick) {
+                  const areaDetails = areaDetailsDataRef.current.get(areaId as number);
+                  if (areaDetails) {
+                    currentOnAreaClick(areaDetails);
+                  }
                 }
-              }
-              
+              });
+
               // Desktop: hover
               layer.on('mouseover', (e: L.LeafletMouseEvent) => {
-                handleMouseEnter(tooltipData, e);
+                handleMouseEnter(getTooltipData(feature), e);
               });
               layer.on('mouseout', () => {
                 handleMouseLeave();
               });
-              
+
               // Mobile: long-press (touchstart/touchend)
               // WHY: Use 'as any' for touch events since Leaflet types are incomplete
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               layer.on('touchstart', (e: any) => {
-                handleTouchStart(tooltipData, e);
+                handleTouchStart(getTooltipData(feature), e);
               });
               layer.on('touchend', () => {
                 handleTouchEnd();

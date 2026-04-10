@@ -698,15 +698,20 @@ export async function persistDatabase(): Promise<void> {
  */
 export async function executeWrite(
   sql: string,
-  params?: (string | number | null | Uint8Array)[]
+  params?: (string | number | null | Uint8Array)[],
+  // WHY: skipPersist allows batching multiple writes with a single persistDatabase() call
+  // at the end, avoiding N full-DB serializations during bulk saves. See TICKET-032.
+  options?: { skipPersist?: boolean }
 ): Promise<void> {
   const database = getDatabase();
-  
+
   database.run('BEGIN TRANSACTION');
   try {
     database.run(sql, params);
     database.run('COMMIT');
-    await persistDatabase();
+    if (!options?.skipPersist) {
+      await persistDatabase();
+    }
   } catch (e) {
     database.run('ROLLBACK');
     throw e;
@@ -930,12 +935,17 @@ export function getAllAreas(): AreaRow[] {
 /**
  * Save stream data for a walk.
  */
-export async function saveWalkStreams(walkId: number, streams: CachedStreams): Promise<void> {
+export async function saveWalkStreams(
+  walkId: number,
+  streams: CachedStreams,
+  options?: { skipPersist?: boolean }
+): Promise<void> {
   await executeWrite(
     `UPDATE walks
      SET streams_json = ?, streams_fetched_at = ?, stream_point_count = ?
      WHERE id = ?`,
-    [JSON.stringify(streams), streams.fetchedAt, streams.pointCount, walkId]
+    [JSON.stringify(streams), streams.fetchedAt, streams.pointCount, walkId],
+    options
   );
 }
 

@@ -329,6 +329,7 @@
 - [ ] Database export/import UI
 - [x] ~~Offline support testing~~ (Removed — feature removed 2026-04-08)
 - [ ] Performance optimization (lazy load sql.js)
+- [x] Fix mobile analysis freeze — chunked loop, batched DB writes, stable GeoJSON key, viewport config (TICKET-032)
 
 ## Phase 7: Testing & Debugging Infrastructure
 - [x] Install Vitest testing framework
