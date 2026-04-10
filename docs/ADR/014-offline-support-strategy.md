@@ -1,7 +1,7 @@
 # ADR 014: Offline Support Strategy
 
 **Date:** 2026-02-07
-**Status:** Accepted
+**Status:** Superseded (2026-04-08 — service worker and offline caching removed from codebase)
 
 ## Context
 

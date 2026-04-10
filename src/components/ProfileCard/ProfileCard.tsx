@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { getTierColor } from '@/lib/analysis';
 import type { ProgressInfo } from '@/components/Map';
 import type { ReAnalysisMode, ReAnalysisProgress } from '@/lib/analysis-persistence';
-import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+
 
 // ============================================
 // Types
@@ -66,8 +66,6 @@ export default function ProfileCard({
   // WHY: Track local loading state for re-analyze buttons (ADR 011)
   const [isReAnalyzing, setIsReAnalyzing] = useState(false);
   const [reAnalyzeError, setReAnalyzeError] = useState<string | null>(null);
-  // WHY: Disable re-analyze when offline per ADR 014 and TICKET-006
-  const { isOnline } = useOnlineStatus();
   // WHY: Track state for clear data confirmation dialog (TICKET-016)
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
@@ -353,31 +351,24 @@ export default function ProfileCard({
                 )}
 
                 {/* Re-analyze buttons */}
-                {/* WHY: Disable when offline per ADR 014 - re-analyze requires network */}
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleReAnalyze('rescore')}
-                    disabled={isReAnalyzing || !isOnline}
-                    title={!isOnline ? 'Requires internet' : undefined}
+                    disabled={isReAnalyzing}
                     className="flex-1 bg-primary/10 text-primary py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Re-score All
                   </button>
                   <button
                     onClick={() => handleReAnalyze('full')}
-                    disabled={isReAnalyzing || !isOnline}
-                    title={!isOnline ? 'Requires internet' : undefined}
+                    disabled={isReAnalyzing}
                     className="flex-1 bg-primary/10 text-primary py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Full Re-fetch
                   </button>
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
-                  {!isOnline ? (
-                    <span className="text-amber-600 dark:text-amber-400">Offline — re-analysis unavailable</span>
-                  ) : (
-                    'Re-score: Fast, uses cached GPS. Full: Re-fetches from Strava.'
-                  )}
+                  Re-score: Fast, uses cached GPS. Full: Re-fetches from Strava.
                 </div>
               </div>
             )}
@@ -388,8 +379,8 @@ export default function ProfileCard({
                 <div className="text-xs text-muted-foreground mb-2">Sync Activities</div>
                 <button
                   onClick={handleForceRefresh}
-                  disabled={isRefreshing || !isOnline}
-                  title={!isOnline ? 'Requires internet' : 'Re-fetch all activities from Strava'}
+                  disabled={isRefreshing}
+                  title="Re-fetch all activities from Strava"
                   className="w-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 py-1.5 px-3 rounded-lg text-xs font-medium hover:bg-blue-500/20 dark:hover:bg-blue-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                 >
                   {isRefreshing ? (
@@ -405,11 +396,7 @@ export default function ProfileCard({
                   )}
                 </button>
                 <div className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
-                  {!isOnline ? (
-                    <span className="text-amber-600 dark:text-amber-400">Offline — sync unavailable</span>
-                  ) : (
-                    'Re-fetch all activities from Strava (ignores incremental sync)'
-                  )}
+                  Re-fetch all activities from Strava (ignores incremental sync)
                 </div>
               </div>
             )}

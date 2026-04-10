@@ -327,7 +327,7 @@
 
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
-- [ ] Offline support testing
+- [x] ~~Offline support testing~~ (Removed — feature removed 2026-04-08)
 - [ ] Performance optimization (lazy load sql.js)
 
 ## Phase 7: Testing & Debugging Infrastructure

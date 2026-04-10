@@ -2,7 +2,7 @@
 
 **Related:** ADR 014, PRD Section 3.11  
 **Feature:** Offline Support  
-**Status:** Ready for Implementation  
+**Status:** Removed (2026-04-08 — service worker and offline support removed from codebase)  
 **Created:** 2026-02-07
 
 ## Context to Load

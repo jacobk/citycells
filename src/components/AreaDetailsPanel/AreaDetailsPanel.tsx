@@ -13,7 +13,6 @@ import AreaMiniMap from '@/components/AreaMiniMap';
 // WHY: Dynamic import for maximized map modal (ADR 022)
 import MaximizedMapModal from '@/components/MaximizedMapModal';
 import type { WalkData } from '@/components/MaximizedMapModal';
-import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 // WHY: Panel state management and gesture handling (ADR 015)
 import { useExpandablePanel } from '@/hooks/useExpandablePanel';
 import { formatDistance } from '@/lib/format-utils';
@@ -110,8 +109,6 @@ export default function AreaDetailsPanel({
   const [openWalkMenuId, setOpenWalkMenuId] = useState<number | null>(null);
   // WHY: Track loading state for per-walk re-analyze
   const [reAnalyzingWalkId, setReAnalyzingWalkId] = useState<number | null>(null);
-  // WHY: Disable per-walk re-analyze when offline per ADR 014
-  const { isOnline } = useOnlineStatus();
   // WHY: Panel state management and gesture handling (ADR 015)
   const { state: panelState, height: panelHeight, handlers, isDragging } = useExpandablePanel({
     isOpen,
@@ -619,9 +616,8 @@ export default function AreaDetailsPanel({
                             Best
                           </span>
                         )}
-                        {/* WHY: Per-walk re-analyze menu (ADR 011)
-                            Hidden when offline per ADR 014 - re-analyze requires network */}
-                        {onReAnalyzeWalk && isOnline && (
+                        {/* WHY: Per-walk re-analyze menu (ADR 011) */}
+                        {onReAnalyzeWalk && (
                           <div className="relative" data-walk-menu>
                             {reAnalyzingWalkId === walk.id ? (
                               <div className="w-6 h-6 flex items-center justify-center">

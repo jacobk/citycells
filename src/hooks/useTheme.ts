@@ -40,8 +40,7 @@ const DEFAULT_THEME: Theme = 'system';
 
 /**
  * WHY: Using a simple external store pattern with useSyncExternalStore
- * for proper SSR hydration handling. This matches the pattern used in
- * useOnlineStatus.ts in this codebase.
+ * for proper SSR hydration handling.
  */
 
 let currentTheme: Theme = DEFAULT_THEME;

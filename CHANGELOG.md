@@ -17,6 +17,12 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
+### Removed
+- **Offline Support / Service Worker**: Removed service worker, offline indicator, and online status detection (ADR 014 → Superseded)
+  - Deleted: `public/sw.js`, `src/components/ServiceWorkerRegistration/`, `src/components/OfflineIndicator/`, `src/hooks/useOnlineStatus.ts`, `docs/features/offline-support.md`
+  - Edited: `src/app/layout.tsx` (removed SW/offline imports, added stale SW cleanup script), `src/components/ProfileCard/ProfileCard.tsx` (removed offline guards), `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` (removed offline guard)
+  - Docs: ADR 014 status → Superseded; PRD 001 §3.12 and offline stories struck through; TICKET-006 status → Removed
+
 ### Fixed
 - **Lint Cleanup**: Resolved all 17 ESLint warnings (ADR 020)
   - Key files: `src/lib/analysis.ts`, `src/components/Map/Map.tsx`, `src/components/ProfileCard/ProfileCard.tsx`, `src/components/ProgressDashboard/ProgressDashboard.tsx`

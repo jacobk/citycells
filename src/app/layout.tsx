@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
-import { OfflineIndicator } from '@/components/OfflineIndicator';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -73,12 +71,32 @@ const themeScript = `
 (function() {
   try {
     var theme = localStorage.getItem('citycells-theme') || 'system';
-    var isDark = theme === 'dark' || 
+    var isDark = theme === 'dark' ||
       (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     if (isDark) {
       document.documentElement.classList.add('dark');
     }
   } catch (e) {}
+})();
+`;
+
+/**
+ * Inline script to unregister any previously installed service worker.
+ * WHY: Service worker was removed from the app. Existing users may still have
+ * a stale SW registered that intercepts requests. This cleans it up.
+ */
+const swCleanupScript = `
+(function() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      regs.forEach(function(r) { r.unregister(); });
+    });
+    if (typeof caches !== 'undefined') {
+      caches.keys().then(function(names) {
+        names.forEach(function(n) { caches.delete(n); });
+      });
+    }
+  }
 })();
 `;
 
@@ -93,12 +111,11 @@ export default function RootLayout({
         {/* WHY: Inline script prevents flash of wrong theme (FOUC) by applying 
             .dark class before React hydrates. Must be in <head> to run early. */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: swCleanupScript }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ServiceWorkerRegistration />
-        <OfflineIndicator />
         {children}
       </body>
     </html>

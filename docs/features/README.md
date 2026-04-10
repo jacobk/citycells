@@ -23,7 +23,6 @@ Enable any developer (human or AI agent) to:
 | Metrics Documentation | [metrics-documentation.md](./metrics-documentation.md) | Implemented | [ADR 007](../ADR/007-interactive-metrics-documentation.md) |
 | Sub-Area List | [sub-area-list.md](./sub-area-list.md) | Implemented | [ADR 008](../ADR/008-panel-navigation-architecture.md) |
 | Re-Analysis | [re-analysis.md](./re-analysis.md) | Implemented | [ADR 011](../ADR/011-re-analysis-strategy.md), [ADR 004](../ADR/004-sqlite-storage.md) |
-| Offline Support | [offline-support.md](./offline-support.md) | Implemented | [ADR 014](../ADR/014-offline-support-strategy.md), [ADR 004](../ADR/004-sqlite-storage.md) |
 | Distance Progress Tracking | [distance-progress-tracking.md](./distance-progress-tracking.md) | Implemented | [ADR 004](../ADR/004-sqlite-storage.md), [ADR 005](../ADR/005-strava-privacy-zones.md) |
 | Deployment | [deployment.md](./deployment.md) | Implemented | [ADR 016](../ADR/016-vercel-deployment.md), [ADR 001](../ADR/001-tech-stack.md), [ADR 013](../ADR/013-persistent-strava-authentication.md) |
 | Live Walking Mode | [live-walking-mode.md](./live-walking-mode.md) | Implemented | [ADR 017](../ADR/017-live-walking-mode.md) |
