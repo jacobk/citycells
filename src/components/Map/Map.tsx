@@ -23,6 +23,7 @@ import {
   getBorderWeight,
   getBorderOpacity,
   getFillOpacity,
+  TIER_ICON_MIN_ZOOM,
 } from '@/lib/design-tokens';
 import {
   prepareDeviationColoredRoute,
@@ -99,6 +100,9 @@ interface AreaDetail {
   feature: Feature<Polygon | MultiPolygon>;
   perimeterMeters: number;
   areaSqm: number;
+  // WHY: Pre-computed centroid for TierIcon placement. Computing turf.centroid +
+  // booleanPointInPolygon during render blocked the main thread on mobile. See TICKET-032.
+  labelPoint: [number, number];
 }
 
 export interface AreaWalkInfo {
@@ -330,10 +334,24 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           const perimeterMeters = calculatePerimeterMeters(featurePolygon);
           const areaSqm = turf.area(featurePolygon);
 
+          // WHY: Pre-compute centroid here (in chunked effect) to avoid blocking
+          // during render when TierIcon components mount. See TICKET-032.
+          let labelPoint: [number, number];
+          const centroid = turf.centroid(featurePolygon);
+          if (turf.booleanPointInPolygon(centroid, featurePolygon)) {
+            const c = centroid.geometry.coordinates;
+            labelPoint = [c[1], c[0]];
+          } else {
+            const p = turf.pointOnFeature(featurePolygon);
+            const c = p.geometry.coordinates;
+            labelPoint = [c[1], c[0]];
+          }
+
           areaDetails.set(areaId as number, {
             feature: featurePolygon,
             perimeterMeters,
-            areaSqm
+            areaSqm,
+            labelPoint,
           });
         } catch (e) {
           console.warn('Error processing area for analysis:', areaId, e);
@@ -1078,20 +1096,19 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         )}
 
         {/* WHY: Tier medal icons at polygon centroids per ADR 010
-            Only render when zoom >= 13 for performance and visual clarity */}
-        {geoData && geoData.features.map(feature => {
-          const areaId = feature.properties?.FID || feature.id;
-          const analysis = areaAnalyses.get(areaId as number);
-          
-          if (!analysis || !analysis.tier) return null;
-          if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon') return null;
+            Only render when zoom >= 13 for performance and visual clarity
+            Uses pre-computed labelPoint from allAreaDetails to avoid turf.centroid
+            during render (TICKET-032) */}
+        {currentZoom >= TIER_ICON_MIN_ZOOM && allAreaDetails && Array.from(areaAnalyses.entries()).map(([areaId, analysis]) => {
+          if (!analysis.tier) return null;
+          const detail = allAreaDetails.get(areaId);
+          if (!detail) return null;
 
           return (
             <TierIcon
               key={`tier-icon-${areaId}`}
-              feature={feature as Feature<Polygon | MultiPolygon>}
+              position={detail.labelPoint}
               tier={analysis.tier}
-              zoom={currentZoom}
             />
           );
         })}
