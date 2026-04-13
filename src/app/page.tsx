@@ -2,8 +2,10 @@
 
 import CityMap, { type AreaClickData, type ProgressInfo } from '@/components/Map';
 import { useStrava } from '@/hooks/useStrava';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
 import { type AnalysisMetrics } from '@/lib/analysis';
+import { useDebugFeatureToggles } from '@/hooks/useDebugFeatureToggles';
+import { DebugPanel } from '@/components/DebugPanel/DebugPanel';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AreaDetailsPanel, type AreaDetails } from '@/components/AreaDetailsPanel';
 import { ExemptionModal } from '@/components/ExemptionModal';
@@ -74,6 +76,15 @@ const EMPTY_METRICS: AnalysisMetrics = {
 };
 
 export default function Home() {
+  return (
+    <Suspense>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
+  const debugToggles = useDebugFeatureToggles();
   const { athlete, activities, loading, login, logout } = useStrava();
   // WHY: Theme hook for dark mode toggle per PRD Section 3.14
   const { theme, setTheme } = useTheme();
@@ -125,7 +136,7 @@ export default function Home() {
   const refreshMapRef = useRef<(() => void) | null>(null);
 
   // WHY: Database hook for distance queries (Ticket 012)
-  const { db, loading: dbLoading } = useDatabase();
+  const { ready: dbReady, loading: dbLoading } = useDatabase();
 
   // WHY: State for distance metrics (Ticket 012)
   const [distanceMetrics, setDistanceMetrics] = useState<{
@@ -141,18 +152,18 @@ export default function Home() {
   
   // Derive userId when athlete changes
   useEffect(() => {
-    if (!athlete?.id || dbLoading || !db) {
+    if (!athlete?.id || dbLoading || !dbReady) {
       setUserId(undefined);
       return;
     }
-    
-    // WHY: Dynamic import to avoid bundling sql.js at build time
+
+    // WHY: Dynamic import to avoid bundling at build time
     // Try-catch handles race condition where React state says db is ready
-    // but module-level db was reset (e.g., HMR, Strict Mode remount cycles)
+    // but IndexedDB was closed (e.g., HMR, Strict Mode remount cycles)
     const loadUserId = async () => {
       try {
         const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
-        setUserId(getOrCreateUserId(athlete.id));
+        setUserId(await getOrCreateUserId(athlete.id));
       } catch {
         // WHY: Database may not be truly ready due to module reload timing
         // Effect will re-run when db state changes, so this is safe to ignore
@@ -161,7 +172,7 @@ export default function Home() {
       }
     };
     loadUserId();
-  }, [athlete?.id, dbLoading, db]);
+  }, [athlete?.id, dbLoading, dbReady]);
 
   // WHY: Achievement hook provides state and check/clear functions (TICKET-023)
   const {
@@ -173,7 +184,7 @@ export default function Home() {
     loading: achievementsLoading,
     checkForNewAchievements,
     clearNewlyUnlocked,
-  } = useAchievements(userId, !dbLoading && !!db);
+  } = useAchievements(userId, !dbLoading && dbReady);
   
   // WHY: Track previous progress to detect when analysis completes
   const prevProgressRef = useRef<ProgressInfo | null>(null);
@@ -194,13 +205,13 @@ export default function Home() {
       prevProgress.completedCount === 0 && 
       progress.completedCount > 0;
     
-    if (analysisJustCompleted && userId && !dbLoading && db) {
+    if (analysisJustCompleted && userId && !dbLoading && dbReady) {
       // WHY: Small delay to ensure all database writes from analysis are complete
       setTimeout(() => {
         checkForNewAchievements();
       }, 500);
     }
-  }, [progress, userId, dbLoading, db, checkForNewAchievements]);
+  }, [progress, userId, dbLoading, dbReady, checkForNewAchievements]);
 
   // WHY: Handler for when Map loads all area data (ADR 008)
   const handleAreasLoaded = useCallback((areas: Map<number, AreaClickData>) => {
@@ -391,6 +402,37 @@ export default function Home() {
   // Re-Analysis Handlers (ADR 011)
   // ============================================
 
+  // WHY: Build areas array from allAreas for re-analysis functions.
+  // Areas no longer live in the DB (ADR 026) — they come from GeoJSON at runtime.
+  // reAnalyzeWalk and reAnalyzeWalks require area features with perimeter/area metadata.
+  const buildAreasForAnalysis = useCallback(() => {
+    const areas: Array<{
+      fid: number;
+      feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+      perimeterMeters: number;
+      areaSqm: number;
+    }> = [];
+
+    allAreas.forEach((areaData, areaId) => {
+      if (!areaData.geometry) return;
+      const geomType = areaData.geometry.type;
+      if (geomType !== 'Polygon' && geomType !== 'MultiPolygon') return;
+
+      areas.push({
+        fid: areaId,
+        feature: {
+          type: 'Feature',
+          properties: {},
+          geometry: areaData.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+        },
+        perimeterMeters: areaData.totalPerimeterMeters,
+        areaSqm: areaData.totalAreaSqm,
+      });
+    });
+
+    return areas;
+  }, [allAreas]);
+
   /**
    * Handle re-analysis from profile card.
    * WHY: Re-analysis allows users to refresh cached scores when the algorithm
@@ -402,7 +444,7 @@ export default function Home() {
     // Dynamic imports to avoid bundling at build time
     const { getOrCreateUserId, reAnalyzeWalks } = await import('@/lib/analysis-persistence');
 
-    const userId = getOrCreateUserId(athlete.id);
+    const userId = await getOrCreateUserId(athlete.id);
 
     // WHY: For 'full' mode, provide a fetch function to re-fetch streams from Strava
     const fetchStreams = mode === 'full'
@@ -443,13 +485,17 @@ export default function Home() {
       };
     };
 
+    // WHY: Build areas array from allAreas for re-analysis (areas no longer in DB, come from GeoJSON)
+    const areasForAnalysis = buildAreasForAnalysis();
+
     const result = await reAnalyzeWalks(
       userId,
       mode,
       undefined, // all walks
       setReAnalysisProgress,
       fetchStreams,
-      getActivityMetadata
+      getActivityMetadata,
+      areasForAnalysis,
     );
 
     // Clear progress after a delay to show completion state
@@ -465,7 +511,7 @@ export default function Home() {
     if (!result.success && result.errors.length > 0) {
       console.error('[ReAnalysis] Errors:', result.errors);
     }
-  }, [athlete?.id, activities]);
+  }, [athlete?.id, activities, buildAreasForAnalysis]);
 
   // WHY: Callback for Map to register its refresh function
   const handleRegisterRefresh = useCallback((refreshFn: () => void) => {
@@ -475,24 +521,36 @@ export default function Home() {
   // WHY: Query distance metrics when dashboard opens (Ticket 012)
   // Only calculate when dashboard is open and user is authenticated
   useEffect(() => {
-    if (!isDashboardOpen || !athlete?.id || dbLoading || !db) {
+    if (!isDashboardOpen || !athlete?.id || dbLoading || !dbReady) {
       return;
     }
 
-    // WHY: Dynamic import to avoid bundling sql.js at build time
+    // WHY: Dynamic import to avoid bundling at build time
     const queryDistanceMetrics = async () => {
       try {
         const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
-        const { 
-          getTheoreticalDistance, 
-          getTotalPerimeterDistance, 
-          getActualWalkedDistance 
+        const {
+          getTheoreticalDistance,
+          getActualWalkedDistance,
         } = await import('@/lib/db');
 
-        const userId = getOrCreateUserId(athlete.id);
-        const theoreticalDistance = getTheoreticalDistance(userId);
-        const totalPerimeterDistance = getTotalPerimeterDistance();
-        const actualWalkedDistance = getActualWalkedDistance(userId);
+        const userId = await getOrCreateUserId(athlete.id);
+
+        // WHY: Build perimeter lookup from allAreas (areas no longer stored in DB)
+        const perimeterLookup = new Map<number, number>();
+        allAreas.forEach((area, areaId) => {
+          perimeterLookup.set(areaId, area.totalPerimeterMeters);
+        });
+
+        // WHY: getTotalPerimeterDistance was removed from db.ts since areas
+        // are no longer stored in the database. Compute from allAreas instead.
+        let totalPerimeterDistance = 0;
+        allAreas.forEach(area => {
+          totalPerimeterDistance += area.totalPerimeterMeters;
+        });
+
+        const theoreticalDistance = await getTheoreticalDistance(userId, perimeterLookup);
+        const actualWalkedDistance = await getActualWalkedDistance(userId);
 
         setDistanceMetrics({
           theoreticalDistance,
@@ -506,7 +564,7 @@ export default function Home() {
     };
 
     queryDistanceMetrics();
-  }, [isDashboardOpen, athlete?.id, dbLoading, db]);
+  }, [isDashboardOpen, athlete?.id, dbLoading, dbReady, allAreas]);
 
   // ============================================
   // Data Management Handlers (TICKET-016)
@@ -519,7 +577,7 @@ export default function Home() {
    * See ADR 004 "Database Reset" section.
    */
   const handleClearData = useCallback(async () => {
-    if (!athlete?.id || dbLoading || !db) {
+    if (!athlete?.id || dbLoading || !dbReady) {
       console.error('[ClearData] Cannot clear data: database not ready or user not authenticated');
       return;
     }
@@ -528,7 +586,7 @@ export default function Home() {
       const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
       const { clearUserData } = await import('@/lib/db');
 
-      const userId = getOrCreateUserId(athlete.id);
+      const userId = await getOrCreateUserId(athlete.id);
       await clearUserData(userId);
 
       console.log('[ClearData] Data cleared successfully, reloading page...');
@@ -536,7 +594,7 @@ export default function Home() {
       // in development mode. The HMR system can get confused if we reload immediately
       // after dynamic imports. This delay allows the module graph to stabilize.
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // WHY: Reload page to re-initialize app state cleanly
       // This triggers a fresh sync from Strava and clears UI state
       window.location.reload();
@@ -544,7 +602,7 @@ export default function Home() {
       console.error('[ClearData] Failed to clear data:', error);
       throw error;
     }
-  }, [athlete?.id, dbLoading, db]);
+  }, [athlete?.id, dbLoading, dbReady]);
 
   /**
    * Handle force refresh from profile card.
@@ -554,7 +612,7 @@ export default function Home() {
    * See ADR 004 "Incremental Activity Sync" section.
    */
   const handleForceRefresh = useCallback(async () => {
-    if (!athlete?.id || dbLoading || !db) {
+    if (!athlete?.id || dbLoading || !dbReady) {
       console.error('[ForceRefresh] Cannot force refresh: database not ready or user not authenticated');
       return;
     }
@@ -563,8 +621,8 @@ export default function Home() {
       const { getOrCreateUserId } = await import('@/lib/analysis-persistence');
       const { updateLastSync } = await import('@/lib/db');
 
-      const userId = getOrCreateUserId(athlete.id);
-      
+      const userId = await getOrCreateUserId(athlete.id);
+
       // WHY: Clear the sync timestamp to force a full re-sync on next page load
       // We use a far-past timestamp rather than null to be explicit
       await updateLastSync(userId, '1970-01-01T00:00:00Z');
@@ -573,14 +631,14 @@ export default function Home() {
       // WHY: Small delay before reload to avoid Next.js Turbopack HMR race condition
       // in development mode (same as handleClearData)
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // WHY: Reload page to trigger fresh activity fetch
       window.location.reload();
     } catch (error) {
       console.error('[ForceRefresh] Failed to reset sync:', error);
       throw error;
     }
-  }, [athlete?.id, dbLoading, db]);
+  }, [athlete?.id, dbLoading, dbReady]);
 
   /**
    * Handle per-walk re-analysis from area details panel.
@@ -591,7 +649,7 @@ export default function Home() {
     // Dynamic imports to avoid bundling at build time
     const { getWalkIdByStravaActivityId, reAnalyzeWalk } = await import('@/lib/analysis-persistence');
 
-    const walkId = getWalkIdByStravaActivityId(stravaActivityId);
+    const walkId = await getWalkIdByStravaActivityId(stravaActivityId);
     if (!walkId) {
       console.error('[ReAnalyzeWalk] Walk not found for activity:', stravaActivityId);
       return;
@@ -620,13 +678,16 @@ export default function Home() {
         }
       : undefined;
 
-    await reAnalyzeWalk(walkId, mode, fetchStreams);
+    // WHY: Build areas array from allAreas for re-analysis (areas no longer in DB)
+    const areasForAnalysis = buildAreasForAnalysis();
+
+    await reAnalyzeWalk(walkId, mode, fetchStreams, undefined, areasForAnalysis);
 
     // Trigger map refresh to reload cached analyses
     if (refreshMapRef.current) {
       refreshMapRef.current();
     }
-  }, []);
+  }, [buildAreasForAnalysis]);
 
   return (
     <main className="min-h-screen relative overflow-hidden">
@@ -638,7 +699,10 @@ export default function Home() {
         onAreasLoaded={handleAreasLoaded}
         onRegisterRefresh={handleRegisterRefresh}
         showRoutes={showRoutes}
+        debugToggles={debugToggles}
       />
+
+      {debugToggles && <DebugPanel toggles={debugToggles} />}
       
       {/* Hamburger Menu - Top Left (ADR 009) */}
       <HamburgerMenu 

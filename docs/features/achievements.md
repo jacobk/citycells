@@ -26,7 +26,7 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 2 (Achievement System St
 | `src/lib/adjacency.ts` | Area boundary sharing detection - graph building, cluster detection, vertex sharing, encirclement |
 | `src/lib/achievement-conditions.ts` | Modular condition evaluators for all 6 condition types |
 | `src/lib/achievement-service.ts` | Main service for checking achievements against user data and persisting unlocks |
-| `src/lib/db.ts` | SQLite schema v6 with `achievements` and `user_achievements` tables, migration logic, seeding |
+| `src/lib/db.ts` | IndexedDB schema with `userAchievements` store (achievement definitions are JS constants, not stored in DB) |
 | `src/components/AchievementBrowser/` | Slide-up panel showing all achievements grouped by category |
 | `src/components/AchievementModal/` | Celebratory modal for newly unlocked achievements |
 | `src/hooks/useAchievements.ts` | React hook for achievement state, checking, and display |
@@ -34,10 +34,10 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 2 (Achievement System St
 
 ### Data Flow
 
-1. **Database Initialization:** On schema v6 migration, `achievements` table is created and seeded with all 40 achievement definitions
+1. **Achievement Definitions:** 40 achievement definitions are JS constants in `src/lib/achievements.ts` (not stored in the database)
 2. **User Achievement Check:** After activity analysis completes in `page.tsx`, the `checkForNewAchievements()` function is called
 3. **Condition Evaluation:** `achievement-service.ts` queries user stats (area counts, tiers, clusters, etc.) and evaluates each achievement's conditions
-4. **Unlock Persistence:** Newly earned achievements are written to `user_achievements` table with timestamp
+4. **Unlock Persistence:** Newly earned achievements are written to the `userAchievements` IndexedDB store with timestamp
 5. **UI Update:** Hook returns `newlyUnlocked` array which triggers the `AchievementModal` to display
 6. **Browse Achievements:** User can open `AchievementBrowser` from hamburger menu to see all achievements grouped by category
 
@@ -87,13 +87,13 @@ Displaying "???" for locked hidden achievements creates curiosity and encourages
 **Single Modal for Batch Achievements:**
 When analyzing multiple activities, all newly earned achievements appear in one consolidated modal rather than separate popups for each, reducing interruption while still celebrating accomplishments.
 
-**SQLite Persistence:**
-Following the established pattern (ADR 004), achievements are stored in SQLite/IndexedDB for offline access and persistence across sessions. This aligns with the app's local-first architecture.
+**IndexedDB Persistence:**
+Following the established pattern ([ADR 026](../ADR/026-indexeddb-storage.md)), achievement unlock records are stored in the `userAchievements` IndexedDB store for offline access and persistence across sessions. Achievement definitions themselves are JS constants (no database storage needed). This aligns with the app's local-first architecture.
 
 ### ADR References
 
 - [ADR 019: Achievement System Data Model](../ADR/019-achievement-system.md) - Defines data schema, condition types, and evaluation approach
-- [ADR 004: SQLite Storage](../ADR/004-sqlite-storage.md) - Establishes local persistence pattern used for achievements
+- [ADR 026: IndexedDB Storage](../ADR/026-indexeddb-storage.md) - Establishes local persistence pattern used for achievements (supersedes ADR 004)
 
 ## Current Limitations
 

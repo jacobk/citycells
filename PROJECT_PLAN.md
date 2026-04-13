@@ -34,16 +34,27 @@
 - [x] Implement Activities API (`/api/activities`) with filtering
 - [x] Add activity streams API + caching helpers (ADR 006)
 
-## Phase 3.5: Database Setup (ADR 004)
-- [x] Install `sql.js` dependency
-- [x] Configure WASM loading in Next.js
+## Phase 3.5: Database Setup (ADR 004, superseded by ADR 026)
+- [x] ~~Install `sql.js` dependency~~ (superseded — sql.js removed in ADR 026)
+- [x] ~~Configure WASM loading in Next.js~~ (superseded — no WASM needed with IndexedDB)
 - [x] Create database initialization module (`src/lib/db.ts`)
 - [x] Implement IndexedDB persistence layer
-- [x] Create database schema migration script
-- [x] Seed `areas` table from GeoJSON on first load
+- [x] ~~Create database schema migration script~~ (superseded — IndexedDB uses `onupgradeneeded`)
+- [x] ~~Seed `areas` table from GeoJSON on first load~~ (superseded — areas computed from GeoJSON at runtime)
 - [x] Add database export/import utilities
 - [x] Create `useDatabase` React hook (`src/hooks/useDatabase.ts`)
 - [x] Create `docs/features/data-persistence.md`
+
+## Phase 3.6: IndexedDB Migration (ADR 026)
+- [x] Replace sql.js with native IndexedDB (`src/lib/idb.ts` — ~220 lines, zero dependencies)
+- [x] Rewrite `src/lib/db.ts` (all exports async)
+- [x] Rewrite `src/lib/analysis-persistence.ts` (denormalized `areaCompletions`, single index scan)
+- [x] Rewrite `src/lib/exemptions.ts` (async IDB)
+- [x] Drop `areas` and `achievements` SQL tables (computed from GeoJSON / JS constants)
+- [x] Remove `persistDatabase()` pattern (granular IDB writes)
+- [x] Change export/import format from SQLite binary to JSON
+- [x] Remove sql.js dependency (~1MB WASM binary)
+- [x] Big-bang migration: delete old data, user re-syncs from Strava
 
 ## Phase 4: Analysis Engine (ADR 003)
 
@@ -121,7 +132,7 @@
 - [x] Add AreaDetailsPanel to page.tsx
 - [x] Open AreaDetailsPanel on area click/tap (PRD 001 §3.6)
 - [x] Add ExemptionModal with add/remove handlers
-- [x] Configure Turbopack for sql.js (resolve fs alias)
+- [x] ~~Configure Turbopack for sql.js (resolve fs alias)~~ (superseded — no sql.js)
 - [x] Create exemption-types.ts for client-safe type exports
 
 ## Phase 6: Database Integration (Phase 7 from plan)
@@ -328,7 +339,7 @@
 ## Phase 7: Polish & Deployment
 - [ ] Database export/import UI
 - [x] ~~Offline support testing~~ (Removed — feature removed 2026-04-08)
-- [ ] Performance optimization (lazy load sql.js)
+- [x] ~~Performance optimization (lazy load sql.js)~~ (superseded — sql.js removed, IndexedDB is native)
 
 ## Phase 7: Testing & Debugging Infrastructure
 - [x] Install Vitest testing framework

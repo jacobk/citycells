@@ -34,6 +34,7 @@ import { calculatePerimeterMeters } from '@/lib/geo-utils';
 import { AreaTooltip, useAreaTooltip, type TooltipData } from '@/components/AreaTooltip';
 import { TierIcon } from '@/components/TierIcon';
 import { useDatabase } from '@/hooks/useDatabase';
+import type { DebugToggles, FeatureId } from '@/hooks/useDebugFeatureToggles';
 import { 
   saveWalkAnalysis, 
   getOrCreateUserId,
@@ -42,8 +43,7 @@ import {
   loadActivityAreaAssignments,
   type CachedMetrics
 } from '@/lib/analysis-persistence';
-import { 
-  getWalkIdByActivityId,
+import {
   getWalkStreams,
   needsStreamsFetch,
   saveWalkStreams
@@ -83,6 +83,7 @@ interface MapProps {
   onRegisterRefresh?: (refreshFn: () => void) => void;
   // WHY: Route visibility toggle - hidden by default per ADR 010 Section 3
   showRoutes?: boolean;
+  debugToggles?: DebugToggles | null;
 }
 
 // WHY: Store full analysis results per area for display in popups/tooltips
@@ -215,7 +216,9 @@ interface ActivityRouteData {
   assignedAreaId: number | null;
 }
 
-export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, showRoutes = false }: MapProps) {
+export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, showRoutes = false, debugToggles }: MapProps) {
+  // Helper: check if a feature is enabled (always true when debug panel inactive)
+  const dbg = (id: FeatureId) => !debugToggles || debugToggles.isEnabled(id);
   const { tileUrl, tileAttribution, mapStyle, isSatellite } = useMapTileLayer();
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
@@ -237,7 +240,12 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   const [activityAreaAssignments, setActivityAreaAssignments] = useState<Map<number, number>>(new Map());
   
   // WHY: Database hook for persistence - loads cached results and saves new analyses
-  const { db, loading: dbLoading } = useDatabase();
+  // The persistence functions manage their own IndexedDB connection internally.
+  // We only need `ready` (db initialized) and `loading` state from the hook.
+  const { ready: rawDbReady, loading: rawDbLoading } = useDatabase();
+  // Feature 1: db-init — gate consumption so the hook always runs but Map ignores it when toggled off
+  const db = dbg('db-init') ? rawDbReady : false;
+  const dbLoading = dbg('db-init') ? rawDbLoading : false;
 
   // WHY: Register refresh function for re-analysis (ADR 011)
   // The refresh function increments counter to trigger the analysis effect
@@ -260,12 +268,19 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     handleTouchEnd,
   } = useAreaTooltip();
 
+  // Feature 2: geojson-load
+  const geojsonEnabled = dbg('geojson-load');
   useEffect(() => {
+    if (!geojsonEnabled) return;
+    const t0 = performance.now();
     fetch('/data/malmo_delomraden.geojson')
       .then((res) => res.json())
-      .then((data) => setGeoData(data))
+      .then((data) => {
+        debugToggles?.recordTiming('geojson-load', performance.now() - t0);
+        setGeoData(data);
+      })
       .catch(err => console.error("Failed to load GeoJSON", err));
-  }, []);
+  }, [geojsonEnabled, debugToggles]);
 
   const buildAreaDetailMap = useCallback((data: FeatureCollection): Map<number, AreaDetail> => {
     const areaDetails = new Map<number, AreaDetail>();
@@ -330,25 +345,30 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       let userId: number | null = null;
       if (db && !dbLoading && athleteId) {
         try {
-          userId = getOrCreateUserId(athleteId);
+          userId = await getOrCreateUserId(athleteId);
         } catch (e) {
           console.warn('[Map] Could not get/create user:', e);
         }
       }
 
       const newAreaAnalyses = new Map<number, AreaAnalysis>();
-      
-      // Pre-process areas with their geometry and metrics
-      const allAreaDetails = buildAreaDetailMap(geoData);
+
+      // Feature 3: area-detail — compute perimeter/area for all polygons
+      let allAreaDetails = new Map<number, AreaDetail>();
+      if (dbg('area-detail')) {
+        const t0 = performance.now();
+        allAreaDetails = buildAreaDetailMap(geoData);
+        debugToggles?.recordTiming('area-detail', performance.now() - t0);
+      }
       const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
 
-      // WHY: Load cached analysis results to avoid re-computation (ADR 004)
-      // This provides instant feedback for returning users AND when rate limited
-      // (when activities array is empty but cached data exists in database)
-      let cachedResults = new Map<number, ReturnType<typeof loadCachedAnalyses> extends Map<number, infer V> ? V : never>();
-      if (userId !== null) {
+      // Feature 4: cached-analysis — load stored results from DB
+      let cachedResults = new Map<number, Awaited<ReturnType<typeof loadCachedAnalyses>> extends Map<number, infer V> ? V : never>();
+      if (userId !== null && dbg('cached-analysis')) {
         try {
-          cachedResults = loadCachedAnalyses(userId);
+          const t0 = performance.now();
+          cachedResults = await loadCachedAnalyses(userId);
+          debugToggles?.recordTiming('cached-analysis', performance.now() - t0);
         } catch (e) {
           console.warn('[Map] Could not load cached analyses:', e);
         }
@@ -412,8 +432,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       // WHY: Skip already-analyzed activities (ADR 004 Cache Loading Strategy)
       const activityIds = activities.map(a => a.id);
-      const needsAnalysis = userId !== null 
-        ? getActivitiesToAnalyze(userId, activityIds)
+      const needsAnalysis = userId !== null
+        ? await getActivitiesToAnalyze(userId, activityIds)
         : activityIds;
 
       if (needsAnalysis.length === 0) {
@@ -423,10 +443,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         // the best activity per area like loadCachedAnalyses does. This ensures all routes
         // can be colored based on their deviation from assigned area boundaries.
         if (userId !== null) {
-          const allAssignments = loadActivityAreaAssignments(userId);
+          const allAssignments = await loadActivityAreaAssignments(userId);
           setActivityAreaAssignments(allAssignments);
         }
-        
+
         setIsAnalyzing(false);
         setNewActivityCount(0);
         return;
@@ -450,7 +470,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         streamDistance?: number[];
       }> {
         const hasDb = Boolean(db && !dbLoading);
-        const cached = hasDb ? getWalkStreams(activity.id) : null;
+        const cached = hasDb ? await getWalkStreams(activity.id) : null;
         if (cached && cached.latlng.length > 0) {
           return {
             streamCoordinates: cached.latlng.map(([lat, lng]) => [lng, lat]),
@@ -461,7 +481,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           };
         }
 
-        if (hasDb && !needsStreamsFetch(activity.id)) {
+        if (hasDb && !(await needsStreamsFetch(activity.id))) {
           return { streamCoordinates: null, cachedStreams: null, shouldSaveStreams: false };
         }
 
@@ -506,11 +526,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         }
       }
 
-      // Pre-process only NEW activities that need analysis
-      // WHY: Skip already-analyzed activities to avoid redundant computation (ADR 004)
-      const activitiesToProcess = activities.filter(a => needsAnalysis.includes(a.id));
-      console.log(`[Map] Processing ${activitiesToProcess.length} new activities (skipping ${activities.length - activitiesToProcess.length} already-analyzed)`);
-      
+      // Feature 5: activity-processing — decode polylines + fetch streams
       const processedActivities: Array<{
         original: StravaActivity;
         coordinates: Position[];
@@ -520,47 +536,51 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         shouldSaveStreams: boolean;
       }> = [];
 
-      for (const act of activitiesToProcess) {
-        if (!act.map || !act.map.summary_polyline) continue;
-        try {
-          const decoded = mapboxPolyline.decode(act.map.summary_polyline);
-          // WHY: mapbox polyline returns [lat, lng], turf needs [lng, lat]
-          const coordinates: Position[] = decoded.map(pt => [pt[1], pt[0]]);
+      if (dbg('activity-processing')) {
+        const t0 = performance.now();
+        const activitiesToProcess = activities.filter(a => needsAnalysis.includes(a.id));
+        console.log(`[Map] Processing ${activitiesToProcess.length} new activities (skipping ${activities.length - activitiesToProcess.length} already-analyzed)`);
 
-          const streamData = await loadStreamData(act);
+        for (const act of activitiesToProcess) {
+          if (!act.map || !act.map.summary_polyline) continue;
+          try {
+            const decoded = mapboxPolyline.decode(act.map.summary_polyline);
+            const coordinates: Position[] = decoded.map(pt => [pt[1], pt[0]]);
 
-          // WHY: Strava metadata is more reliable for loop detection
-          // The summary_polyline is often truncated and missing GPS points
-          const stravaMetadata: StravaMetadata | undefined = act.start_latlng && act.end_latlng
-            ? {
-              startLatLng: act.start_latlng,
-              endLatLng: act.end_latlng,
-              distance: act.distance,
-              streamTime: streamData.streamTime,
-              streamDistance: streamData.streamDistance
-            }
-            : undefined;
-          
-          processedActivities.push({ 
-            original: act,
-            coordinates,
-            stravaMetadata,
-            streamCoordinates: streamData.streamCoordinates,
-            cachedStreams: streamData.cachedStreams,
-            shouldSaveStreams: streamData.shouldSaveStreams
-          });
-        } catch (e) {
-          console.warn("Error decoding polyline for activity", act.id, act.name, e);
+            const streamData = await loadStreamData(act);
+
+            const stravaMetadata: StravaMetadata | undefined = act.start_latlng && act.end_latlng
+              ? {
+                startLatLng: act.start_latlng,
+                endLatLng: act.end_latlng,
+                distance: act.distance,
+                streamTime: streamData.streamTime,
+                streamDistance: streamData.streamDistance
+              }
+              : undefined;
+
+            processedActivities.push({
+              original: act,
+              coordinates,
+              stravaMetadata,
+              streamCoordinates: streamData.streamCoordinates,
+              cachedStreams: streamData.cachedStreams,
+              shouldSaveStreams: streamData.shouldSaveStreams
+            });
+          } catch (e) {
+            console.warn("Error decoding polyline for activity", act.id, act.name, e);
+          }
         }
+        debugToggles?.recordTiming('activity-processing', performance.now() - t0);
       }
 
-      // WHY: Track best analysis per area for exclusive assignment (ADR 002)
-      // Each walk can only count for one area (the one with best coverage)
+      // Feature 6: walk-analysis — N×M intersection loop
       const activityBestArea = new Map<number, { areaId: number; score: number }>();
 
+      if (dbg('walk-analysis')) {
+      const walkAnalysisT0 = performance.now();
       console.log(`[Map] Processing ${processedActivities.length} activities against ${allAreaDetails.size} areas`);
-      
-      // Calculate coverage for each activity-area pair
+
       processedActivities.forEach(pAct => {
         const activityId = pAct.original.id;
         let bestAreaId: number | null = null;
@@ -607,15 +627,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         }
       });
 
-      // Now run full analysis only for assigned activity-area pairs
-      // and aggregate results per area, saving to database
+      // Full analysis + aggregation for assigned activity-area pairs
       const areaActivityScores = new Map<number, Array<{ activityId: number; name: string; score: number; metrics: AnalysisMetrics; result: FullAnalysisResult; summaryPolyline?: string }>>();
 
-      // WHY: Save each analysis result to database as we compute it
       for (const [activityId, { areaId }] of activityBestArea.entries()) {
         const activity = processedActivities.find(p => p.original.id === activityId);
         const areaDetail = allAreaDetails.get(areaId);
-        
+
         if (!activity || !areaDetail) continue;
 
         const result = analyzeWalk(
@@ -627,8 +645,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           activity.streamCoordinates ?? undefined
         );
 
-        // Save to database if available (but don't fail analysis if save fails)
-        if (userId !== null) {
+        // Feature 7: db-persist — save analysis results to DB
+        if (userId !== null && dbg('db-persist')) {
+          const persistT0 = performance.now();
           try {
             await saveWalkAnalysis(
               userId,
@@ -639,38 +658,31 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             );
 
             if (activity.cachedStreams && activity.shouldSaveStreams) {
-              const walkId = getWalkIdByActivityId(activityId);
-              if (walkId !== null) {
-                await saveWalkStreams(walkId, activity.cachedStreams);
-              }
+              await saveWalkStreams(activityId, activity.cachedStreams);
             }
           } catch (e) {
-            // WHY: Log error but continue - analysis results still valid for display
-            // Database save failure shouldn't prevent UI from showing results
             console.error(`[Map] Error saving analysis for activity ${activityId}, area ${areaId}:`, e);
           }
+          debugToggles?.recordTiming('db-persist', performance.now() - persistT0);
         }
 
         if (!areaActivityScores.has(areaId)) {
           areaActivityScores.set(areaId, []);
         }
-        
+
         areaActivityScores.get(areaId)!.push({
           activityId,
           name: activity.original.name,
           score: result.metrics.rawQualityScore,
           metrics: result.metrics,
           result,
-          // WHY: Include summary_polyline for route visualization fallback (Ticket 011)
           summaryPolyline: activity.original.map?.summary_polyline
         });
       }
 
-      // WHY: Merge new analysis results with cached data in newAreaAnalyses
-      // newAreaDetailsData was already created and populated with cached data earlier
+      // Merge new analysis results with cached data
       areaActivityScores.forEach((scores, areaId) => {
-        // WHY: Use best score among all walks for this area
-        const bestWalk = scores.reduce((best, current) => 
+        const bestWalk = scores.reduce((best, current) =>
           current.score > best.score ? current : best
         );
 
@@ -693,31 +705,25 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             distanceMeters: score.metrics.totalWalkLengthMeters,
             qualityScore: score.metrics.rawQualityScore,
             isBest: score.activityId === bestWalk.activityId,
-            // WHY: Include summary_polyline for route visualization fallback (Ticket 011)
             summaryPolyline: score.summaryPolyline
           }));
-          // WHY: Deviations require database IDs and exemption state.
-          // Populate from persistence when details are loaded from the database.
           areaDetails.deviations = [];
         }
       });
 
-      // WHY: Store activity-to-area assignments for route deviation coloring (ADR 010)
-      // This enables the route visualization effect to calculate deviation colors
       const newAssignments = new Map<number, number>();
       activityBestArea.forEach((value, activityId) => {
         newAssignments.set(activityId, value.areaId);
       });
-      // WHY: After analysis, load ALL assignments from database to ensure complete coverage
-      // The newAssignments from activityBestArea only contains newly analyzed activities.
-      // loadActivityAreaAssignments returns all activities with their primary area assignment.
       if (userId !== null) {
-        const allAssignments = loadActivityAreaAssignments(userId);
+        const allAssignments = await loadActivityAreaAssignments(userId);
         setActivityAreaAssignments(allAssignments);
       } else {
-        // Fallback for no userId: use only the newly analyzed assignments
         setActivityAreaAssignments(newAssignments);
       }
+
+      debugToggles?.recordTiming('walk-analysis', performance.now() - walkAnalysisT0);
+      } // end walk-analysis gate
 
       setAreaDetailsData(newAreaDetailsData);
       setAreaAnalyses(newAreaAnalyses);
@@ -743,13 +749,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     }, 100);
 
   // WHY: refreshCounter triggers re-load of cached analyses after re-analysis (ADR 011)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- dbg/debugToggles are stable references from props
   }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
 
-  // WHY: Prepare route visualization data when routes are shown (ADR 010)
-  // This effect calculates deviation-colored segments for each activity based on
-  // its distance from the assigned area boundary. Runs on-demand when showRoutes is true.
+  // Feature 8: route-viz — deviation-colored route rendering
+  const routeVizEnabled = dbg('route-viz');
   useEffect(() => {
-    if (!showRoutes || !geoData || activities.length === 0) {
+    if (!routeVizEnabled || !showRoutes || !geoData || activities.length === 0) {
       // Clear route data when routes are hidden
       if (!showRoutes && routeVisualizationData.size > 0) {
         setRouteVisualizationData(new Map());
@@ -757,63 +763,78 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       return;
     }
 
-    // Build area details map for boundary access
-    const areaDetails = buildAreaDetailMap(geoData);
-    const newRouteData = new Map<number, ActivityRouteData>();
-    
-    activities.forEach(activity => {
-      if (!activity.map || !activity.map.summary_polyline) return;
+    // WHY: Wrap in async IIFE because getWalkStreams is now async (IndexedDB migration)
+    (async () => {
+      // Build area details map for boundary access
+      const areaDetails = buildAreaDetailMap(geoData);
+      const newRouteData = new Map<number, ActivityRouteData>();
 
-      try {
-        // Decode polyline - prefer stream data if available in cache
-        // WHY: Stream data provides full path without privacy zone truncation (ADR 006)
-        let coordinates: Position[];
-        const hasDb = Boolean(db && !dbLoading);
-        const cachedStreams = hasDb ? getWalkStreams(activity.id) : null;
-        
-        if (cachedStreams && cachedStreams.latlng.length > 0) {
-          // Use stream data (convert from [lat, lng] to [lng, lat] for GeoJSON)
-          coordinates = cachedStreams.latlng.map(([lat, lng]) => [lng, lat]);
-        } else {
-          // Fallback to summary_polyline
-          const decoded = mapboxPolyline.decode(activity.map.summary_polyline);
-          coordinates = decoded.map(pt => [pt[1], pt[0]]);
-        }
+      for (const activity of activities) {
+        if (!activity.map || !activity.map.summary_polyline) continue;
 
-        // Check if activity is assigned to an area
-        const assignedAreaId = activityAreaAssignments.get(activity.id) ?? null;
-        
-        let segments: RouteSegment[];
-        if (assignedAreaId !== null) {
-          // Get the area boundary for deviation calculation
-          const areaDetail = areaDetails.get(assignedAreaId);
-          if (areaDetail) {
-            segments = prepareDeviationColoredRoute(coordinates, areaDetail.feature);
+        try {
+          // Decode polyline - prefer stream data if available in cache
+          // WHY: Stream data provides full path without privacy zone truncation (ADR 006)
+          let coordinates: Position[];
+          const hasDb = Boolean(db && !dbLoading);
+          const cachedStreams = hasDb ? await getWalkStreams(activity.id) : null;
+
+          if (cachedStreams && cachedStreams.latlng.length > 0) {
+            // Use stream data (convert from [lat, lng] to [lng, lat] for GeoJSON)
+            coordinates = cachedStreams.latlng.map(([lat, lng]) => [lng, lat]);
           } else {
-            // Area not found - render as unmatched
+            // Fallback to summary_polyline
+            const decoded = mapboxPolyline.decode(activity.map.summary_polyline);
+            coordinates = decoded.map(pt => [pt[1], pt[0]]);
+          }
+
+          // Check if activity is assigned to an area
+          const assignedAreaId = activityAreaAssignments.get(activity.id) ?? null;
+
+          let segments: RouteSegment[];
+          if (assignedAreaId !== null) {
+            // Get the area boundary for deviation calculation
+            const areaDetail = areaDetails.get(assignedAreaId);
+            if (areaDetail) {
+              segments = prepareDeviationColoredRoute(coordinates, areaDetail.feature);
+            } else {
+              // Area not found - render as unmatched
+              segments = prepareUnmatchedRoute(coordinates);
+            }
+          } else {
+            // No assigned area - render in neutral color
             segments = prepareUnmatchedRoute(coordinates);
           }
-        } else {
-          // No assigned area - render in neutral color
-          segments = prepareUnmatchedRoute(coordinates);
+
+          newRouteData.set(activity.id, {
+            activityId: activity.id,
+            segments,
+            assignedAreaId,
+          });
+        } catch (e) {
+          console.warn('[Map] Error preparing route visualization for activity', activity.id, e);
         }
-
-        newRouteData.set(activity.id, {
-          activityId: activity.id,
-          segments,
-          assignedAreaId,
-        });
-      } catch (e) {
-        console.warn('[Map] Error preparing route visualization for activity', activity.id, e);
       }
-    });
 
-    setRouteVisualizationData(newRouteData);
-  }, [showRoutes, geoData, activities, activityAreaAssignments, buildAreaDetailMap, db, dbLoading, routeVisualizationData.size]);
+      setRouteVisualizationData(newRouteData);
+    })();
+  }, [routeVizEnabled, showRoutes, geoData, activities, activityAreaAssignments, buildAreaDetailMap, db, dbLoading, routeVisualizationData.size]);
 
-  // WHY: Style function returns tier-based colors per ADR 010 (purple-pink gradient)
+  // Feature 10: geojson-style — tier-based area coloring
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getStyle = useCallback((feature: any) => {
+    // When geojson-style is off, show plain unwalked styling
+    if (debugToggles && !debugToggles.isEnabled('geojson-style')) {
+      const unwalked = isSatellite ? SATELLITE_UNWALKED_STYLE : UNWALKED_AREA_STYLE;
+      return {
+        color: unwalked.borderColor,
+        weight: unwalked.borderWeight,
+        opacity: unwalked.borderOpacity,
+        fillColor: unwalked.fillColor,
+        fillOpacity: unwalked.fillOpacity,
+      };
+    }
+
     const areaId = feature?.properties?.FID || feature?.id;
     const analysis = areaAnalyses.get(areaId as number);
 
@@ -841,7 +862,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       fillColor: unwalked.fillColor,
       fillOpacity: unwalked.fillOpacity,
     };
-  }, [areaAnalyses, isSatellite]);
+  }, [areaAnalyses, isSatellite, debugToggles]);
 
   // Create tooltip data from a feature
   // WHY: Include circumferenceMeters for walk time estimate in tooltip (ADR 012)
@@ -960,9 +981,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           )
         )}
 
-        {/* WHY: Tier medal icons at polygon centroids per ADR 010
-            Only render when zoom >= 13 for performance and visual clarity */}
-        {geoData && geoData.features.map(feature => {
+        {/* Feature 9: tier-icons — medal icons at polygon centroids */}
+        {dbg('tier-icons') && geoData && geoData.features.map(feature => {
           const areaId = feature.properties?.FID || feature.id;
           const analysis = areaAnalyses.get(areaId as number);
           

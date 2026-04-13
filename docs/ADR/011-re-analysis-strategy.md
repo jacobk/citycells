@@ -6,7 +6,7 @@
 
 ## Context
 
-Analysis results are cached in the SQLite database (ADR 004). Once a walk is analyzed and stored in `walk_analyses`, it is never re-computed on page load. This design avoids redundant work but creates two problems:
+Analysis results are cached in IndexedDB (see [ADR 026](./026-indexeddb-storage.md), which superseded ADR 004). Once a walk is analyzed and stored in the `walkAnalyses` store, it is never re-computed on page load. This design avoids redundant work but creates two problems:
 
 1. **Source data may change.** Strava data can be edited (privacy zone changes, activity corrections, re-uploads). Cached stream data and derived scores may become stale.
 2. **Scoring algorithm may change.** When we ship new metrics, weights, or thresholds (e.g., ADR 003 updates), existing cached scores do not reflect the new formula.
@@ -36,8 +36,8 @@ The UI will let the user **choose** between these modes (e.g., profile card: "Re
 
 ### Invalidation and Persistence
 
-- **Re-score only:** For each target walk, delete rows in `walk_analyses` and `deviations` for that walk; recalculate using existing `walks.streams_json`; write new rows via existing `saveWalkAnalysis()`. Update `area_completions` after all affected walk-area pairs are re-scored.
-- **Full re-analyze:** For each target walk, optionally clear or refresh `walks.streams_json` (re-fetch from API), then same as re-score: delete analysis rows, run `analyzeWalk()` with fresh or existing streams, save via `saveWalkAnalysis()`, refresh `area_completions`.
+- **Re-score only:** For each target walk, delete records in `walkAnalyses` and `deviations` stores for that walk; recalculate using existing cached streams from the `walkStreams` store; write new records via existing `saveWalkAnalysis()`. Update `areaCompletions` after all affected walk-area pairs are re-scored.
+- **Full re-analyze:** For each target walk, optionally clear or refresh the `walkStreams` record (re-fetch from API), then same as re-score: delete analysis records, run `analyzeWalk()` with fresh or existing streams, save via `saveWalkAnalysis()`, refresh `areaCompletions`.
 - No schema change required; reuse existing tables and save/load functions.
 
 ### UI and State

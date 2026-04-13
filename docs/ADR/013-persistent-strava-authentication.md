@@ -12,17 +12,17 @@ Currently, CityCells stores Strava OAuth tokens in HTTP-only cookies. While secu
 2. **Cookie expiration**: Even persistent cookies eventually expire
 3. **No automatic refresh**: If the access token expires mid-session, users must manually re-login
 
-The existing SQLite database (ADR 004) already defines a `users` table with `access_token`, `refresh_token`, and `token_expires_at` columns, but these are not currently utilized. Instead, tokens live only in cookies.
+The IndexedDB `users` store ([ADR 026](./026-indexeddb-storage.md), which superseded ADR 004) stores `accessToken`, `refreshToken`, and `tokenExpiresAt` fields, but these are not currently utilized. Instead, tokens live only in cookies.
 
 **User expectation**: Once connected to Strava, the connection should persist indefinitely (or until the refresh token is revoked by Strava/user).
 
 ## Decision
 
-We will implement **persistent token storage in SQLite** with **automatic token refresh**, using cookies only as a session bridge.
+We will implement **persistent token storage in IndexedDB** with **automatic token refresh**, using cookies only as a session bridge.
 
 ### Token Storage Strategy
 
-**Primary storage**: SQLite `users` table (persistent via IndexedDB)
+**Primary storage**: IndexedDB `users` store (keyed by `stravaId` — see [ADR 026](./026-indexeddb-storage.md))
 **Session bridge**: Short-lived HTTP-only cookies for API route authentication
 
 ```
@@ -32,7 +32,7 @@ We will implement **persistent token storage in SQLite** with **automatic token 
 │                                                                      │
 │  INITIAL AUTH (OAuth callback):                                      │
 │  ┌──────────┐    ┌──────────────┐    ┌────────────┐                 │
-│  │  Strava  │───>│ /api/auth/   │───>│  SQLite    │                 │
+│  │  Strava  │───>│ /api/auth/   │───>│ IndexedDB  │                 │
 │  │  OAuth   │    │  callback    │    │  (persist) │                 │
 │  └──────────┘    └──────┬───────┘    └────────────┘                 │
 │                         │                                            │
@@ -44,7 +44,7 @@ We will implement **persistent token storage in SQLite** with **automatic token 
 │                                                                      │
 │  PAGE LOAD (returning user):                                         │
 │  ┌──────────┐    ┌──────────────┐    ┌────────────┐                 │
-│  │  Client  │───>│ Check SQLite │───>│ Valid      │──> Auto-login   │
+│  │  Client  │───>│ Check IDB    │───>│ Valid      │──> Auto-login   │
 │  │  loads   │    │ for tokens   │    │ refresh?   │                 │
 │  └──────────┘    └──────────────┘    └─────┬──────┘                 │
 │                                            │ No                      │
@@ -59,7 +59,7 @@ We will implement **persistent token storage in SQLite** with **automatic token 
 │                              │                         │             │
 │                         Yes  v                    No   v             │
 │                    ┌──────────────┐         ┌──────────────┐         │
-│                    │ Update SQLite│         │ Clear tokens │         │
+│                    │ Update IDB   │         │ Clear tokens │         │
 │                    │ + new cookie │         │ Prompt login │         │
 │                    └──────────────┘         └──────────────┘         │
 │                                                                      │
@@ -70,17 +70,17 @@ We will implement **persistent token storage in SQLite** with **automatic token 
 
 | Event | Action |
 |-------|--------|
-| OAuth callback | Store tokens in SQLite, set 1-hour session cookie |
+| OAuth callback | Store tokens in IndexedDB `users` store, set 1-hour session cookie |
 | Page load (cookie valid) | Use cookie for API calls |
-| Page load (no cookie, SQLite has tokens) | Check token expiry, refresh if needed, set new cookie |
-| API call (token expired) | Automatic refresh, update SQLite, continue request |
+| Page load (no cookie, IndexedDB has tokens) | Check token expiry, refresh if needed, set new cookie |
+| API call (token expired) | Automatic refresh, update IndexedDB, continue request |
 | Refresh token invalid/revoked | Clear all tokens, prompt user to re-connect |
-| User logout | Clear SQLite tokens + cookies |
+| User logout | Clear IndexedDB tokens + cookies |
 
 ### Cookie Strategy
 
 **Session cookie** (`strava_session`):
-- Contains: Strava athlete ID (to identify user in SQLite)
+- Contains: Strava athlete ID (to identify user in IndexedDB)
 - HttpOnly: Yes (security)
 - Secure: Yes (production)
 - SameSite: Lax
@@ -88,8 +88,8 @@ We will implement **persistent token storage in SQLite** with **automatic token 
 
 **Why short-lived cookies?**
 - Cookies are attack vectors (CSRF, theft)
-- SQLite is the source of truth for tokens
-- If cookie expires, we check SQLite and refresh seamlessly
+- IndexedDB is the source of truth for tokens
+- If cookie expires, we check IndexedDB and refresh seamlessly
 - If device is stolen, attacker has limited window
 
 ### Automatic Token Refresh
@@ -129,8 +129,8 @@ async function getValidAccessToken(athleteId: number): Promise<string | null> {
     
     const tokens = await response.json();
     
-    // Update SQLite with new tokens
-    db.updateUserTokens(athleteId, {
+    // Update IndexedDB with new tokens
+    await db.updateUserTokens(athleteId, {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token, // Strava may rotate this
       token_expires_at: tokens.expires_at,
@@ -148,7 +148,7 @@ async function getValidAccessToken(athleteId: number): Promise<string | null> {
 
 **Returning user (happy path)**:
 1. User opens CityCells
-2. Client initializes SQLite, finds stored tokens
+2. Client initializes IndexedDB, finds stored tokens
 3. Check if refresh token exists and is likely valid
 4. If access token expired: automatic refresh in background
 5. User sees their data immediately - no login prompt
@@ -156,7 +156,7 @@ async function getValidAccessToken(athleteId: number): Promise<string | null> {
 **Returning user (refresh token expired/revoked)**:
 1. User opens CityCells
 2. Client finds tokens, but refresh fails (401 from Strava)
-3. All tokens cleared from SQLite
+3. All tokens cleared from IndexedDB
 4. User sees "Connect with Strava" button
 5. Single click re-authenticates
 
@@ -168,36 +168,24 @@ async function getValidAccessToken(athleteId: number): Promise<string | null> {
 
 ### Database Usage
 
-Leverage existing `users` table from ADR 004:
+Leverage the `users` IndexedDB store (see [ADR 026](./026-indexeddb-storage.md)):
 
-```sql
--- Already defined in ADR 004
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  strava_id INTEGER UNIQUE NOT NULL,
-  username TEXT,
-  access_token TEXT,        -- Store here (encrypted recommended)
-  refresh_token TEXT,       -- Store here (encrypted recommended)
-  token_expires_at INTEGER, -- Unix timestamp
-  created_at TEXT DEFAULT (datetime('now'))
-);
-```
+- **Store**: `users`
+- **Key**: `stravaId`
+- **Fields**: `accessToken`, `refreshToken`, `tokenExpiresAt`, `username`, `firstname`, `lastname`, `profileUrl`, `createdAt`
 
-**New index for efficient lookup:**
-```sql
-CREATE INDEX IF NOT EXISTS idx_users_strava_id ON users(strava_id);
-```
+No separate index needed — `stravaId` is the primary key.
 
 ### Security Considerations
 
 | Risk | Mitigation |
 |------|------------|
-| Token theft from SQLite | IndexedDB is origin-sandboxed; tokens not accessible cross-origin |
-| XSS accessing tokens | Tokens stored in SQLite (not JS-accessible cookies); API routes validate requests |
+| Token theft from IndexedDB | IndexedDB is origin-sandboxed; tokens not accessible cross-origin |
+| XSS accessing tokens | Tokens stored in IndexedDB; API routes validate requests |
 | Stolen device | Short session cookies limit active window; user can revoke in Strava |
 | Stale permissions | Refresh validates with Strava; revoked access immediately detected |
 
-**Future enhancement**: Encrypt tokens at rest in SQLite using a derived key.
+**Future enhancement**: Encrypt tokens at rest in IndexedDB using a derived key.
 
 ## Consequences
 
@@ -205,7 +193,7 @@ CREATE INDEX IF NOT EXISTS idx_users_strava_id ON users(strava_id);
 
 - **Seamless UX**: Users connect once, stay connected indefinitely
 - **No re-auth friction**: Returning users see their data immediately
-- **Leverages existing schema**: Uses `users` table already defined in ADR 004
+- **Leverages existing schema**: Uses `users` store in IndexedDB (ADR 026)
 - **Automatic recovery**: Token refresh happens transparently
 - **Graceful degradation**: If refresh fails, user simply re-connects (one click)
 
@@ -217,10 +205,10 @@ CREATE INDEX IF NOT EXISTS idx_users_strava_id ON users(strava_id);
 
 ### Technical
 
-- Requires client-side SQLite initialization before auth state is known
+- Requires client-side IndexedDB initialization before auth state is known
 - API routes must handle token refresh atomically (avoid race conditions)
 - Need to handle IndexedDB storage limits (tokens are small, not a concern)
-- Cookie and SQLite state must stay synchronized
+- Cookie and IndexedDB state must stay synchronized
 
 ## Updates
 
@@ -231,7 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_users_strava_id ON users(strava_id);
 **Problem:** When a user closes the browser:
 1. Session cookies are deleted
 2. `strava_session` (1 hour) eventually expires
-3. Without athlete ID, the system cannot look up tokens in SQLite
+3. Without athlete ID, the system cannot look up tokens in IndexedDB
 4. User appears unauthenticated despite having valid tokens stored
 
 **Clarification - Complete Cookie Strategy:**
@@ -247,8 +235,8 @@ CREATE INDEX IF NOT EXISTS idx_users_strava_id ON users(strava_id);
 **Rationale for 30 days:**
 - Aligns with typical Strava refresh token validity
 - Balances user convenience (stay logged in) with security
-- SQLite remains source of truth; cookies are convenience cache
-- If cookies expire but SQLite has valid tokens, session restoration works
+- IndexedDB remains source of truth; cookies are convenience cache
+- If cookies expire but IndexedDB has valid tokens, session restoration works
 
 **Additional Requirement:** The `/api/auth/restore-session` endpoint must set the `strava_athlete` cookie when refreshing tokens, not just `strava_session`.
 
@@ -262,23 +250,20 @@ See TICKET-019 for implementation.
 
 This doubles API usage during session restoration and contributes to rate limit consumption.
 
-**Optimization:** Cache athlete info (firstname, lastname, profile URL) in SQLite alongside tokens. The athlete profile rarely changes, so we can:
+**Optimization:** Cache athlete info (firstname, lastname, profile URL) in IndexedDB alongside tokens. The athlete profile rarely changes, so we can:
 1. Store athlete info when first received during OAuth callback
 2. Reuse cached info during session restoration
 3. Only fetch fresh athlete info if cache is missing or explicitly refreshed
 
-**Schema Update:**
-```sql
--- Add columns to users table
-ALTER TABLE users ADD COLUMN firstname TEXT;
-ALTER TABLE users ADD COLUMN lastname TEXT;
-ALTER TABLE users ADD COLUMN profile_url TEXT;
-```
+**User store fields** (in `users` IndexedDB store):
+- `firstname`
+- `lastname`
+- `profileUrl`
 
 **Updated Session Restoration Flow:**
 1. Receive refresh_token from client
 2. Refresh tokens with Strava (1 API call)
-3. Check SQLite for cached athlete info
+3. Check IndexedDB for cached athlete info
 4. If cached: use it for `strava_athlete` cookie (0 API calls)
 5. If missing: fetch from Strava and cache (1 API call - rare)
 6. Set cookies and return

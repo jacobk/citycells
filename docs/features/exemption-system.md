@@ -17,17 +17,15 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 |------|---------|
 | `src/lib/exemptions.ts` | Exemption service: add/remove exemptions, recalculate scores |
 | `src/lib/analysis.ts` | Deviation detection algorithm |
-| `src/lib/db.ts` | Database schema for deviations table |
+| `src/lib/db.ts` | IndexedDB schema for deviations store |
 
 ### Data Model
 
-Exemptions are stored in the `deviations` table with these fields:
+Exemptions are stored in the `deviations` IndexedDB store with these fields:
 
-```sql
-is_exempt INTEGER DEFAULT 0,
-exemption_reason TEXT,
-exempted_at TEXT
-```
+- `isExempt` (boolean) - Whether the deviation is exempt
+- `exemptionReason` (string) - Reason for exemption
+- `exemptedAt` (string) - ISO timestamp when exempted
 
 ### Predefined Reasons
 
@@ -191,4 +189,4 @@ From ADR 003:
 ## ADR References
 
 - [ADR 003: Multi-Metric Completion Scoring](../ADR/003-multi-metric-completion-scoring.md) - Section 6 defines exemption system
-- [ADR 004: SQLite Storage](../ADR/004-sqlite-storage.md) - Deviations table schema
+- [ADR 026: IndexedDB Storage](../ADR/026-indexeddb-storage.md) - Deviations store schema (supersedes ADR 004)

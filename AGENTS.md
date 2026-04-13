@@ -156,6 +156,7 @@ npm run test
 - **Styling**: Tailwind CSS v4, PostCSS
 - **Maps**: Leaflet, React-Leaflet, Turf.js
 - **State**: React Hooks (Global state management TBD)
+- **Storage**: IndexedDB (native browser storage, async, zero dependencies — see [ADR 026](docs/ADR/026-indexeddb-storage.md))
 - **Auth**: Custom API routes (`src/app/api`) with Strava OAuth
 
 ### Directory Structure

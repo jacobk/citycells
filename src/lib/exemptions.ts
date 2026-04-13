@@ -1,17 +1,34 @@
 /**
- * CityCells Exemption Service
- * 
+ * CityCells Exemption Service (IndexedDB)
+ *
  * Manages exemptions for detected deviations and recalculates scores.
  * See ADR 003 section 6 for exemption system design.
- * 
+ *
+ * WHY: Replaces the sql.js implementation with async IndexedDB operations.
+ * All functions are now async. Score recalculation uses a multi-store
+ * transaction for atomicity. See ADR 026.
+ *
  * @module exemptions
  */
 
-import { getDatabase, executeWrite, persistDatabase } from './db';
-import { assignTier, type Tier } from './tiers';
+import {
+  get,
+  put,
+  getAllFromIndex,
+  openTransaction,
+  txGet,
+  txGetAllFromIndex,
+  txPut,
+  txDone,
+  type WalkAnalysisRecord,
+  type DeviationRecord,
+  type AreaCompletionRecord,
+  type WalkRecord,
+} from '@/lib/db';
+import { assignTier, type Tier } from '@/lib/tiers';
 
-// WHY: Import constants directly to avoid HMR issues with large analysis.ts module
-// The exemptions system still uses the legacy 4-metric formula for adjusted scores
+// WHY: Import constants directly to avoid HMR issues with large analysis.ts module.
+// The exemptions system still uses the legacy 4-metric formula for adjusted scores.
 // TODO: Update to use TIERED_SCORE_WEIGHTS when exemptions are reworked for ADR 021
 const SCORE_WEIGHTS = {
   perimeterCoverage: 0.40,
@@ -23,14 +40,14 @@ const SCORE_WEIGHTS = {
 const RMSE_NORMALIZATION_METERS = 50;
 
 // Re-export types from exemption-types.ts for convenience
-export { 
-  EXEMPTION_REASONS, 
-  type ExemptionReason, 
-  type Exemption, 
-  type DeviationWithExemption 
-} from './exemption-types';
+export {
+  EXEMPTION_REASONS,
+  type ExemptionReason,
+  type Exemption,
+  type DeviationWithExemption,
+} from '@/lib/exemption-types';
 
-import type { ExemptionReason, DeviationWithExemption } from './exemption-types';
+import type { ExemptionReason, DeviationWithExemption } from '@/lib/exemption-types';
 
 export interface AdjustedMetrics {
   // Original metrics
@@ -39,14 +56,14 @@ export interface AdjustedMetrics {
   originalEfficiency: number;
   originalQualityScore: number;
   originalTier: Tier;
-  
+
   // Adjusted metrics (after exemptions)
   effectivePerimeterCoverage: number;
   effectiveRmse: number;
   effectiveEfficiency: number;
   adjustedQualityScore: number;
   adjustedTier: Tier;
-  
+
   // Exemption totals
   totalExemptBorderGap: number;
   totalExemptDetourDistance: number;
@@ -59,10 +76,10 @@ export interface AdjustedMetrics {
 
 /**
  * Add an exemption to a deviation.
- * 
+ *
  * WHY: Users can mark unavoidable deviations (e.g., private property) as exempt
  * to improve their score fairly. See ADR 003 section 6.
- * 
+ *
  * @param deviationId - The deviation to exempt
  * @param reason - Predefined reason from EXEMPTION_REASONS
  * @param customReason - Required if reason is 'Other'
@@ -70,7 +87,7 @@ export interface AdjustedMetrics {
 export async function addExemption(
   deviationId: number,
   reason: ExemptionReason,
-  customReason?: string
+  customReason?: string,
 ): Promise<void> {
   if (reason === 'Other' && !customReason) {
     throw new Error('Custom reason is required when reason is "Other"');
@@ -79,93 +96,68 @@ export async function addExemption(
   const fullReason = reason === 'Other' ? `Other: ${customReason}` : reason;
   const now = new Date().toISOString();
 
-  await executeWrite(
-    `UPDATE deviations 
-     SET is_exempt = 1, 
-         exemption_reason = ?, 
-         exempted_at = ?
-     WHERE id = ?`,
-    [fullReason, now, deviationId]
-  );
-
-  // Get the walk_analysis_id to trigger recalculation
-  const db = getDatabase();
-  const result = db.exec(
-    'SELECT walk_analysis_id FROM deviations WHERE id = ?',
-    [deviationId]
-  );
-
-  if (result.length > 0 && result[0].values.length > 0) {
-    const walkAnalysisId = result[0].values[0][0] as number;
-    await recalculateScoreWithExemptions(walkAnalysisId);
+  const deviation = await get<DeviationRecord>('deviations', deviationId);
+  if (!deviation) {
+    throw new Error(`Deviation ${deviationId} not found`);
   }
+
+  deviation.isExempt = true;
+  deviation.exemptionReason = fullReason;
+  deviation.exemptedAt = now;
+  await put('deviations', deviation);
+
+  // WHY: Trigger score recalculation after exemption change
+  await recalculateScoreWithExemptions(deviation.walkAnalysisId);
 }
 
 /**
  * Remove an exemption from a deviation.
  */
 export async function removeExemption(deviationId: number): Promise<void> {
-  // Get walk_analysis_id before removing
-  const db = getDatabase();
-  const result = db.exec(
-    'SELECT walk_analysis_id FROM deviations WHERE id = ?',
-    [deviationId]
-  );
-
-  await executeWrite(
-    `UPDATE deviations 
-     SET is_exempt = 0, 
-         exemption_reason = NULL, 
-         exempted_at = NULL
-     WHERE id = ?`,
-    [deviationId]
-  );
-
-  if (result.length > 0 && result[0].values.length > 0) {
-    const walkAnalysisId = result[0].values[0][0] as number;
-    await recalculateScoreWithExemptions(walkAnalysisId);
+  const deviation = await get<DeviationRecord>('deviations', deviationId);
+  if (!deviation) {
+    throw new Error(`Deviation ${deviationId} not found`);
   }
+
+  // WHY: Capture walkAnalysisId before clearing exemption fields
+  const { walkAnalysisId } = deviation;
+
+  deviation.isExempt = false;
+  deviation.exemptionReason = null;
+  deviation.exemptedAt = null;
+  await put('deviations', deviation);
+
+  // WHY: Trigger score recalculation after exemption removal
+  await recalculateScoreWithExemptions(walkAnalysisId);
 }
 
 /**
  * Get all deviations for a walk analysis with exemption status.
  */
-export function getDeviationsForAnalysis(walkAnalysisId: number): DeviationWithExemption[] {
-  const db = getDatabase();
-  const result = db.exec(`
-    SELECT 
-      id,
-      walk_analysis_id,
-      start_point_index,
-      end_point_index,
-      border_gap_meters,
-      detour_distance_meters,
-      max_deviation_meters,
-      classification,
-      is_exempt,
-      exemption_reason,
-      exempted_at
-    FROM deviations
-    WHERE walk_analysis_id = ?
-    ORDER BY start_point_index
-  `, [walkAnalysisId]);
+export async function getDeviationsForAnalysis(
+  walkAnalysisId: number,
+): Promise<DeviationWithExemption[]> {
+  const records = await getAllFromIndex<DeviationRecord>(
+    'deviations',
+    'walkAnalysisId',
+    walkAnalysisId,
+  );
 
-  if (result.length === 0) {
-    return [];
-  }
+  // WHY: Sort by startPointIndex for consistent ordering (same as old SQL ORDER BY)
+  const sorted = records.sort((a, b) => a.startPointIndex - b.startPointIndex);
 
-  return result[0].values.map(row => ({
-    id: row[0] as number,
-    walkAnalysisId: row[1] as number,
-    startPointIndex: row[2] as number,
-    endPointIndex: row[3] as number,
-    borderGapMeters: row[4] as number,
-    detourDistanceMeters: row[5] as number,
-    maxDeviationMeters: row[6] as number,
-    classification: row[7] as 'obstacle_avoidance' | 'shortcut' | 'drift',
-    isExempt: row[8] === 1,
-    exemptionReason: row[9] as string | null,
-    exemptedAt: row[10] as string | null,
+  return sorted.map((r) => ({
+    id: r.id!,
+    walkAnalysisId: r.walkAnalysisId,
+    startPointIndex: r.startPointIndex,
+    endPointIndex: r.endPointIndex,
+    borderGapMeters: r.borderGapMeters,
+    detourDistanceMeters: r.detourDistanceMeters,
+    maxDeviationMeters: r.maxDeviationMeters,
+    classification: r.classification as 'obstacle_avoidance' | 'shortcut' | 'drift',
+    isExempt: r.isExempt,
+    exemptionReason: r.exemptionReason,
+    exemptedAt: r.exemptedAt,
   }));
 }
 
@@ -175,251 +167,328 @@ export function getDeviationsForAnalysis(walkAnalysisId: number): DeviationWithE
 
 /**
  * Recalculate the quality score for a walk analysis considering exemptions.
- * 
+ *
  * WHY: When exemptions change, the score needs to be recalculated with:
  * - Exempt border gaps added to perimeter coverage
  * - Exempt detour distances removed from efficiency calculation
  * - Exempt segments excluded from RMSE
  * See ADR 003 section 6 for formulas.
+ *
+ * Uses a multi-store transaction for atomicity across walkAnalyses,
+ * deviations, areaCompletions, and walks stores.
  */
-export async function recalculateScoreWithExemptions(walkAnalysisId: number): Promise<AdjustedMetrics | null> {
-  const db = getDatabase();
-
-  // Get the original analysis
-  const analysisResult = db.exec(`
-    SELECT 
-      perimeter_coverage_percent,
-      covered_distance_meters,
-      rmse_meters,
-      efficiency,
-      area_coverage_percent,
-      raw_quality_score,
-      tier
-    FROM walk_analyses
-    WHERE id = ?
-  `, [walkAnalysisId]);
-
-  if (analysisResult.length === 0 || analysisResult[0].values.length === 0) {
-    return null;
-  }
-
-  const row = analysisResult[0].values[0];
-  const originalPerimeterCoverage = row[0] as number;
-  const coveredDistanceMeters = row[1] as number;
-  const originalRmse = row[2] as number;
-  const originalEfficiency = row[3] as number;
-  const areaCoverage = row[4] as number;
-  const originalQualityScore = row[5] as number;
-  const originalTier = row[6] as Tier;
-
-  // Get area info for perimeter length
-  const areaResult = db.exec(`
-    SELECT a.perimeter_meters
-    FROM walk_analyses wa
-    JOIN areas a ON wa.area_id = a.id
-    WHERE wa.id = ?
-  `, [walkAnalysisId]);
-
-  if (areaResult.length === 0) {
-    return null;
-  }
-
-  const perimeterMeters = areaResult[0].values[0][0] as number;
-
-  // Get exempt deviations
-  const deviations = getDeviationsForAnalysis(walkAnalysisId);
-  const exemptDeviations = deviations.filter(d => d.isExempt);
-
-  // Calculate exemption totals
-  const totalExemptBorderGap = exemptDeviations.reduce(
-    (sum, d) => sum + d.borderGapMeters, 0
+export async function recalculateScoreWithExemptions(
+  walkAnalysisId: number,
+): Promise<AdjustedMetrics | null> {
+  // WHY: Use a multi-store transaction so the walkAnalysis update and the
+  // areaCompletion update are atomic. Reads from walks are needed to resolve
+  // userId for the area completion lookup.
+  const tx = await openTransaction(
+    ['walkAnalyses', 'deviations', 'areaCompletions', 'walks'],
+    'readwrite',
   );
-  const totalExemptDetourDistance = exemptDeviations.reduce(
-    (sum, d) => sum + d.detourDistanceMeters, 0
-  );
+  const done = txDone(tx);
 
-  // WHY: Adjusted perimeter coverage adds exempt border gaps
-  // Formula: (covered_length + Σ exempt_border_gaps) / perimeter_length
-  const effectiveCoveredMeters = coveredDistanceMeters + totalExemptBorderGap;
-  const effectivePerimeterCoverage = Math.min(effectiveCoveredMeters / perimeterMeters, 1.0);
+  try {
+    // 1. Read the walk analysis
+    const analysis = await txGet<WalkAnalysisRecord>(tx, 'walkAnalyses', walkAnalysisId);
+    if (!analysis) {
+      // WHY: Must still await done — the transaction auto-commits on success,
+      // but we need to wait for it to settle to avoid dangling promises.
+      await done;
+      return null;
+    }
 
-  // WHY: Adjusted efficiency removes exempt detour distance
-  // We need original total walk length - for now approximate from efficiency
-  // efficiency = border_aligned / total_walk
-  // total_walk ≈ border_aligned / efficiency (if efficiency > 0)
-  const borderAlignedLength = originalEfficiency > 0 
-    ? coveredDistanceMeters // Approximation: covered ≈ border-aligned for good walks
-    : coveredDistanceMeters;
-  const originalTotalWalk = originalEfficiency > 0 
-    ? borderAlignedLength / originalEfficiency 
-    : borderAlignedLength;
-  const effectiveTotalWalk = Math.max(originalTotalWalk - totalExemptDetourDistance, borderAlignedLength);
-  const effectiveEfficiency = Math.min(borderAlignedLength / effectiveTotalWalk, 1.0);
+    const originalPerimeterCoverage = analysis.perimeterCoveragePercent;
+    const coveredDistanceMeters = analysis.coveredDistanceMeters;
+    const originalRmse = analysis.rmseMeters ?? 0;
+    const originalEfficiency = analysis.efficiency ?? 0;
+    const areaCoverage = analysis.areaCoveragePercent ?? 0;
+    const originalQualityScore = analysis.rawQualityScore ?? 0;
+    const originalTier = assignTier(originalQualityScore);
 
-  // WHY: RMSE adjustment is complex - for now we use a proportional reduction
-  // based on the ratio of exempt detour to total detour
-  // This is an approximation; full implementation would re-calculate from GPS points
-  const totalDetourDistance = deviations.reduce((sum, d) => sum + d.detourDistanceMeters, 0);
-  const exemptRatio = totalDetourDistance > 0 
-    ? totalExemptDetourDistance / totalDetourDistance 
-    : 0;
-  // Reduce RMSE proportionally to exempt ratio (approximation)
-  const effectiveRmse = originalRmse * (1 - exemptRatio * 0.5); // Conservative reduction
+    // 2. Read all deviations for this analysis
+    const allDeviations = await txGetAllFromIndex<DeviationRecord>(
+      tx,
+      'deviations',
+      'walkAnalysisId',
+      walkAnalysisId,
+    );
+    const exemptDeviations = allDeviations.filter((d) => d.isExempt);
 
-  // Calculate adjusted alignment score
-  const effectiveAlignmentScore = Math.max(0, 1 - effectiveRmse / RMSE_NORMALIZATION_METERS);
-
-  // Calculate adjusted quality score using same weights as original
-  const adjustedQualityScore = 
-    SCORE_WEIGHTS.perimeterCoverage * effectivePerimeterCoverage +
-    SCORE_WEIGHTS.areaCoverage * areaCoverage +
-    SCORE_WEIGHTS.alignment * effectiveAlignmentScore +
-    SCORE_WEIGHTS.efficiency * effectiveEfficiency;
-
-  // WHY: Use centralized assignTier() to ensure consistency
-  // FIX: This previously missed potato tier assignment (TICKET-016)
-  const adjustedTier = assignTier(adjustedQualityScore);
-
-  // Update the database with adjusted score
-  db.run(`
-    UPDATE walk_analyses
-    SET quality_score = ?,
-        tier = ?
-    WHERE id = ?
-  `, [adjustedQualityScore, adjustedTier, walkAnalysisId]);
-
-  // Get area_id and user_id for this analysis
-  const areaUserResult = db.exec(`
-    SELECT wa.area_id, w.user_id
-    FROM walk_analyses wa
-    JOIN walks w ON wa.walk_id = w.id
-    WHERE wa.id = ?
-  `, [walkAnalysisId]);
-
-  if (areaUserResult.length > 0 && areaUserResult[0].values.length > 0) {
-    const areaId = areaUserResult[0].values[0][0] as number;
-    const userId = areaUserResult[0].values[0][1] as number;
-
-    // WHY: Find the best walk for this area (using adjusted scores)
-    // This ensures area_completions reflects the actual best walk after exemptions
-    const bestAnalysis = db.exec(
-      `SELECT wa.id, COALESCE(wa.quality_score, wa.raw_quality_score) as quality_score, wa.tier 
-       FROM walk_analyses wa
-       JOIN walks w ON wa.walk_id = w.id
-       WHERE wa.area_id = ? AND w.user_id = ?
-       ORDER BY COALESCE(wa.quality_score, wa.raw_quality_score) DESC LIMIT 1`,
-      [areaId, userId]
+    // 3. Calculate exemption adjustments
+    const totalExemptBorderGap = exemptDeviations.reduce(
+      (sum, d) => sum + d.borderGapMeters,
+      0,
+    );
+    const totalExemptDetourDistance = exemptDeviations.reduce(
+      (sum, d) => sum + d.detourDistanceMeters,
+      0,
     );
 
-    if (bestAnalysis.length > 0 && bestAnalysis[0].values.length > 0) {
-      const bestId = bestAnalysis[0].values[0][0] as number;
-      const bestScore = bestAnalysis[0].values[0][1] as number;
-      const bestTier = bestAnalysis[0].values[0][2] as string | null;
+    // WHY: We need the perimeter length to compute adjusted coverage.
+    // In IndexedDB, areas come from GeoJSON at runtime (not from a DB table).
+    // We approximate by inverting: perimeterMeters = coveredDistance / coveragePercent.
+    // This is accurate when coveredDistance was computed against the true perimeter.
+    const perimeterMeters =
+      originalPerimeterCoverage > 0
+        ? coveredDistanceMeters / originalPerimeterCoverage
+        : coveredDistanceMeters;
 
-      // Update area_completions with the best walk (which might be this one or another)
-      db.run(`
-        UPDATE area_completions
-        SET best_walk_analysis_id = ?,
-            best_quality_score = ?,
-            tier = ?,
-            total_exemptions = (
-              SELECT COUNT(*) FROM deviations d
-              JOIN walk_analyses wa ON d.walk_analysis_id = wa.id
-              WHERE wa.area_id = area_completions.area_id
-                AND d.is_exempt = 1
-            )
-        WHERE area_id = ? AND user_id = ?
-      `, [bestId, bestScore, bestTier, areaId, userId]);
+    // WHY: Adjusted perimeter coverage adds exempt border gaps
+    // Formula: (covered_length + sum(exempt_border_gaps)) / perimeter_length
+    const effectiveCoveredMeters = coveredDistanceMeters + totalExemptBorderGap;
+    const effectivePerimeterCoverage = Math.min(
+      perimeterMeters > 0 ? effectiveCoveredMeters / perimeterMeters : 0,
+      1.0,
+    );
 
-      // If no area_completion exists yet, create it
-      const existing = db.exec(
-        'SELECT id FROM area_completions WHERE area_id = ? AND user_id = ?',
-        [areaId, userId]
+    // WHY: Adjusted efficiency removes exempt detour distance
+    // efficiency = border_aligned / total_walk
+    // total_walk approx= border_aligned / efficiency (when efficiency > 0)
+    const borderAlignedLength = coveredDistanceMeters;
+    const originalTotalWalk =
+      originalEfficiency > 0
+        ? borderAlignedLength / originalEfficiency
+        : borderAlignedLength;
+    const effectiveTotalWalk = Math.max(
+      originalTotalWalk - totalExemptDetourDistance,
+      borderAlignedLength,
+    );
+    const effectiveEfficiency = Math.min(
+      borderAlignedLength / effectiveTotalWalk,
+      1.0,
+    );
+
+    // WHY: RMSE adjustment is approximate — proportional reduction based on
+    // the ratio of exempt detour to total detour. Full implementation would
+    // re-calculate from GPS points, but that data isn't available here.
+    const totalDetourDistance = allDeviations.reduce(
+      (sum, d) => sum + d.detourDistanceMeters,
+      0,
+    );
+    const exemptRatio =
+      totalDetourDistance > 0 ? totalExemptDetourDistance / totalDetourDistance : 0;
+    // WHY: Conservative 50% reduction factor to avoid over-crediting exemptions
+    const effectiveRmse = originalRmse * (1 - exemptRatio * 0.5);
+
+    // Calculate adjusted alignment score
+    const effectiveAlignmentScore = Math.max(
+      0,
+      1 - effectiveRmse / RMSE_NORMALIZATION_METERS,
+    );
+
+    // Calculate adjusted quality score using same weights as original
+    const adjustedQualityScore =
+      SCORE_WEIGHTS.perimeterCoverage * effectivePerimeterCoverage +
+      SCORE_WEIGHTS.areaCoverage * areaCoverage +
+      SCORE_WEIGHTS.alignment * effectiveAlignmentScore +
+      SCORE_WEIGHTS.efficiency * effectiveEfficiency;
+
+    // WHY: Use centralized assignTier() to ensure consistency (TICKET-016 fix)
+    const adjustedTier = assignTier(adjustedQualityScore);
+
+    // 4. Update the walkAnalysis with new adjusted score and tier
+    analysis.qualityScore = adjustedQualityScore;
+    analysis.tier = adjustedTier;
+    await txPut(tx, 'walkAnalyses', analysis);
+
+    // 5. Update areaCompletion if this analysis affects the best score
+    const { areaFid, walkId } = analysis;
+
+    // WHY: Resolve userId from the walks store (walkAnalyses don't store userId)
+    const walk = await txGet<WalkRecord>(tx, 'walks', walkId);
+    if (walk) {
+      const userId = walk.userId;
+
+      // WHY: Find the best analysis across all walks for this area+user.
+      // We need all user walks first, then filter analyses by those walk IDs.
+      const userWalks = await txGetAllFromIndex<WalkRecord>(tx, 'walks', 'userId', userId);
+      const userWalkIds = new Set(userWalks.map((w) => w.stravaActivityId));
+
+      const allAreaAnalyses = await txGetAllFromIndex<WalkAnalysisRecord>(
+        tx,
+        'walkAnalyses',
+        'areaFid',
+        areaFid,
       );
-      if (existing.length === 0 || existing[0].values.length === 0) {
-        const walkCount = db.exec(
-          `SELECT COUNT(*) FROM walk_analyses wa
-           JOIN walks w ON wa.walk_id = w.id
-           WHERE wa.area_id = ? AND w.user_id = ?`,
-          [areaId, userId]
-        );
-        const totalWalks = walkCount[0].values[0][0] as number;
+      const userAreaAnalyses = allAreaAnalyses.filter((a) =>
+        userWalkIds.has(a.walkId),
+      );
 
-        db.run(`
-          INSERT INTO area_completions (
-            user_id, area_id, best_walk_analysis_id, best_quality_score, tier,
-            total_walks, first_completed_at, best_completed_at
-          ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-          [userId, areaId, bestId, bestScore, bestTier, totalWalks]
+      if (userAreaAnalyses.length > 0) {
+        // WHY: Pick the best by adjusted quality_score, falling back to rawQualityScore
+        const best = userAreaAnalyses.reduce((a, b) =>
+          (b.qualityScore ?? b.rawQualityScore ?? 0) >
+          (a.qualityScore ?? a.rawQualityScore ?? 0)
+            ? b
+            : a,
         );
+        const bestScore = best.qualityScore ?? best.rawQualityScore ?? 0;
+        // WHY: Coalesce null to 'potato' — if we have analyses for this area,
+        // the score must be > 0 so assignTier won't actually return null.
+        // The fallback satisfies AreaCompletionRecord.tier: string.
+        const bestTier = assignTier(bestScore) ?? 'potato';
+
+        // Count total exemptions across all analyses for this area
+        let totalExemptions = 0;
+        for (const a of userAreaAnalyses) {
+          if (a.id != null) {
+            const devs = await txGetAllFromIndex<DeviationRecord>(
+              tx,
+              'deviations',
+              'walkAnalysisId',
+              a.id,
+            );
+            totalExemptions += devs.filter((d) => d.isExempt).length;
+          }
+        }
+
+        const existingCompletion = await txGet<AreaCompletionRecord>(
+          tx,
+          'areaCompletions',
+          areaFid,
+        );
+
+        if (existingCompletion) {
+          // WHY: Update existing completion with recalculated best score
+          existingCompletion.bestWalkAnalysisId = best.id!;
+          existingCompletion.bestQualityScore = bestScore;
+          existingCompletion.tier = bestTier;
+          existingCompletion.totalExemptions = totalExemptions;
+          existingCompletion.bestCompletedAt = new Date().toISOString();
+
+          // WHY: Update cachedMetrics so loadCachedAnalyses reflects the new score
+          if (existingCompletion.cachedMetrics) {
+            existingCompletion.cachedMetrics.rawQualityScore = bestScore;
+            existingCompletion.cachedMetrics.tier = bestTier;
+          }
+
+          await txPut(tx, 'areaCompletions', existingCompletion);
+        } else {
+          // WHY: Create area completion if it doesn't exist yet.
+          // Build denormalized fields for zero-join loadCachedAnalyses.
+          const activityIds = [
+            ...new Set(userAreaAnalyses.map((a) => a.walkId)),
+          ];
+          const activityPolylines: Record<number, string> = {};
+          for (const aid of activityIds) {
+            const w = userWalks.find((uw) => uw.stravaActivityId === aid);
+            if (w?.polyline) activityPolylines[aid] = w.polyline;
+          }
+
+          const completionRecord: AreaCompletionRecord = {
+            areaFid,
+            userId,
+            bestWalkAnalysisId: best.id!,
+            bestQualityScore: bestScore,
+            tier: bestTier,
+            totalWalks: userAreaAnalyses.length,
+            totalExemptions,
+            firstCompletedAt: new Date().toISOString(),
+            bestCompletedAt: new Date().toISOString(),
+            activityIds,
+            activityPolylines,
+            cachedMetrics: {
+              perimeterCoveragePercent: best.perimeterCoveragePercent,
+              areaCoveragePercent: best.areaCoveragePercent ?? 0,
+              rawQualityScore: bestScore,
+              tier: bestTier,
+              isClosedLoop: best.isClosedLoop,
+              coveredDistanceMeters: best.coveredDistanceMeters,
+              rmseMeters: best.rmseMeters ?? 0,
+              maxDeviationMeters: best.maxDeviationMeters ?? 0,
+              p90DeviationMeters: best.p90DeviationMeters ?? 0,
+              efficiency: best.efficiency ?? 0,
+              enclosedAreaSqm: best.enclosedAreaSqm ?? 0,
+              loopGapMeters: best.loopGapMeters ?? 0,
+              tieredBorderScore: best.tieredBorderScore ?? 0,
+              tierDistribution: best.tierDistribution ?? {
+                platinum: 0,
+                gold: 0,
+                silver: 0,
+                bronze: 0,
+                potato: 0,
+                missed: 0,
+              },
+              walkFocus: best.efficiency ?? 0,
+            },
+          };
+          await txPut(tx, 'areaCompletions', completionRecord);
+        }
       }
     }
+
+    // WHY: Await transaction completion to ensure all writes are committed atomically
+    await done;
+
+    return {
+      originalPerimeterCoverage,
+      originalRmse,
+      originalEfficiency,
+      originalQualityScore,
+      originalTier,
+      effectivePerimeterCoverage,
+      effectiveRmse,
+      effectiveEfficiency,
+      adjustedQualityScore,
+      adjustedTier,
+      totalExemptBorderGap,
+      totalExemptDetourDistance,
+      exemptionCount: exemptDeviations.length,
+    };
+  } catch (error) {
+    // WHY: If anything throws, the transaction auto-aborts. We still await
+    // done so the abort error surfaces cleanly instead of an unhandled rejection.
+    try {
+      await done;
+    } catch {
+      // Expected — transaction was aborted by the thrown error
+    }
+    throw error;
   }
-
-  await persistDatabase();
-
-  return {
-    originalPerimeterCoverage,
-    originalRmse,
-    originalEfficiency,
-    originalQualityScore,
-    originalTier,
-    effectivePerimeterCoverage,
-    effectiveRmse,
-    effectiveEfficiency,
-    adjustedQualityScore,
-    adjustedTier,
-    totalExemptBorderGap,
-    totalExemptDetourDistance,
-    exemptionCount: exemptDeviations.length,
-  };
 }
 
 /**
  * Get adjusted metrics for a walk analysis.
  * Returns both original and exemption-adjusted values.
  */
-export function getAdjustedMetrics(walkAnalysisId: number): AdjustedMetrics | null {
-  const db = getDatabase();
-
-  const result = db.exec(`
-    SELECT 
-      perimeter_coverage_percent,
-      rmse_meters,
-      efficiency,
-      raw_quality_score,
-      quality_score,
-      tier
-    FROM walk_analyses
-    WHERE id = ?
-  `, [walkAnalysisId]);
-
-  if (result.length === 0 || result[0].values.length === 0) {
+export async function getAdjustedMetrics(
+  walkAnalysisId: number,
+): Promise<AdjustedMetrics | null> {
+  const analysis = await get<WalkAnalysisRecord>('walkAnalyses', walkAnalysisId);
+  if (!analysis) {
     return null;
   }
 
-  const row = result[0].values[0];
-  const deviations = getDeviationsForAnalysis(walkAnalysisId);
-  const exemptDeviations = deviations.filter(d => d.isExempt);
+  const deviations = await getDeviationsForAnalysis(walkAnalysisId);
+  const exemptDeviations = deviations.filter((d) => d.isExempt);
 
-  // WHY: Use centralized assignTier() to ensure consistency
-  // FIX: This previously missed potato tier assignment (TICKET-016)
-  const rawScore = row[3] as number;
+  // WHY: Use centralized assignTier() to ensure consistency (TICKET-016 fix)
+  const rawScore = analysis.rawQualityScore ?? 0;
   const originalTier = assignTier(rawScore);
 
   return {
-    originalPerimeterCoverage: row[0] as number,
-    originalRmse: row[1] as number,
-    originalEfficiency: row[2] as number,
+    originalPerimeterCoverage: analysis.perimeterCoveragePercent,
+    originalRmse: analysis.rmseMeters ?? 0,
+    originalEfficiency: analysis.efficiency ?? 0,
     originalQualityScore: rawScore,
     originalTier,
-    effectivePerimeterCoverage: row[0] as number, // Would need full recalc
-    effectiveRmse: row[1] as number,
-    effectiveEfficiency: row[2] as number,
-    adjustedQualityScore: row[4] as number,
-    adjustedTier: row[5] as Tier,
-    totalExemptBorderGap: exemptDeviations.reduce((sum, d) => sum + d.borderGapMeters, 0),
-    totalExemptDetourDistance: exemptDeviations.reduce((sum, d) => sum + d.detourDistanceMeters, 0),
+    // WHY: Effective metrics would need full recalculation; return originals
+    // as a reasonable approximation when not recalculating
+    effectivePerimeterCoverage: analysis.perimeterCoveragePercent,
+    effectiveRmse: analysis.rmseMeters ?? 0,
+    effectiveEfficiency: analysis.efficiency ?? 0,
+    adjustedQualityScore: analysis.qualityScore ?? rawScore,
+    adjustedTier: assignTier(analysis.qualityScore ?? rawScore),
+    totalExemptBorderGap: exemptDeviations.reduce(
+      (sum, d) => sum + d.borderGapMeters,
+      0,
+    ),
+    totalExemptDetourDistance: exemptDeviations.reduce(
+      (sum, d) => sum + d.detourDistanceMeters,
+      0,
+    ),
     exemptionCount: exemptDeviations.length,
   };
 }

@@ -1,104 +1,99 @@
 /**
  * React hook for database access.
- * 
- * Handles lazy initialization of the SQLite database and provides
+ *
+ * Handles lazy initialization of the IndexedDB database and provides
  * loading/error states for UI feedback.
- * 
- * See ADR 004 for storage architecture.
+ *
+ * See ADR 026 for the IndexedDB migration.
  * See docs/features/data-persistence.md for implementation details.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Database } from 'sql.js';
-import { 
-  initDatabase, 
-  closeDatabase, 
-  exportDatabase, 
+import {
+  initDatabase,
+  closeDatabase,
+  exportDatabase,
   importDatabase,
-  getAllAreas,
-  getUserProgress,
-  type AreaRow,
-  type UserProgressRow
 } from '@/lib/db';
+import { isDatabaseOpen } from '@/lib/idb';
 
 interface UseDatabaseReturn {
-  /** The database instance, null if not yet initialized */
-  db: Database | null;
+  /** True once the database has been initialized successfully */
+  ready: boolean;
   /** True while the database is being initialized */
   loading: boolean;
   /** Error message if initialization failed */
   error: string | null;
-  /** Re-initialize the database (e.g., after import) */
-  refresh: () => Promise<void>;
   /** Export the database as a downloadable file */
-  exportDb: () => void;
+  exportDb: () => Promise<void>;
   /** Import a database from a file */
   importDb: (file: File) => Promise<void>;
-  /** Get all areas from the database */
-  getAreas: () => AreaRow[];
-  /** Get user progress summary */
-  getProgress: (userId: number) => UserProgressRow | null;
 }
 
 export function useDatabase(): UseDatabaseReturn {
-  const [db, setDb] = useState<Database | null>(null);
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const initialize = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const database = await initDatabase();
-      // WHY: initDatabase may return null if closed during React Strict Mode cleanup.
-      // In this case, don't update state - a new initialization will follow.
-      if (database) {
-        setDb(database);
-      }
-    } catch (e) {
-      console.error('[useDatabase] Initialization failed:', e);
-      setError(e instanceof Error ? e.message : 'Failed to initialize database');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
+    let cancelled = false;
+
+    async function initialize() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        await initDatabase();
+        if (!cancelled) {
+          setReady(true);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('[useDatabase] Initialization failed:', e);
+        if (!cancelled) {
+          setReady(false);
+          setError(e instanceof Error ? e.message : 'Failed to initialize database');
+          setLoading(false);
+        }
+      }
+    }
+
     initialize();
 
-    // WHY: Close database on unmount to free WebAssembly memory
+    // WHY: Close database on unmount to release IndexedDB connection
     return () => {
+      cancelled = true;
       closeDatabase();
+      setReady(false);
     };
-  }, [initialize]);
+  }, []);
 
-  const exportDb = useCallback(() => {
-    if (!db) {
+  const exportDb = useCallback(async () => {
+    if (!isDatabaseOpen()) {
       console.error('[useDatabase] Cannot export: database not initialized');
       return;
     }
 
-    const blob = exportDatabase();
+    const blob = await exportDatabase();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `citycells-backup-${new Date().toISOString().split('T')[0]}.db`;
+    a.download = `citycells-backup-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [db]);
+  }, []);
 
   const importDb = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       await importDatabase(file);
-      // Re-initialize to get the new database instance
-      const database = await initDatabase();
-      setDb(database);
+      // Re-initialize to ensure connection is fresh
+      await initDatabase();
+      setReady(true);
     } catch (e) {
       console.error('[useDatabase] Import failed:', e);
       setError(e instanceof Error ? e.message : 'Failed to import database');
@@ -108,24 +103,11 @@ export function useDatabase(): UseDatabaseReturn {
     }
   }, []);
 
-  const getAreas = useCallback((): AreaRow[] => {
-    if (!db) return [];
-    return getAllAreas();
-  }, [db]);
-
-  const getProgress = useCallback((userId: number): UserProgressRow | null => {
-    if (!db) return null;
-    return getUserProgress(userId);
-  }, [db]);
-
   return {
-    db,
+    ready,
     loading,
     error,
-    refresh: initialize,
     exportDb,
     importDb,
-    getAreas,
-    getProgress,
   };
 }

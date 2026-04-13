@@ -192,8 +192,8 @@ export async function getStoredUser(stravaId: number): Promise<UserRow | null> {
       await initDatabase();
     }
     
-    const user = getUserByStravaId(stravaId);
-    
+    const user = await getUserByStravaId(stravaId);
+
     // WHY: User must have refresh_token to restore session
     if (user && user.refresh_token) {
       return user;
@@ -232,7 +232,7 @@ export async function restoreSession(stravaId: number): Promise<SessionRestoreRe
     
     // WHY: Check for cached athlete info (TICKET-024)
     // If available, send to server to skip Strava API call
-    const cachedAthlete = getCachedAthleteInfo(stravaId);
+    const cachedAthlete = await getCachedAthleteInfo(stravaId);
     
     // WHY: Call server endpoint to refresh tokens and set cookies
     // This ensures API routes have valid cookies for Strava API calls

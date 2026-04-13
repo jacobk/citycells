@@ -17,14 +17,14 @@ We need a system to:
 
 ### Constraints
 
-- Must work with existing SQLite/IndexedDB storage (ADR 004)
+- Must work with existing IndexedDB storage ([ADR 026](./026-indexeddb-storage.md), which superseded ADR 004)
 - Achievement checking should be a separate process from analysis (not block the analysis flow)
 - Must support ~40 achievements without performance issues
 - Achievement conditions range from simple counts to geometric analysis
 
 ## Decision
 
-We will implement a **local achievement system** with SQLite persistence and emoji-based icons.
+We will implement a **local achievement system** with IndexedDB persistence and emoji-based icons.
 
 ### Achievement Categories
 
@@ -42,21 +42,19 @@ Achievements are organized into these categories:
 
 ### Data Model
 
-#### `achievements` Table (Static Definition)
+> **Note:** Achievement definitions are no longer stored in a database table. They are JS constants in `src/lib/achievements.ts`. Only unlock records are persisted in IndexedDB. See [ADR 026](./026-indexeddb-storage.md).
 
-```sql
-CREATE TABLE achievements (
-  id TEXT PRIMARY KEY,           -- Unique slug: 'first-steps', 'platinum-pioneer'
-  name TEXT NOT NULL,            -- Display name: 'First Steps'
-  description TEXT NOT NULL,     -- How to unlock: 'Complete your first area'
-  icon TEXT NOT NULL,            -- Emoji icon: '🎯'
-  category TEXT NOT NULL,        -- Category slug: 'milestones', 'quality', etc.
-  is_hidden INTEGER DEFAULT 0,   -- 1 = show as "???" until unlocked
-  sort_order INTEGER NOT NULL,   -- Display order within category
-  condition_type TEXT NOT NULL,  -- 'area_count', 'tier_count', 'adjacent', etc.
-  condition_value TEXT NOT NULL  -- JSON: {"count": 5} or {"tier": "platinum", "count": 10}
-);
-```
+#### Achievement Definitions (JS Constants)
+
+Achievement definitions are defined as an array of objects in `src/lib/achievements.ts`, each with:
+- `id` - Unique slug: `'first-steps'`, `'platinum-pioneer'`
+- `name` - Display name
+- `description` - How to unlock
+- `icon` - Emoji icon
+- `category` - Category slug
+- `isHidden` - Show as "???" until unlocked
+- `sortOrder` - Display order within category
+- `conditionType` / `conditionValue` - Evaluation criteria
 
 **Condition Types:**
 - `area_count` - Number of areas completed: `{"count": N}`
@@ -70,17 +68,11 @@ CREATE TABLE achievements (
 - `distance_total` - Total walked distance: `{"km": N}`
 - `hidden_*` - Various hidden conditions (evaluated specially)
 
-#### `user_achievements` Table
+#### `userAchievements` IndexedDB Store
 
-```sql
-CREATE TABLE user_achievements (
-  user_id TEXT NOT NULL,
-  achievement_id TEXT NOT NULL,
-  unlocked_at TEXT NOT NULL,     -- ISO 8601 timestamp
-  PRIMARY KEY (user_id, achievement_id),
-  FOREIGN KEY (achievement_id) REFERENCES achievements(id)
-);
-```
+- **Key**: `[userId, achievementId]` (compound)
+- **Index**: `userId`
+- **Fields**: `userId`, `achievementId`, `unlockedAt` (ISO 8601 timestamp)
 
 ### Achievement Checking Process
 
@@ -136,17 +128,17 @@ When achievements are earned:
 
 - Complex geometric conditions (triple_point, encirclement) require spatial calculations
 - Achievement definitions hardcoded in app (not dynamically configurable)
-- No cross-device sync (local storage only, per ADR 004)
+- No cross-device sync (local storage only, per ADR 026)
 
 ### Technical
 
-- New SQLite tables require migration on app update
+- IndexedDB schema versioning handled by `onupgradeneeded` (no manual migration scripts)
 - Adjacent area calculations need cached graph representation of area topology
 - Hidden achievement conditions evaluated with same logic but display hidden
 
 ### Maintainability
 
-- Achievement definitions centralized in one seed/migration file
+- Achievement definitions centralized in `src/lib/achievements.ts` as JS constants
 - Condition evaluation logic modular (one function per condition_type)
 - Adding new achievements only requires adding row + condition handler
 - Easy to test each condition type in isolation

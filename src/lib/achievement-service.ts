@@ -1,12 +1,12 @@
 /**
  * Achievement Service
- * 
+ *
  * Orchestrates achievement checking, evaluation, and persistence.
  * This is the main entry point for the achievement system.
- * 
+ *
  * See ADR 019 for achievement system design.
  * See TICKET-023 for implementation requirements.
- * 
+ *
  * @module achievement-service
  */
 
@@ -18,9 +18,8 @@ import {
   unlockAchievement,
   getUserProgress,
   getActualWalkedDistance,
-  getAllAreas,
   getCompletedAreasWithPerimeter,
-  getSmallestAreaFid,
+  type AreaRow,
 } from './db';
 import {
   getAdjacencyGraph,
@@ -32,6 +31,20 @@ import * as turf from '@turf/turf';
 // ============================================
 // Types
 // ============================================
+
+/**
+ * Context needed by the achievement service that comes from GeoJSON at runtime.
+ * WHY: Areas no longer live in the database — they come from GeoJSON features.
+ * Callers must provide this data.
+ */
+export interface AchievementAreaContext {
+  /** All areas in AreaRow format (for adjacency graph building) */
+  allAreas: AreaRow[];
+  /** Map of areaFid -> perimeter in meters */
+  perimeterLookup: Map<number, number>;
+  /** FID of the smallest area (by perimeter) */
+  smallestAreaFid: number | null;
+}
 
 /**
  * Result of checking achievements.
@@ -64,27 +77,27 @@ let cachedCenterAreaFid: number | null = null;
  * Build the user state for achievement evaluation.
  * WHY: Pre-aggregates all data needed to evaluate achievements in a single pass.
  */
-export function buildUserState(userId: number): UserState {
+export async function buildUserState(
+  userId: number,
+  areaCtx: AchievementAreaContext,
+): Promise<UserState> {
+  const { allAreas, perimeterLookup, smallestAreaFid } = areaCtx;
+
   // Get user progress for tier counts
-  const progress = getUserProgress(userId);
-  
+  const progress = await getUserProgress(userId, allAreas.length);
+
   // Get completed areas with their perimeters
-  const completedAreasMap = getCompletedAreasWithPerimeter(userId);
+  const completedAreasMap = await getCompletedAreasWithPerimeter(userId, perimeterLookup);
   const completedAreaFids = new Set(completedAreasMap.keys());
-  
-  // Get all areas for graph building
-  const allAreas = getAllAreas();
+
   const allAreaFids = new Set(allAreas.map(a => a.fid));
-  
-  // Get smallest area FID
-  const smallestAreaFid = getSmallestAreaFid();
-  
+
   // Get center area FID (computed once and cached)
   const centerAreaFid = getCenterAreaFid(allAreas);
-  
+
   // Get total walked distance
-  const totalWalkedDistanceMeters = getActualWalkedDistance(userId);
-  
+  const totalWalkedDistanceMeters = await getActualWalkedDistance(userId);
+
   // Build tier counts with defaults
   const tierCounts: TierCounts = {
     platinum: progress?.platinum_count ?? 0,
@@ -93,7 +106,7 @@ export function buildUserState(userId: number): UserState {
     bronze: progress?.bronze_count ?? 0,
     potato: progress?.potato_count ?? 0,
   };
-  
+
   return {
     completedAreaCount: progress?.completed_areas ?? 0,
     tierCounts,
@@ -111,19 +124,19 @@ export function buildUserState(userId: number): UserState {
  * Get the FID of the area containing Malmö's geographic center.
  * WHY: Uses Turf.js for accurate point-in-polygon check.
  */
-function getCenterAreaFid(areas: ReturnType<typeof getAllAreas>): number | null {
+function getCenterAreaFid(areas: AreaRow[]): number | null {
   // Return cached value if available
   if (cachedCenterAreaFid !== null) {
     return cachedCenterAreaFid;
   }
-  
+
   const centerPoint = turf.point([MALMO_CENTER_LNG, MALMO_CENTER_LAT]);
-  
+
   for (const area of areas) {
     try {
       const geometry = JSON.parse(area.geometry_json);
       const feature = turf.feature(geometry);
-      
+
       // Check if center point is inside this area
       // WHY: Cast to any since turf types can be complex with GeoJSON geometries
       if (turf.booleanPointInPolygon(centerPoint, feature as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>)) {
@@ -135,7 +148,7 @@ function getCenterAreaFid(areas: ReturnType<typeof getAllAreas>): number | null 
       // Skip invalid geometry
     }
   }
-  
+
   console.warn('[AchievementService] No area contains Malmö center point');
   return null;
 }
@@ -147,60 +160,61 @@ function getCenterAreaFid(areas: ReturnType<typeof getAllAreas>): number | null 
 /**
  * Check all achievements for a user and unlock any newly earned.
  * WHY: Main entry point for achievement evaluation.
- * 
+ *
  * @param userId - Database user ID
+ * @param areaCtx - Area context from GeoJSON (areas, perimeters, smallest FID)
  * @returns Result containing newly unlocked achievements
  */
-export async function checkAchievements(userId: number): Promise<CheckAchievementsResult> {
+export async function checkAchievements(
+  userId: number,
+  areaCtx: AchievementAreaContext,
+): Promise<CheckAchievementsResult> {
   console.log(`[AchievementService] Checking achievements for user ${userId}`);
-  
+
   // Get current user state
-  const state = buildUserState(userId);
-  
+  const state = await buildUserState(userId, areaCtx);
+
   // Get already unlocked achievements
-  const existingUnlocks = getUserAchievements(userId);
-  
-  // Get all areas for graph building
-  const allAreas = getAllAreas();
-  
+  const existingUnlocks = await getUserAchievements(userId);
+
   // Build evaluation context with cached graph data
   const ctx: EvaluationContext = {
     state,
-    adjacencyGraph: getAdjacencyGraph(allAreas),
-    vertexMap: getVertexMap(allAreas),
+    adjacencyGraph: getAdjacencyGraph(areaCtx.allAreas),
+    vertexMap: getVertexMap(areaCtx.allAreas),
   };
-  
+
   // Track newly unlocked achievements
   const newlyUnlocked: Achievement[] = [];
-  
+
   // Evaluate each achievement
   for (const achievement of ACHIEVEMENTS) {
     // Skip already unlocked
     if (existingUnlocks.has(achievement.id)) {
       continue;
     }
-    
+
     // Evaluate condition
     const isEarned = evaluateCondition(
       ctx,
       achievement.conditionType,
       achievement.conditionValue
     );
-    
+
     if (isEarned) {
       // Unlock the achievement
       await unlockAchievement(userId, achievement.id);
       newlyUnlocked.push(achievement);
-      
+
       console.log(`[AchievementService] Unlocked: ${achievement.name} (${achievement.id})`);
     }
   }
-  
+
   // Refresh unlocked achievements after any new unlocks
-  const allUnlocked = getUserAchievements(userId);
-  
+  const allUnlocked = await getUserAchievements(userId);
+
   console.log(`[AchievementService] Check complete. New unlocks: ${newlyUnlocked.length}, Total: ${allUnlocked.size}/${ACHIEVEMENTS.length}`);
-  
+
   return {
     newlyUnlocked,
     allUnlocked,
@@ -212,13 +226,13 @@ export async function checkAchievements(userId: number): Promise<CheckAchievemen
  * Get all achievements with unlock status for a user.
  * WHY: Used by achievement browser to display all achievements.
  */
-export function getAllAchievementsWithStatus(userId: number): Array<{
+export async function getAllAchievementsWithStatus(userId: number): Promise<Array<{
   achievement: Achievement;
   isUnlocked: boolean;
   unlockedAt: string | null;
-}> {
-  const unlocks = getUserAchievements(userId);
-  
+}>> {
+  const unlocks = await getUserAchievements(userId);
+
   return ACHIEVEMENTS.map(achievement => {
     const unlock = unlocks.get(achievement.id);
     return {
@@ -233,16 +247,16 @@ export function getAllAchievementsWithStatus(userId: number): Array<{
  * Get achievement statistics for a user.
  * WHY: Used for header display (e.g., "12 / 40 unlocked").
  */
-export function getAchievementStats(userId: number): {
+export async function getAchievementStats(userId: number): Promise<{
   unlockedCount: number;
   totalCount: number;
   percentage: number;
-} {
-  const unlocks = getUserAchievements(userId);
+}> {
+  const unlocks = await getUserAchievements(userId);
   const unlockedCount = unlocks.size;
   const totalCount = ACHIEVEMENTS.length;
   const percentage = totalCount > 0 ? (unlockedCount / totalCount) * 100 : 0;
-  
+
   return {
     unlockedCount,
     totalCount,

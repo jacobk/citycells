@@ -22,7 +22,7 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md):
 | `src/lib/distance-tiers.ts` | **NEW:** 6-tier distance classification and weighted scoring |
 | `src/lib/geo-distance.ts` | Distance-to-geometry utilities |
 | `src/lib/tiers.ts` | Overall tier assignment (Platinum/Gold/Silver/Bronze/Potato) |
-| `src/lib/db.ts` | Storage of analysis results (walk_analyses table) |
+| `src/lib/db.ts` | Storage of analysis results (IndexedDB `walkAnalyses` store) |
 | `src/app/api/activities/streams/route.ts` | Fetch Strava streams for high-fidelity GPS |
 | `src/components/Map/Map.tsx` | Streams-aware analysis orchestration |
 | `src/lib/types/strava-streams.ts` | Stream type definitions |
@@ -154,7 +154,7 @@ The `summary_polyline` from Strava API is often truncated at the beginning and e
 4. Continue using Strava `distance` for total walk length to avoid undercounting.
 
 **Caching:**
-- Streams are stored in `walks.streams_json` with a `streams_fetched_at` marker.
+- Streams are stored in the IndexedDB `walkStreams` store (keyed by `stravaActivityId`) with a `streamsFetchedAt` marker.
 - Cached streams are reused across sessions to reduce API usage.
 
 ### 3. Alignment Score (Weight: 20%)
@@ -407,10 +407,10 @@ When users mark deviations as exempt (see [Exemption System](./exemption-system.
 - **`quality_score`**: Adjusted score after exemptions are applied (preferred for display)
 
 The system automatically:
-- Stores both scores in `walk_analyses` table
+- Stores both scores in `walkAnalyses` IndexedDB store
 - Prefers `quality_score` when loading cached results (falls back to `raw_quality_score` if no exemptions)
 - Selects best walk per area based on adjusted scores
-- Updates `area_completions` with adjusted scores and tiers
+- Updates `areaCompletions` store with adjusted scores and tiers
 
 **WHY:** This ensures displayed scores and tiers match what users see after applying exemptions, preventing score instability across page reloads.
 
@@ -418,14 +418,14 @@ The system automatically:
 
 1. **Performance with many points**: RMSE calculation is O(n × m) where n = walk points, m = perimeter segments
 2. **Self-intersecting walks**: May cause issues with area coverage calculation
-3. ~~**No persistence**~~ - ✅ Implemented: Analysis results cached in SQLite (see [Data Persistence](./data-persistence.md))
+3. ~~**No persistence**~~ - ✅ Implemented: Analysis results cached in IndexedDB (see [Data Persistence](./data-persistence.md))
 4. ~~**No exemption adjustment yet**~~ - ✅ Implemented: Exemptions adjust scores automatically
 
 ## Planned Improvements
 
 1. **Spatial indexing** - Use R-tree for faster point-to-line distance queries
 2. ~~**Debug visualization in app**~~ - ✅ See [Metrics Documentation](./metrics-documentation.md) for in-app D3 visualizations
-3. ~~**Caching**~~ - ✅ Implemented: Results cached in SQLite database
+3. ~~**Caching**~~ - ✅ Implemented: Results cached in IndexedDB
 4. ~~**Exemption-adjusted scores**~~ - ✅ Implemented: Scores automatically recalculate with exemptions
 
 ## Related Features

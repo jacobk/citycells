@@ -1,7 +1,7 @@
 # ADR 004: SQLite Storage Architecture
 
 **Date:** 2026-02-03 (Updated: 2026-02-15)
-**Status:** Accepted
+**Status:** Superseded by [ADR 026](026-indexeddb-storage.md) (2026-04-13)
 
 ## Context
 

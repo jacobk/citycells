@@ -11,13 +11,14 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { 
-  ACHIEVEMENTS, 
+import {
+  ACHIEVEMENTS,
   type Achievement,
   type AchievementCategory,
   CATEGORY_ORDER,
   getAchievementDisplay,
 } from '@/lib/achievements';
+import type { AchievementAreaContext } from '@/lib/achievement-service';
 
 // ============================================
 // Types
@@ -62,13 +63,15 @@ export interface UseAchievementsReturn {
 
 /**
  * Hook for managing achievement state.
- * 
+ *
  * @param userId - Database user ID (from getOrCreateUserId)
  * @param dbReady - Whether database is initialized
+ * @param areaCtx - Area context from GeoJSON (areas, perimeters, smallest FID)
  */
 export function useAchievements(
   userId: number | undefined,
-  dbReady: boolean
+  dbReady: boolean,
+  areaCtx?: AchievementAreaContext,
 ): UseAchievementsReturn {
   const [achievements, setAchievements] = useState<AchievementWithStatus[]>([]);
   const [newlyUnlocked, setNewlyUnlocked] = useState<Achievement[]>([]);
@@ -87,7 +90,7 @@ export function useAchievements(
       // WHY: Dynamic import to avoid bundling sql.js at build time
       const { getAllAchievementsWithStatus } = await import('@/lib/achievement-service');
       
-      const achievementsWithStatus = getAllAchievementsWithStatus(userId);
+      const achievementsWithStatus = await getAllAchievementsWithStatus(userId);
       
       // Add display info for each achievement
       const enriched: AchievementWithStatus[] = achievementsWithStatus.map(item => ({
@@ -106,21 +109,21 @@ export function useAchievements(
    * WHY: Called after analysis completes to unlock any newly earned achievements.
    */
   const checkForNewAchievements = useCallback(async () => {
-    if (!userId || !dbReady) return;
-    
+    if (!userId || !dbReady || !areaCtx) return;
+
     setLoading(true);
-    
+
     try {
-      // WHY: Dynamic import to avoid bundling sql.js at build time
+      // WHY: Dynamic import to keep achievement-service out of the main bundle
       const { checkAchievements } = await import('@/lib/achievement-service');
-      
-      const result = await checkAchievements(userId);
-      
+
+      const result = await checkAchievements(userId, areaCtx);
+
       // Update newly unlocked for modal display
       if (result.newlyUnlocked.length > 0) {
         setNewlyUnlocked(result.newlyUnlocked);
       }
-      
+
       // Reload all achievements to update status
       await loadAchievements();
     } catch (error) {
@@ -128,7 +131,7 @@ export function useAchievements(
     } finally {
       setLoading(false);
     }
-  }, [userId, dbReady, loadAchievements]);
+  }, [userId, dbReady, areaCtx, loadAchievements]);
 
   /**
    * Clear newly unlocked achievements (after modal dismissed).

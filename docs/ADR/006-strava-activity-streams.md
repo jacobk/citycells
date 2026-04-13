@@ -35,7 +35,7 @@ We will adopt Strava activity streams (`/activities/{id}/streams`) as the primar
   - `latlng`, `time`, `distance`
 - Use `resolution=high` and `series_type=distance` by default to maximize spatial precision while keeping predictable downsampling.
 - If an activity returns no `latlng` stream, fall back to `summary_polyline`.
-- Cache stream data locally (IndexedDB/sql.js) to avoid repeated API calls.
+- Cache stream data locally (IndexedDB `walkStreams` store — see [ADR 026](./026-indexeddb-storage.md)) to avoid repeated API calls.
 
 ### OAuth Scopes and Privacy Zones
 
@@ -57,7 +57,7 @@ We will adopt Strava activity streams (`/activities/{id}/streams`) as the primar
 
 - Batch and throttle stream requests during initial sync.
 - Default to incremental sync: only fetch streams for new activities.
-- Persist a per-activity "streams_fetched_at" marker to prevent refetching.
+- Persist a per-activity `streamsFetchedAt` marker in the `walkStreams` store to prevent refetching.
 
 ## Consequences
 
@@ -76,6 +76,6 @@ We will adopt Strava activity streams (`/activities/{id}/streams`) as the primar
 ### Technical
 
 - Requires new API route(s) to fetch and cache streams.
-- Requires data model updates to store streams (or decoded coordinates) locally.
+- Requires data model updates to store streams (or decoded coordinates) locally. Streams are now stored in a dedicated `walkStreams` IndexedDB store (see [ADR 026](./026-indexeddb-storage.md)).
 - Test fixtures should include stream-based coordinates for regression validation.
 - Supersedes ADR 005: data-quality issues from summary polylines are addressed by adopting streams.

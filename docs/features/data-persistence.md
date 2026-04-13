@@ -1,18 +1,18 @@
 # Data Persistence
 
-*Updated: 2026-02-15*
+*Updated: 2026-04-13*
 
 ## Overview
 
-CityCells uses SQLite running in the browser via sql.js (WebAssembly) with IndexedDB for persistence. This allows all user data to remain on their device while providing powerful SQL query capabilities.
+CityCells uses native IndexedDB for all browser-side storage. All user data remains on the device with zero external dependencies for persistence. See [ADR 026](../ADR/026-indexeddb-storage.md) for the migration rationale (replaced sql.js/WASM).
 
 ## User Stories
 
 From [PRD 001](../PRD/001-mvp-mobile-walker.md) section 3.8:
-- "All data stored locally in browser using sql.js (SQLite in WebAssembly)"
-- "Data persists to IndexedDB across sessions"
+- "All data stored locally in browser using IndexedDB"
+- "Data persists across sessions"
 - "Analysis results cached—no re-analysis on page reload"
-- "Export database feature for backup"
+- "Export database feature for backup (JSON format)"
 - "Import database feature to restore from backup"
 
 ## Implementation
@@ -21,17 +21,15 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) section 3.8:
 
 | File | Purpose |
 |------|---------|
-| `src/lib/db.ts` | Core database module: init, schema, persistence, queries |
-| `src/lib/analysis-persistence.ts` | Functions for saving/loading analysis results |
+| `src/lib/idb.ts` | IndexedDB wrapper: schema, Promise helpers, store definitions (~220 lines, zero dependencies) |
+| `src/lib/db.ts` | Core database module: async init, queries, user/walk CRUD |
+| `src/lib/analysis-persistence.ts` | Functions for saving/loading analysis results (async IDB) |
+| `src/lib/exemptions.ts` | Exemption CRUD (async IDB) |
 | `src/hooks/useDatabase.ts` | React hook for database access with loading states |
-| `public/sql-wasm/sql-wasm.wasm` | WebAssembly SQLite binary (~1MB) |
-| `next.config.ts` | WASM file serving headers configuration |
 
 ### Technology Stack
 
-**sql.js**: SQLite compiled to WebAssembly, runs entirely in browser.
-
-**IndexedDB**: Browser storage API used to persist the SQLite database file.
+**IndexedDB**: Native browser storage API. Fully asynchronous — cannot freeze the main thread. Built into every browser since 2012. Zero dependency cost (no WASM, no npm package).
 
 ### Data Flow
 
@@ -45,56 +43,58 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) section 3.8:
 │  └──────────────┘    └──────────────┘    └──────┬───────┘  │
 │                                                  │          │
 │                                          ┌──────▼───────┐  │
-│                                          │    sql.js    │  │
-│                                          │   (WASM)     │  │
+│                                          │   idb.ts     │  │
+│                                          │  (wrapper)   │  │
 │                                          └──────┬───────┘  │
 │                                                  │          │
 │                                          ┌──────▼───────┐  │
 │                                          │  IndexedDB   │  │
-│                                          │ (Persistence)│  │
+│                                          │  (native)    │  │
 │                                          └──────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Database Schema
 
-See [ADR 004](../ADR/004-sqlite-storage.md) for complete schema. Key tables:
+See [ADR 026](../ADR/026-indexeddb-storage.md) for complete schema. Seven object stores:
 
-| Table | Purpose |
-|-------|---------|
-| `users` | Strava user info and tokens |
-| `areas` | Cached sub-area data from GeoJSON |
-| `walks` | Synced Strava activities and cached stream data |
-| `walk_analyses` | Analysis results per walk-area pair |
-| `deviations` | Detected obstacle avoidances |
-| `area_completions` | Denormalized completion status |
+| Store | Key | Purpose |
+|-------|-----|---------|
+| `users` | `stravaId` | Strava user info and tokens |
+| `walks` | `stravaActivityId` | Synced Strava activities and polyline data |
+| `walkStreams` | `stravaActivityId` | GPS stream data (separated for query performance) |
+| `walkAnalyses` | auto `id` | Analysis results per walk-area pair |
+| `deviations` | auto `id` | Detected obstacle avoidances |
+| `areaCompletions` | `areaFid` | Denormalized completion status with display metrics |
+| `userAchievements` | `[userId, achievementId]` | Achievement unlock records |
+
+**Dropped from previous sql.js schema:**
+- `areas` — FID used as natural key; geometry computed from GeoJSON at runtime
+- `achievements` — static definitions in `src/lib/achievements.ts` as JS constants
+- `schema_version` — IndexedDB has built-in versioning via `onupgradeneeded`
 
 ### Initialization Flow
 
-1. **Load sql.js WASM** - ~1MB download, cached by browser
-2. **Check IndexedDB** - Look for existing database
-3. **Create or Restore** - New database or restore from IndexedDB
-4. **Run Migrations** - Apply schema updates if needed
-5. **Seed Areas** - Load from GeoJSON if areas table empty
+1. **Open IndexedDB** - `idb.ts` opens the database, triggers `onupgradeneeded` if schema version changed
+2. **Create stores** - On first load or version bump, object stores and indexes are created
+3. **Ready** - All db.ts exports are async functions that use the initialized IDB connection
 
 ### Persistence Strategy
 
+IndexedDB writes are natively granular — each put/delete operates on a single record without serializing the entire database.
+
 ```typescript
-// After any write operation
-async function executeWrite(sql: string, params?: any[]) {
-  db.run('BEGIN TRANSACTION');
-  try {
-    db.run(sql, params);
-    db.run('COMMIT');
-    await persistDatabase(); // Save to IndexedDB
-  } catch (e) {
-    db.run('ROLLBACK');
-    throw e;
-  }
+// Example: saving a walk analysis
+async function saveWalkAnalysis(analysis: WalkAnalysis) {
+  const db = await getDb();
+  const tx = db.transaction(['walkAnalyses', 'areaCompletions'], 'readwrite');
+  await tx.objectStore('walkAnalyses').put(analysis);
+  await updateAreaCompletion(tx, analysis);
+  await tx.done;
 }
 ```
 
-WHY: Every write is wrapped in a transaction for atomicity, then immediately persisted to IndexedDB to survive page reloads.
+WHY: No more `persistDatabase()` pattern (which serialized the entire SQLite DB on every write). IndexedDB writes are granular, fast, and async — they cannot freeze the main thread.
 
 ### Analysis Result Persistence
 
@@ -112,8 +112,8 @@ Analysis results are automatically saved to the database after computation and l
 - `saveWalkAnalysis()` - Saves full analysis result including deviations
   - Stores both `raw_quality_score` (original) and `quality_score` (adjusted with exemptions)
   - Selects best walk per area using adjusted scores
-- `loadCachedAnalyses()` - Loads cached results with all metrics for fast page rendering
-  - **WHY:** Uses `COALESCE(quality_score, raw_quality_score)` to prefer exemption-adjusted scores
+- `loadCachedAnalyses()` - Loads cached results via single IndexedDB index scan on `areaCompletions` store
+  - **WHY:** The `areaCompletions` store is denormalized to contain all display data, replacing the old 4-table SQL JOIN
   - Ensures displayed scores match tiers calculated with exemptions applied
   - Prevents score instability across page reloads
 - `getActivitiesToAnalyze()` - Identifies which activities need analysis
@@ -131,36 +131,38 @@ Analysis results are automatically saved to the database after computation and l
 
 ### Stream Data Caching (ADR 006)
 
-High-fidelity GPS streams are cached alongside walk records to avoid repeated Strava API calls.
+High-fidelity GPS streams are cached in a dedicated `walkStreams` IndexedDB store (keyed by `stravaActivityId`) to avoid repeated Strava API calls.
 
-**Columns:**
-- `walks.streams_json` - Serialized stream payload (`latlng`, `time`, `distance`)
-- `walks.streams_fetched_at` - ISO timestamp when streams were fetched
-- `walks.stream_point_count` - Point count for diagnostics
+**Store fields:**
+- Stream payload (`latlng`, `time`, `distance`)
+- `streamsFetchedAt` - ISO timestamp when streams were fetched
+- `streamPointCount` - Point count for diagnostics
 
 **Flow:**
 1. Fetch streams for a walk when needed for analysis.
-2. Store streams in `walks` after analysis is persisted.
+2. Store streams in `walkStreams` store after analysis is persisted.
 3. Reuse cached streams on subsequent sessions.
+
+WHY: Streams are stored separately from `walks` for query performance — loading walk metadata does not require loading large GPS arrays.
 
 ### Export/Import
 
-**Export**: Serialize entire SQLite database to a `.db` file for user download.
+**Export**: Serialize all IndexedDB stores to a JSON file for user download.
 
-**Import**: Load a `.db` file, validate it's a CityCells database, replace current data.
+**Import**: Load a JSON file, validate it's a CityCells export, replace current data.
 
-WHY: Since data is browser-local, users need a way to backup and restore their progress. This also enables moving data between devices.
+WHY: Since data is browser-local, users need a way to backup and restore their progress. This also enables moving data between devices. The format changed from SQLite binary (`.db`) to JSON as part of the IndexedDB migration (ADR 026).
 
 ## Rationale
 
-### Why SQLite over localStorage/IndexedDB directly?
+### Why IndexedDB over sql.js (WASM SQLite)?
 
-From [ADR 004](../ADR/004-sqlite-storage.md):
+From [ADR 026](../ADR/026-indexeddb-storage.md):
 
-1. **SQL Power**: Complex queries (joins, aggregations) needed for progress tracking
-2. **Schema Enforcement**: Relationships between walks, analyses, deviations
-3. **Transactions**: Atomic updates across multiple tables
-4. **Portability**: Export entire database as single file
+1. **No main-thread freeze**: sql.js ran synchronous WASM queries that froze iPhones; IndexedDB is natively async
+2. **Zero dependencies**: No ~1MB WASM binary to download and initialize
+3. **Granular writes**: Save one record instead of serializing the entire database
+4. **Simpler config**: No WASM headers or fs/path fallbacks in `next.config.ts`
 
 ### Why Browser Storage over Server?
 
@@ -169,13 +171,14 @@ From [ADR 004](../ADR/004-sqlite-storage.md):
 3. **Offline**: Works without internet after initial load
 4. **Simplicity**: No auth complexity, no data sync issues
 
-### Why Eager Persistence?
+### Why Granular Persistence?
 
-Every write immediately persists to IndexedDB rather than batching:
+Each write operation saves only the affected records to IndexedDB:
 
 1. **Data Safety**: User closes tab unexpectedly? Data saved.
 2. **Simplicity**: No complex flush logic or timers
 3. **Performance**: IndexedDB writes are fast (~1-5ms for small changes)
+4. **No serialization overhead**: Unlike sql.js where every write serialized the entire database
 
 ### Magic Numbers
 
@@ -186,7 +189,7 @@ Every write immediately persists to IndexedDB rather than batching:
 
 ## Database Reset (Added: 2026-02-15, Implemented: 2026-02-15)
 
-*Reference: [ADR 004](../ADR/004-sqlite-storage.md) section "Database Reset"*
+*Reference: [ADR 026](../ADR/026-indexeddb-storage.md)*
 
 Users can clear all synced activities and analysis results to resolve data issues.
 
@@ -196,13 +199,13 @@ Users can clear all synced activities and analysis results to resolve data issue
 - Start fresh while preserving authentication
 
 **What is cleared:**
-- All synced walks (`walks` table)
-- All analysis results (`walk_analyses`, `deviations`, `area_completions`)
+- All synced walks (`walks` store)
+- All stream data (`walkStreams` store)
+- All analysis results (`walkAnalyses`, `deviations`, `areaCompletions` stores)
 - Sync timestamp (forces full re-sync on next load)
 
 **What is preserved:**
-- User authentication tokens (`users` table)
-- Area definitions (`areas` table - seeded from GeoJSON)
+- User authentication tokens (`users` store)
 
 **UI Location:** Profile card (expanded) → "Clear All Data" button
 
@@ -213,11 +216,12 @@ Users can clear all synced activities and analysis results to resolve data issue
 - `src/components/ProfileCard/ProfileCard.tsx` - UI button with confirmation dialog
 - `src/app/page.tsx` - `handleClearData()` handler
 
-**Deletion Order (respecting foreign keys):**
-1. `deviations` (references `walk_analyses`)
-2. `walk_analyses` (references `walks`)
-3. `area_completions` (references `walks`)
-4. `walks` (main data)
+**Stores cleared:**
+1. `deviations`
+2. `walkAnalyses`
+3. `areaCompletions`
+4. `walkStreams`
+5. `walks`
 
 **User Flow:**
 1. User clicks "Clear All Data" in expanded profile card
@@ -252,14 +256,12 @@ To provide instant page loads for returning users, the app uses incremental sync
 
 ### Implementation
 
-**Schema Changes (Migration v5):**
-```sql
-ALTER TABLE users ADD COLUMN last_activity_sync_at TEXT;
-ALTER TABLE users ADD COLUMN last_synced_activity_id INTEGER;
-```
+**User store fields:**
+- `lastActivitySyncAt` - ISO timestamp of last sync
+- `lastSyncedActivityId` - Most recent synced activity
 
 **Key Files:**
-- `src/lib/db.ts` - Schema migration, `getLastSyncTimestamp()`, `updateLastSync()`
+- `src/lib/db.ts` - `getLastSyncTimestamp()`, `updateLastSync()` (async IDB)
 - `src/app/api/activities/route.ts` - Accepts `?after=<timestamp>` query param
 - `src/hooks/useStrava.ts` - `fetchActivities(afterTimestamp?)` supports incremental fetch
 - `src/components/ProfileCard/ProfileCard.tsx` - "Force Refresh All Activities" button
@@ -267,21 +269,21 @@ ALTER TABLE users ADD COLUMN last_synced_activity_id INTEGER;
 
 **Sync Flow:**
 1. Page loads → cached analyses displayed instantly
-2. Check `last_activity_sync_at` from `users` table
+2. Check `lastActivitySyncAt` from `users` store
 3. If exists: call API with `?after=<epoch_seconds>`
 4. If null: full sync (first visit or after force refresh)
-5. After successful fetch: update `last_activity_sync_at`
+5. After successful fetch: update `lastActivitySyncAt`
 
 **Force Refresh:**
 - Button in expanded ProfileCard under "Sync Activities"
-- Resets `last_activity_sync_at` to epoch (1970-01-01)
+- Resets `lastActivitySyncAt` to epoch (1970-01-01)
 - Triggers page reload for full re-sync
 
 ## Current Limitations
 
 1. **No cross-device sync**: Data stays on one browser. Future: cloud storage option.
 
-2. **Bundle size**: sql.js WASM adds ~1MB to initial load. Mitigated by lazy loading.
+2. **No ad-hoc SQL**: JOINs and GROUP BY must be done in JavaScript (trade-off of dropping sql.js).
 
 3. **Storage limits**: IndexedDB typically allows 50MB+, sufficient for this app.
 

@@ -33,7 +33,7 @@ import {
 import { MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
 import { useMapTileLayer } from '@/hooks/useMapTileLayer';
 import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
-import { getWalkStreams, getDatabase } from '@/lib/db';
+import { getWalkStreams, get, type WalkRecord } from '@/lib/db';
 import { prepareDeviationColoredRoute, getRoutePathOptions } from '@/lib/route-visualization';
 import type { RouteSegment } from '@/lib/route-visualization';
 import DistanceTierLegend from '@/components/DistanceTierLegend';
@@ -175,8 +175,8 @@ export default function MaximizedMapModal({
       let coordinates: Position[] | null = null;
 
       // Try stream data first (preferred - full path without privacy zone truncation)
-      const cachedStreams = getWalkStreams(walkId);
-      
+      const cachedStreams = await getWalkStreams(walkId);
+
       if (cachedStreams && cachedStreams.latlng.length > 0) {
         // Convert from [lat, lng] to [lng, lat] for GeoJSON format
         coordinates = cachedStreams.latlng.map(([lat, lng]) => [lng, lat]);
@@ -187,13 +187,9 @@ export default function MaximizedMapModal({
 
         // If not in props, try database
         if (!polyline) {
-          const database = getDatabase();
-          const result = database.exec(
-            'SELECT polyline FROM walks WHERE strava_activity_id = ? LIMIT 1',
-            [walkId]
-          );
-          if (result.length > 0 && result[0].values.length > 0) {
-            polyline = (result[0].values[0][0] as string | null) ?? undefined;
+          const walkRecord = await get<WalkRecord>('walks', walkId);
+          if (walkRecord?.polyline) {
+            polyline = walkRecord.polyline;
           }
         }
 

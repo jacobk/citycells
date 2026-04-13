@@ -24,7 +24,7 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 2 (Re-Analysis Stories):
 | `src/lib/analysis.ts` | `analyzeWalk()` — used to recompute scores |
 | `src/components/ProfileCard/ProfileCard.tsx` | Re-analyze button and mode choice in user-profile popup |
 | `src/components/AreaDetailsPanel/AreaDetailsPanel.tsx` | Per-walk re-analyze menu in walk history section |
-| `src/lib/db.ts` | Schema for walk_analyses, walks, area_completions (no schema change) |
+| `src/lib/db.ts` | IndexedDB stores: walkAnalyses, walks, areaCompletions (async operations) |
 | `src/components/Map/Map.tsx` | Orchestration: registers refresh callback, reloads cached analyses after re-analysis |
 | `src/app/page.tsx` | Wires up re-analysis handlers from ProfileCard and AreaDetailsPanel to persistence layer |
 
@@ -34,10 +34,10 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 2 (Re-Analysis Stories):
 2. **Page handler** (`handleReAnalyze` or `handleReAnalyzeWalk`) is called with mode (`rescore` | `full`).
 3. **Persistence layer** (`reAnalyzeWalks` / `reAnalyzeWalk`) is invoked:
    - Lists walks to process (all cached walks or single walk).
-   - For each walk, invalidates existing analyses (`invalidateWalkAnalyses`).
-   - If `full` mode, fetches fresh streams from `/api/activities/streams` and saves them.
+   - For each walk, invalidates existing analyses (`invalidateWalkAnalyses`) by deleting records from IndexedDB stores.
+   - If `full` mode, fetches fresh streams from `/api/activities/streams` and saves them to the `walkStreams` store.
    - Runs `analyzeWalk()` with cached or fresh GPS coordinates.
-   - Saves new analysis via `saveWalkAnalysis()` (which also updates `area_completions`).
+   - Saves new analysis via `saveWalkAnalysis()` (which also updates `areaCompletions` store).
    - Calls progress callback to update UI.
 4. **UI refresh**: After completion, `refreshMapRef.current()` increments `refreshCounter`, triggering the Map's analysis effect to reload cached analyses from the database.
 5. **Map updates**: Cached analyses are loaded via `loadCachedAnalyses()`, and `areaAnalyses` / `areaDetailsData` state is updated, causing the map and panels to re-render with new scores and tiers.
@@ -47,7 +47,7 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 2 (Re-Analysis Stories):
 | Function | Location | Purpose |
 |----------|----------|---------|
 | `listWalksWithCache(userId)` | `analysis-persistence.ts` | Returns all walks with cached analyses for batch re-analysis |
-| `invalidateWalkAnalyses(walkIds)` | `analysis-persistence.ts` | Deletes `walk_analyses`, `deviations`, and orphaned `area_completions` for given walks |
+| `invalidateWalkAnalyses(walkIds)` | `analysis-persistence.ts` | Deletes `walkAnalyses`, `deviations`, and orphaned `areaCompletions` records from IndexedDB for given walks |
 | `reAnalyzeWalk(walkId, mode, fetchStreams?)` | `analysis-persistence.ts` | Re-analyzes a single walk (invalidate → fetch streams if full → run analyzeWalk → save) |
 | `reAnalyzeWalks(userId, mode, walkIds?, onProgress?, fetchStreams?)` | `analysis-persistence.ts` | Batch re-analysis with progress tracking |
 | `getWalkIdByStravaActivityId(stravaActivityId)` | `analysis-persistence.ts` | Maps Strava activity ID to database walk ID |
@@ -60,12 +60,12 @@ From [PRD 001](../PRD/001-mvp-mobile-walker.md) Section 2 (Re-Analysis Stories):
 
 - **Two modes:** Re-score only vs full re-fetch+re-score address different causes of staleness (algorithm vs source data). Letting the user choose avoids unnecessary API calls when only the app has been updated.
 - **Profile card as primary entry:** "Re-analyze all" in the profile popup gives one clear place to refresh everything; per-walk re-analyze supports targeted refresh from area/walk context.
-- **Reuse existing persistence:** Invalidation is implemented by deleting relevant rows in `walk_analyses` and `deviations`, then re-running analysis and calling existing `saveWalkAnalysis()` and area_completions update logic. No new tables.
+- **Reuse existing persistence:** Invalidation is implemented by deleting relevant records in the `walkAnalyses` and `deviations` IndexedDB stores, then re-running analysis and calling existing `saveWalkAnalysis()` and `areaCompletions` update logic. No new stores.
 
 ### ADR References
 
 - [ADR 011: Re-Analysis Strategy](../ADR/011-re-analysis-strategy.md) — Two modes, entry points, invalidation approach, UI/state.
-- [ADR 004: SQLite Storage](../ADR/004-sqlite-storage.md) — Schema and persistence; re-analysis invalidates and rewrites cached analysis rows.
+- [ADR 026: IndexedDB Storage](../ADR/026-indexeddb-storage.md) — Schema and persistence (supersedes ADR 004); re-analysis invalidates and rewrites cached analysis records in IndexedDB.
 
 ## Current Limitations
 
