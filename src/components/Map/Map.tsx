@@ -278,55 +278,58 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       .catch(err => console.error("Failed to load GeoJSON", err));
   }, []);
 
-  // WHY: Cache area detail map so turf calculations only run once per GeoJSON load,
-  // not on every analysis re-run. See TICKET-032.
-  const areaDetailCacheRef = useRef<{ data: FeatureCollection; result: Map<number, AreaDetail> } | null>(null);
+  // WHY: Pre-computed area details, built once when GeoJSON loads. The computation
+  // (136× turf.area + calculatePerimeterMeters) is done in a dedicated effect that
+  // yields to the main thread in chunks to prevent mobile UI freeze. The analysis
+  // effect reads from this state instead of recomputing. See TICKET-032.
+  const [allAreaDetails, setAllAreaDetails] = useState<Map<number, AreaDetail> | null>(null);
 
-  // WHY: Async version yields to main thread every CHUNK_SIZE areas to prevent
-  // mobile UI freeze from 136× turf.area + calculatePerimeterMeters. See TICKET-032.
-  const buildAreaDetailMap = useCallback(async (data: FeatureCollection, cancelled: { value: boolean }): Promise<Map<number, AreaDetail> | null> => {
-    // Return cached result if GeoJSON hasn't changed
-    if (areaDetailCacheRef.current && areaDetailCacheRef.current.data === data) {
-      return areaDetailCacheRef.current.result;
-    }
+  useEffect(() => {
+    if (!geoData) return;
 
-    const CHUNK_SIZE = 20;
-    const areaDetails = new Map<number, AreaDetail>();
-    const features = data.features;
+    let cancelled = false;
 
-    for (let i = 0; i < features.length; i++) {
-      if (cancelled.value) return null;
+    (async () => {
+      const CHUNK_SIZE = 10;
+      const areaDetails = new Map<number, AreaDetail>();
+      const features = geoData.features;
 
-      const feature = features[i];
-      if (!feature.geometry || (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) continue;
+      for (let i = 0; i < features.length; i++) {
+        if (cancelled) return;
 
-      const areaId = feature.properties?.FID || feature.id;
-      if (areaId === undefined || areaId === null) continue;
+        const feature = features[i];
+        if (!feature.geometry || (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) continue;
 
-      try {
-        const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
-        // WHY: Use shared geo-utils to avoid duplicating perimeter logic (see geo-utils.ts)
-        const perimeterMeters = calculatePerimeterMeters(featurePolygon);
-        const areaSqm = turf.area(featurePolygon);
+        const areaId = feature.properties?.FID || feature.id;
+        if (areaId === undefined || areaId === null) continue;
 
-        areaDetails.set(areaId as number, {
-          feature: featurePolygon,
-          perimeterMeters,
-          areaSqm
-        });
-      } catch (e) {
-        console.warn("Error processing area for analysis:", areaId, e);
+        try {
+          const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
+          const perimeterMeters = calculatePerimeterMeters(featurePolygon);
+          const areaSqm = turf.area(featurePolygon);
+
+          areaDetails.set(areaId as number, {
+            feature: featurePolygon,
+            perimeterMeters,
+            areaSqm
+          });
+        } catch (e) {
+          console.warn('Error processing area for analysis:', areaId, e);
+        }
+
+        // WHY: Yield to main thread every CHUNK_SIZE areas to keep UI responsive (TICKET-032)
+        if ((i + 1) % CHUNK_SIZE === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
       }
 
-      // Yield to main thread every CHUNK_SIZE areas
-      if ((i + 1) % CHUNK_SIZE === 0) {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      if (!cancelled) {
+        setAllAreaDetails(areaDetails);
       }
-    }
+    })();
 
-    areaDetailCacheRef.current = { data, result: areaDetails };
-    return areaDetails;
-  }, []);
+    return () => { cancelled = true; };
+  }, [geoData]);
 
   const buildBaseAreaClickData = useCallback((details: Map<number, AreaDetail>): Map<number, AreaClickData> => {
     const baseDetails = new Map<number, AreaClickData>();
@@ -353,7 +356,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
   // Analysis Logic - runs analysis for all activities, optionally persists to database
   useEffect(() => {
-    if (!geoData) {
+    if (!geoData || !allAreaDetails) {
       return;
     }
 
@@ -375,10 +378,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       const newAreaAnalyses = new Map<number, AreaAnalysis>();
 
-      // Pre-process areas with their geometry and metrics
-      // WHY: Async with chunked yields to prevent mobile UI freeze (TICKET-032)
-      const allAreaDetails = await buildAreaDetailMap(geoData, { value: cancelled });
-      if (!allAreaDetails || cancelled) return;
       const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
 
       // WHY: Load cached analysis results to avoid re-computation (ADR 004)
@@ -805,7 +804,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       clearTimeout(timeoutId);
     };
   // WHY: refreshCounter triggers re-load of cached analyses after re-analysis (ADR 011)
-  }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
+  }, [geoData, allAreaDetails, activities, onProgressChange, onAreasLoaded, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
 
   // WHY: Prepare route visualization data when routes are shown (ADR 010)
   // This effect calculates deviation-colored segments for each activity based on
@@ -819,10 +818,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       return;
     }
 
-    // WHY: Use cached area details from analysis effect. If cache isn't populated yet,
-    // skip — the analysis effect will run first and populate it. See TICKET-032.
-    const areaDetails = areaDetailCacheRef.current?.result;
-    if (!areaDetails) return;
+    // WHY: Use pre-computed area details. If not populated yet, skip —
+    // the area detail effect will set it when GeoJSON is processed. See TICKET-032.
+    if (!allAreaDetails) return;
     const newRouteData = new Map<number, ActivityRouteData>();
     
     activities.forEach(activity => {
@@ -850,7 +848,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         let segments: RouteSegment[];
         if (assignedAreaId !== null) {
           // Get the area boundary for deviation calculation
-          const areaDetail = areaDetails.get(assignedAreaId);
+          const areaDetail = allAreaDetails.get(assignedAreaId);
           if (areaDetail) {
             segments = prepareDeviationColoredRoute(coordinates, areaDetail.feature);
           } else {
@@ -873,7 +871,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     });
 
     setRouteVisualizationData(newRouteData);
-  }, [showRoutes, geoData, activities, activityAreaAssignments, db, dbLoading, routeVisualizationData.size]);
+  }, [showRoutes, geoData, allAreaDetails, activities, activityAreaAssignments, db, dbLoading, routeVisualizationData.size]);
 
   // WHY: Style function returns tier-based colors per ADR 010 (purple-pink gradient)
   // WHY: Reads from areaAnalysesRef so GeoJSON key can be stable (no SVG teardown).

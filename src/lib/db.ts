@@ -802,50 +802,58 @@ async function seedAreasFromGeoJSON(): Promise<void> {
   }
 
   console.log('[DB] Seeding areas from GeoJSON...');
-  
+
   // Fetch the GeoJSON file
   const response = await fetch('/data/malmo_delomraden.geojson');
   const geoData = await response.json();
 
   // WHY: Import turf dynamically to avoid SSR issues and reduce initial bundle
   const turf = await import('@turf/turf');
+  const { calculatePerimeterMeters } = await import('@/lib/geo-utils');
+
+  // WHY: Process in chunks and yield to main thread to prevent mobile UI freeze.
+  // Without this, 136 turf calculations + DB inserts block the main thread for
+  // 5-10+ seconds on mobile, causing iOS to suppress all touch events. See TICKET-032.
+  const CHUNK_SIZE = 10;
+  const features = geoData.features;
 
   db.run('BEGIN TRANSACTION');
-  
+
   try {
-    for (const feature of geoData.features) {
-      if (!feature.geometry || 
+    for (let i = 0; i < features.length; i++) {
+      const feature = features[i];
+      if (!feature.geometry ||
           (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) {
         continue;
       }
 
       const fid = feature.properties?.FID;
       const name = feature.properties?.delomr || 'Unknown';
-      
+
       if (fid === undefined || fid === null) {
         continue;
       }
 
       // WHY: Use shared geo-utils to avoid duplicating perimeter logic (see geo-utils.ts)
-      const { calculatePerimeterMeters } = await import('@/lib/geo-utils');
       const perimeterMeters = calculatePerimeterMeters(feature);
-
-      // Calculate area
       const areaSqm = turf.area(feature);
-
-      // Store geometry as JSON string
       const geometryJson = JSON.stringify(feature.geometry);
 
       db.run(
-        `INSERT OR IGNORE INTO areas (fid, name, perimeter_meters, area_sqm, geometry_json) 
+        `INSERT OR IGNORE INTO areas (fid, name, perimeter_meters, area_sqm, geometry_json)
          VALUES (?, ?, ?, ?, ?)`,
         [fid, name, perimeterMeters, areaSqm, geometryJson]
       );
+
+      // WHY: Yield to main thread every CHUNK_SIZE features to keep UI responsive (TICKET-032)
+      if ((i + 1) % CHUNK_SIZE === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
     }
 
     db.run('COMMIT');
     await persistDatabase();
-    
+
     const count = db.exec('SELECT COUNT(*) FROM areas')[0].values[0][0];
     console.log(`[DB] Seeded ${count} areas`);
   } catch (e) {
