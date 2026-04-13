@@ -75,7 +75,6 @@ const EMPTY_METRICS: AnalysisMetrics = {
 
 export default function Home() {
   const { athlete, activities, loading, login, logout } = useStrava();
-  console.log(`[PAGE-PERF] Home render: athlete=${!!athlete}, activities=${activities?.length}, loading=${loading}`);
   // WHY: Theme hook for dark mode toggle per PRD Section 3.14
   const { theme, setTheme } = useTheme();
   const [progress, setProgress] = useState<ProgressInfo>({ 

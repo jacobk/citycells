@@ -388,23 +388,16 @@ export async function initDatabase(): Promise<Database> {
     return db;
   }
 
-  const t0 = performance.now();
-  const dbPerf = (stage: string) => console.log(`[DB-PERF] +${(performance.now() - t0).toFixed(0)}ms ${stage}`);
-
   // WHY: Lazy load sql.js to avoid blocking initial page render
   // The WASM file is ~1MB, so we only load it when needed
   if (!SQL) {
-    dbPerf('wasm-load-start');
     SQL = await initSqlJs({
       locateFile: (file: string) => `/sql-wasm/${file}`
     });
-    dbPerf('wasm-load-done');
   }
 
   // Try to restore from IndexedDB
-  dbPerf('indexeddb-load-start');
   const savedData = await loadFromIndexedDB();
-  dbPerf('indexeddb-load-done');
   
   if (savedData) {
     db = new SQL.Database(savedData);
@@ -415,9 +408,7 @@ export async function initDatabase(): Promise<Database> {
   }
 
   // Run schema creation (IF NOT EXISTS makes this safe to run repeatedly)
-  dbPerf('schema-run-start');
   db.run(SCHEMA_SQL);
-  dbPerf('schema-run-done');
 
   // Check and update schema version
   const versionResult = db.exec('SELECT version FROM schema_version LIMIT 1');
@@ -665,11 +656,7 @@ export async function initDatabase(): Promise<Database> {
   // Seed areas if empty
   const areasCount = db.exec('SELECT COUNT(*) FROM areas');
   if (areasCount[0].values[0][0] === 0) {
-    dbPerf('seed-areas-start');
     await seedAreasFromGeoJSON();
-    dbPerf('seed-areas-done');
-  } else {
-    dbPerf(`areas-already-seeded (${areasCount[0].values[0][0]})`);
   }
 
   isInitialized = true;
@@ -711,20 +698,15 @@ export async function persistDatabase(): Promise<void> {
  */
 export async function executeWrite(
   sql: string,
-  params?: (string | number | null | Uint8Array)[],
-  // WHY: skipPersist allows batching multiple writes with a single persistDatabase() call
-  // at the end, avoiding N full-DB serializations during bulk saves. See TICKET-032.
-  options?: { skipPersist?: boolean }
+  params?: (string | number | null | Uint8Array)[]
 ): Promise<void> {
   const database = getDatabase();
-
+  
   database.run('BEGIN TRANSACTION');
   try {
     database.run(sql, params);
     database.run('COMMIT');
-    if (!options?.skipPersist) {
-      await persistDatabase();
-    }
+    await persistDatabase();
   } catch (e) {
     database.run('ROLLBACK');
     throw e;
@@ -815,58 +797,50 @@ async function seedAreasFromGeoJSON(): Promise<void> {
   }
 
   console.log('[DB] Seeding areas from GeoJSON...');
-
+  
   // Fetch the GeoJSON file
   const response = await fetch('/data/malmo_delomraden.geojson');
   const geoData = await response.json();
 
   // WHY: Import turf dynamically to avoid SSR issues and reduce initial bundle
   const turf = await import('@turf/turf');
-  const { calculatePerimeterMeters } = await import('@/lib/geo-utils');
-
-  // WHY: Process in chunks and yield to main thread to prevent mobile UI freeze.
-  // Without this, 136 turf calculations + DB inserts block the main thread for
-  // 5-10+ seconds on mobile, causing iOS to suppress all touch events. See TICKET-032.
-  const CHUNK_SIZE = 10;
-  const features = geoData.features;
 
   db.run('BEGIN TRANSACTION');
-
+  
   try {
-    for (let i = 0; i < features.length; i++) {
-      const feature = features[i];
-      if (!feature.geometry ||
+    for (const feature of geoData.features) {
+      if (!feature.geometry || 
           (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) {
         continue;
       }
 
       const fid = feature.properties?.FID;
       const name = feature.properties?.delomr || 'Unknown';
-
+      
       if (fid === undefined || fid === null) {
         continue;
       }
 
       // WHY: Use shared geo-utils to avoid duplicating perimeter logic (see geo-utils.ts)
+      const { calculatePerimeterMeters } = await import('@/lib/geo-utils');
       const perimeterMeters = calculatePerimeterMeters(feature);
+
+      // Calculate area
       const areaSqm = turf.area(feature);
+
+      // Store geometry as JSON string
       const geometryJson = JSON.stringify(feature.geometry);
 
       db.run(
-        `INSERT OR IGNORE INTO areas (fid, name, perimeter_meters, area_sqm, geometry_json)
+        `INSERT OR IGNORE INTO areas (fid, name, perimeter_meters, area_sqm, geometry_json) 
          VALUES (?, ?, ?, ?, ?)`,
         [fid, name, perimeterMeters, areaSqm, geometryJson]
       );
-
-      // WHY: Yield to main thread every CHUNK_SIZE features to keep UI responsive (TICKET-032)
-      if ((i + 1) % CHUNK_SIZE === 0) {
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
     }
 
     db.run('COMMIT');
     await persistDatabase();
-
+    
     const count = db.exec('SELECT COUNT(*) FROM areas')[0].values[0][0];
     console.log(`[DB] Seeded ${count} areas`);
   } catch (e) {
@@ -956,17 +930,12 @@ export function getAllAreas(): AreaRow[] {
 /**
  * Save stream data for a walk.
  */
-export async function saveWalkStreams(
-  walkId: number,
-  streams: CachedStreams,
-  options?: { skipPersist?: boolean }
-): Promise<void> {
+export async function saveWalkStreams(walkId: number, streams: CachedStreams): Promise<void> {
   await executeWrite(
     `UPDATE walks
      SET streams_json = ?, streams_fetched_at = ?, stream_point_count = ?
      WHERE id = ?`,
-    [JSON.stringify(streams), streams.fetchedAt, streams.pointCount, walkId],
-    options
+    [JSON.stringify(streams), streams.fetchedAt, streams.pointCount, walkId]
   );
 }
 

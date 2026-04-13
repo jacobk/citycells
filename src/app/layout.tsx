@@ -53,11 +53,6 @@ export const metadata: Metadata = {
  * WHY: Theme color adapts to light/dark mode preference for native browser chrome theming.
  */
 export const viewport: Viewport = {
-  // WHY: width/initialScale ensure proper mobile layout; viewportFit 'cover'
-  // fills the screen on devices with safe-area insets (e.g., iPhone notch). See TICKET-032.
-  width: 'device-width',
-  initialScale: 1,
-  viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#7c3aed' },
     { media: '(prefers-color-scheme: dark)', color: '#a78bfa' },

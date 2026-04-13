@@ -17,16 +17,6 @@ Each entry should reference:
 - Key files modified
 
 ## Unreleased
-### Fixed
-- **Mobile Analysis Freeze** (TICKET-032): Fixed UI freeze on iPhone during walk analysis after Strava OAuth
-  - Chunked O(n²) analysis loop to yield to main thread between activities (ADR 002, ADR 003)
-  - Batched DB writes with `skipPersist` option — single `persistDatabase()` call replaces N per-write persists
-  - Stabilized GeoJSON key to prevent full SVG teardown/rebuild on every analysis update; handlers read from refs
-  - Cached `analyzeWalk` results to eliminate redundant re-computation in DB write loop
-  - Added effect cancellation (cancelled flag + clearTimeout) for clean abort on dependency changes
-  - Added proper viewport config (`viewportFit: 'cover'`) and `h-dvh` for iOS dynamic viewport height
-  - Key files: `src/components/Map/Map.tsx`, `src/lib/db.ts`, `src/lib/analysis-persistence.ts`, `src/app/layout.tsx`
-
 ### Removed
 - **Offline Support / Service Worker**: Removed service worker, offline indicator, and online status detection (ADR 014 → Superseded)
   - Deleted: `public/sw.js`, `src/components/ServiceWorkerRegistration/`, `src/components/OfflineIndicator/`, `src/hooks/useOnlineStatus.ts`, `docs/features/offline-support.md`

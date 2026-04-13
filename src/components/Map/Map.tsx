@@ -2,7 +2,7 @@
 
 import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMapEvents, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon, Position } from 'geojson';
 import L from 'leaflet';
 import * as turf from '@turf/turf';
@@ -23,7 +23,6 @@ import {
   getBorderWeight,
   getBorderOpacity,
   getFillOpacity,
-  TIER_ICON_MIN_ZOOM,
 } from '@/lib/design-tokens';
 import {
   prepareDeviationColoredRoute,
@@ -43,12 +42,11 @@ import {
   loadActivityAreaAssignments,
   type CachedMetrics
 } from '@/lib/analysis-persistence';
-import {
+import { 
   getWalkIdByActivityId,
   getWalkStreams,
   needsStreamsFetch,
-  saveWalkStreams,
-  persistDatabase
+  saveWalkStreams
 } from '@/lib/db';
 import type { DeviationWithExemption } from '@/lib/exemption-types';
 import type { CachedStreams } from '@/lib/types/strava-streams';
@@ -100,9 +98,6 @@ interface AreaDetail {
   feature: Feature<Polygon | MultiPolygon>;
   perimeterMeters: number;
   areaSqm: number;
-  // WHY: Pre-computed centroid for TierIcon placement. Computing turf.centroid +
-  // booleanPointInPolygon during render blocked the main thread on mobile. See TICKET-032.
-  labelPoint: [number, number];
 }
 
 export interface AreaWalkInfo {
@@ -220,25 +215,7 @@ interface ActivityRouteData {
   assignedAreaId: number | null;
 }
 
-// DEBUG: Performance beacon for mobile freeze diagnosis (TICKET-032)
-// Logs are buffered in-memory and flushed to console when analysis completes or on tap.
-// Visual beacon shows current stage on-screen even when Web Inspector is unresponsive.
-const perfLog: Array<{ stage: string; t: number }> = [];
-const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-function perf(stage: string) {
-  const t = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
-  perfLog.push({ stage, t });
-  // Also try to log immediately — may not appear if thread is blocked
-  console.log(`[PERF] +${t.toFixed(0)}ms ${stage}`);
-}
-function flushPerf() {
-  console.log('[PERF] === FULL TIMELINE ===');
-  perfLog.forEach(({ stage, t }) => console.log(`  +${t.toFixed(0)}ms ${stage}`));
-}
-
 export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, showRoutes = false }: MapProps) {
-  // DEBUG: Visual progress beacon visible on-screen
-  const [debugStage, setDebugStage] = useState('mount');
   const { tileUrl, tileAttribution, mapStyle, isSatellite } = useMapTileLayer();
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
@@ -259,16 +236,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   // This is populated during analysis and used by route visualization effect
   const [activityAreaAssignments, setActivityAreaAssignments] = useState<Map<number, number>>(new Map());
   
-  // WHY: Refs allow onEachFeature/getStyle/getTooltipData handlers to read latest state
-  // without remounting the GeoJSON component. Without these, changing the GeoJSON key
-  // forces full SVG teardown/rebuild on every analysis update. See TICKET-032.
-  const areaAnalysesRef = useRef(areaAnalyses);
-  const areaDetailsDataRef = useRef(areaDetailsData);
-  const onAreaClickRef = useRef(onAreaClick);
-  useEffect(() => { areaAnalysesRef.current = areaAnalyses; }, [areaAnalyses]);
-  useEffect(() => { areaDetailsDataRef.current = areaDetailsData; }, [areaDetailsData]);
-  useEffect(() => { onAreaClickRef.current = onAreaClick; }, [onAreaClick]);
-
   // WHY: Database hook for persistence - loads cached results and saves new analyses
   const { db, loading: dbLoading } = useDatabase();
 
@@ -294,86 +261,39 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   } = useAreaTooltip();
 
   useEffect(() => {
-    perf('geojson-fetch-start');
-    setDebugStage('fetching geojson');
     fetch('/data/malmo_delomraden.geojson')
-      .then((res) => { perf('geojson-response'); return res.json(); })
-      .then((data) => { perf('geojson-parsed'); setDebugStage('geojson loaded'); setGeoData(data); })
+      .then((res) => res.json())
+      .then((data) => setGeoData(data))
       .catch(err => console.error("Failed to load GeoJSON", err));
   }, []);
 
-  // WHY: Pre-computed area details, built once when GeoJSON loads. The computation
-  // (136× turf.area + calculatePerimeterMeters) is done in a dedicated effect that
-  // yields to the main thread in chunks to prevent mobile UI freeze. The analysis
-  // effect reads from this state instead of recomputing. See TICKET-032.
-  const [allAreaDetails, setAllAreaDetails] = useState<Map<number, AreaDetail> | null>(null);
+  const buildAreaDetailMap = useCallback((data: FeatureCollection): Map<number, AreaDetail> => {
+    const areaDetails = new Map<number, AreaDetail>();
 
-  useEffect(() => {
-    if (!geoData) return;
+    data.features.forEach(feature => {
+      if (!feature.geometry || (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) return;
 
-    let cancelled = false;
-    perf('area-detail-start');
-    setDebugStage(`area details 0/${geoData.features.length}`);
+      const areaId = feature.properties?.FID || feature.id;
+      if (areaId === undefined || areaId === null) return;
 
-    (async () => {
-      const CHUNK_SIZE = 10;
-      const areaDetails = new Map<number, AreaDetail>();
-      const features = geoData.features;
+      try {
+        const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
+        // WHY: Use shared geo-utils to avoid duplicating perimeter logic (see geo-utils.ts)
+        const perimeterMeters = calculatePerimeterMeters(featurePolygon);
+        const areaSqm = turf.area(featurePolygon);
 
-      for (let i = 0; i < features.length; i++) {
-        if (cancelled) return;
-
-        const feature = features[i];
-        if (!feature.geometry || (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon')) continue;
-
-        const areaId = feature.properties?.FID || feature.id;
-        if (areaId === undefined || areaId === null) continue;
-
-        try {
-          const featurePolygon = feature as Feature<Polygon | MultiPolygon>;
-          const perimeterMeters = calculatePerimeterMeters(featurePolygon);
-          const areaSqm = turf.area(featurePolygon);
-
-          // WHY: Pre-compute centroid here (in chunked effect) to avoid blocking
-          // during render when TierIcon components mount. See TICKET-032.
-          let labelPoint: [number, number];
-          const centroid = turf.centroid(featurePolygon);
-          if (turf.booleanPointInPolygon(centroid, featurePolygon)) {
-            const c = centroid.geometry.coordinates;
-            labelPoint = [c[1], c[0]];
-          } else {
-            const p = turf.pointOnFeature(featurePolygon);
-            const c = p.geometry.coordinates;
-            labelPoint = [c[1], c[0]];
-          }
-
-          areaDetails.set(areaId as number, {
-            feature: featurePolygon,
-            perimeterMeters,
-            areaSqm,
-            labelPoint,
-          });
-        } catch (e) {
-          console.warn('Error processing area for analysis:', areaId, e);
-        }
-
-        // WHY: Yield to main thread every CHUNK_SIZE areas to keep UI responsive (TICKET-032)
-        if ((i + 1) % CHUNK_SIZE === 0) {
-          perf(`area-detail-chunk-${i + 1}`);
-          setDebugStage(`area details ${i + 1}/${features.length}`);
-          await new Promise(resolve => setTimeout(resolve, 0));
-        }
+        areaDetails.set(areaId as number, { 
+          feature: featurePolygon, 
+          perimeterMeters,
+          areaSqm
+        });
+      } catch (e) {
+        console.warn("Error processing area for analysis:", areaId, e);
       }
+    });
 
-      if (!cancelled) {
-        perf('area-detail-done');
-        setDebugStage('area details done');
-        setAllAreaDetails(areaDetails);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [geoData]);
+    return areaDetails;
+  }, []);
 
   const buildBaseAreaClickData = useCallback((details: Map<number, AreaDetail>): Map<number, AreaClickData> => {
     const baseDetails = new Map<number, AreaClickData>();
@@ -400,18 +320,12 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
   // Analysis Logic - runs analysis for all activities, optionally persists to database
   useEffect(() => {
-    if (!geoData || !allAreaDetails) {
+    if (!geoData) {
       return;
     }
 
-    // WHY: Cancellation flag + clearTimeout prevent stale analysis runs from racing
-    // when deps change mid-analysis. See TICKET-032.
-    let cancelled = false;
-
     // WHY: Defer analysis to next tick to not block UI rendering
-    const timeoutId = setTimeout(async () => {
-      perf('analysis-effect-start');
-      setDebugStage('analysis starting');
+    setTimeout(async () => {
       // WHY: Database is optional - get userId only if db is available
       let userId: number | null = null;
       if (db && !dbLoading && athleteId) {
@@ -423,10 +337,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       }
 
       const newAreaAnalyses = new Map<number, AreaAnalysis>();
-
-      perf('build-base-click-data-start');
+      
+      // Pre-process areas with their geometry and metrics
+      const allAreaDetails = buildAreaDetailMap(geoData);
       const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
-      perf('build-base-click-data-done');
 
       // WHY: Load cached analysis results to avoid re-computation (ADR 004)
       // This provides instant feedback for returning users AND when rate limited
@@ -434,9 +348,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       let cachedResults = new Map<number, ReturnType<typeof loadCachedAnalyses> extends Map<number, infer V> ? V : never>();
       if (userId !== null) {
         try {
-          perf('load-cached-start');
           cachedResults = loadCachedAnalyses(userId);
-          perf(`load-cached-done (${cachedResults.size} areas)`);
         } catch (e) {
           console.warn('[Map] Could not load cached analyses:', e);
         }
@@ -515,17 +427,12 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           setActivityAreaAssignments(allAssignments);
         }
         
-        perf('analysis-skip (all cached)');
-        setDebugStage('done (cached)');
         setIsAnalyzing(false);
         setNewActivityCount(0);
-        flushPerf();
         return;
       }
 
       // WHY: Only show "Analyzing" when there are new activities to process
-      perf(`analysis-loop-start (${needsAnalysis.length} activities)`);
-      setDebugStage(`analyzing ${needsAnalysis.length} activities`);
       setNewActivityCount(needsAnalysis.length);
       setIsAnalyzing(true);
 
@@ -614,7 +521,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       }> = [];
 
       for (const act of activitiesToProcess) {
-        if (cancelled) return;
         if (!act.map || !act.map.summary_polyline) continue;
         try {
           const decoded = mapboxPolyline.decode(act.map.summary_polyline);
@@ -650,23 +556,15 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       // WHY: Track best analysis per area for exclusive assignment (ADR 002)
       // Each walk can only count for one area (the one with best coverage)
-      // WHY: Cache the FullAnalysisResult to avoid redundant re-computation in the DB write loop (TICKET-032)
-      const activityBestArea = new Map<number, { areaId: number; score: number; result: FullAnalysisResult }>();
+      const activityBestArea = new Map<number, { areaId: number; score: number }>();
 
       console.log(`[Map] Processing ${processedActivities.length} activities against ${allAreaDetails.size} areas`);
-
-      // WHY: Process activities one at a time in an async loop, yielding to the main thread
-      // between each activity to keep the UI responsive on mobile. See TICKET-032.
-      for (const pAct of processedActivities) {
-        if (cancelled) {
-          console.log('[Map] Analysis cancelled mid-processing');
-          return;
-        }
-
+      
+      // Calculate coverage for each activity-area pair
+      processedActivities.forEach(pAct => {
         const activityId = pAct.original.id;
         let bestAreaId: number | null = null;
         let bestScore = 0;
-        let bestResult: FullAnalysisResult | null = null;
         let intersectCount = 0;
 
         allAreaDetails.forEach((areaDetail, areaId) => {
@@ -676,7 +574,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             // false negatives if streams are privacy-cropped.
             const walkLine = turf.lineString(pAct.coordinates);
             if (!turf.booleanIntersects(walkLine, areaDetail.feature)) return;
-
+            
             intersectCount++;
             // Run full analysis (pass Strava metadata for accurate loop detection)
             const result = analyzeWalk(
@@ -696,7 +594,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               if (result.metrics.rawQualityScore > bestScore) {
                 bestScore = result.metrics.rawQualityScore;
                 bestAreaId = areaId;
-                bestResult = result;
               }
             }
           } catch (e) {
@@ -705,27 +602,30 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         });
 
         console.log(`[Map] Activity ${activityId} intersected ${intersectCount} areas, best match: ${bestAreaId} with score ${(bestScore * 100).toFixed(1)}%`);
-        if (bestAreaId !== null && bestResult !== null) {
-          activityBestArea.set(activityId, { areaId: bestAreaId, score: bestScore, result: bestResult });
+        if (bestAreaId !== null) {
+          activityBestArea.set(activityId, { areaId: bestAreaId, score: bestScore });
         }
+      });
 
-        // WHY: Yield to main thread after each activity to keep UI responsive (TICKET-032)
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
-
-      if (cancelled) return;
-
-      // Now use cached analysis results for assigned activity-area pairs
+      // Now run full analysis only for assigned activity-area pairs
       // and aggregate results per area, saving to database
       const areaActivityScores = new Map<number, Array<{ activityId: number; name: string; score: number; metrics: AnalysisMetrics; result: FullAnalysisResult; summaryPolyline?: string }>>();
 
-      // WHY: Save analysis results to database with skipPersist, then persist once at the end.
-      // This avoids N full-DB serializations during bulk saves. See TICKET-032.
-      for (const [activityId, { areaId, result }] of activityBestArea.entries()) {
-        if (cancelled) return;
+      // WHY: Save each analysis result to database as we compute it
+      for (const [activityId, { areaId }] of activityBestArea.entries()) {
         const activity = processedActivities.find(p => p.original.id === activityId);
+        const areaDetail = allAreaDetails.get(areaId);
+        
+        if (!activity || !areaDetail) continue;
 
-        if (!activity) continue;
+        const result = analyzeWalk(
+          activity.coordinates,
+          areaDetail.feature,
+          areaDetail.perimeterMeters,
+          areaDetail.areaSqm,
+          activity.stravaMetadata,
+          activity.streamCoordinates ?? undefined
+        );
 
         // Save to database if available (but don't fail analysis if save fails)
         if (userId !== null) {
@@ -735,14 +635,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
               activity.original,
               areaId,
               result,
-              true, // isPrimaryMatch
-              { skipPersist: true }
+              true // isPrimaryMatch
             );
 
             if (activity.cachedStreams && activity.shouldSaveStreams) {
               const walkId = getWalkIdByActivityId(activityId);
               if (walkId !== null) {
-                await saveWalkStreams(walkId, activity.cachedStreams, { skipPersist: true });
+                await saveWalkStreams(walkId, activity.cachedStreams);
               }
             }
           } catch (e) {
@@ -755,7 +654,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         if (!areaActivityScores.has(areaId)) {
           areaActivityScores.set(areaId, []);
         }
-
+        
         areaActivityScores.get(areaId)!.push({
           activityId,
           name: activity.original.name,
@@ -765,15 +664,6 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           // WHY: Include summary_polyline for route visualization fallback (Ticket 011)
           summaryPolyline: activity.original.map?.summary_polyline
         });
-      }
-
-      // WHY: Single persist after all writes, not N persists during the loop (TICKET-032)
-      if (userId !== null && activityBestArea.size > 0) {
-        try {
-          await persistDatabase();
-        } catch (e) {
-          console.error('[Map] Error persisting database after batch save:', e);
-        }
       }
 
       // WHY: Merge new analysis results with cached data in newAreaAnalyses
@@ -829,15 +719,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         setActivityAreaAssignments(newAssignments);
       }
 
-      if (cancelled) return;
-
-      perf('analysis-complete');
-      setDebugStage('done');
       setAreaDetailsData(newAreaDetailsData);
       setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
       setNewActivityCount(0);
-      flushPerf();
 
       // WHY: Notify parent of all area data for use in SubAreaListPanel (ADR 008)
       onAreasLoaded?.(newAreaDetailsData);
@@ -857,12 +742,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       });
     }, 100);
 
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-    };
   // WHY: refreshCounter triggers re-load of cached analyses after re-analysis (ADR 011)
-  }, [geoData, allAreaDetails, activities, onProgressChange, onAreasLoaded, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
+  }, [geoData, activities, onProgressChange, onAreasLoaded, buildAreaDetailMap, buildBaseAreaClickData, db, dbLoading, athleteId, refreshCounter]);
 
   // WHY: Prepare route visualization data when routes are shown (ADR 010)
   // This effect calculates deviation-colored segments for each activity based on
@@ -876,9 +757,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       return;
     }
 
-    // WHY: Use pre-computed area details. If not populated yet, skip —
-    // the area detail effect will set it when GeoJSON is processed. See TICKET-032.
-    if (!allAreaDetails) return;
+    // Build area details map for boundary access
+    const areaDetails = buildAreaDetailMap(geoData);
     const newRouteData = new Map<number, ActivityRouteData>();
     
     activities.forEach(activity => {
@@ -906,7 +786,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         let segments: RouteSegment[];
         if (assignedAreaId !== null) {
           // Get the area boundary for deviation calculation
-          const areaDetail = allAreaDetails.get(assignedAreaId);
+          const areaDetail = areaDetails.get(assignedAreaId);
           if (areaDetail) {
             segments = prepareDeviationColoredRoute(coordinates, areaDetail.feature);
           } else {
@@ -929,16 +809,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     });
 
     setRouteVisualizationData(newRouteData);
-  }, [showRoutes, geoData, allAreaDetails, activities, activityAreaAssignments, db, dbLoading, routeVisualizationData.size]);
+  }, [showRoutes, geoData, activities, activityAreaAssignments, buildAreaDetailMap, db, dbLoading, routeVisualizationData.size]);
 
   // WHY: Style function returns tier-based colors per ADR 010 (purple-pink gradient)
-  // WHY: Reads from areaAnalysesRef so GeoJSON key can be stable (no SVG teardown).
-  // areaAnalyses in deps forces a new function reference, triggering react-leaflet's setStyle.
-  // See TICKET-032.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getStyle = useCallback((feature: any) => {
     const areaId = feature?.properties?.FID || feature?.id;
-    const analysis = areaAnalysesRef.current.get(areaId as number);
+    const analysis = areaAnalyses.get(areaId as number);
 
     if (analysis && analysis.tier) {
       // WHY: Use design tokens for map-specific purple-pink gradient (ADR 010)
@@ -964,23 +841,21 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       fillColor: unwalked.fillColor,
       fillOpacity: unwalked.fillOpacity,
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- areaAnalyses forces new ref for react-leaflet setStyle (TICKET-032)
   }, [areaAnalyses, isSatellite]);
 
   // Create tooltip data from a feature
   // WHY: Include circumferenceMeters for walk time estimate in tooltip (ADR 012)
-  // WHY: Reads from refs so GeoJSON key can be stable (TICKET-032)
   const getTooltipData = useCallback((feature: Feature): TooltipData => {
     const areaId = feature.properties?.FID || feature.id;
     const areaName = feature.properties?.delomr || 'Unknown Area';
-    const analysis = areaAnalysesRef.current.get(areaId as number);
-    const areaData = areaDetailsDataRef.current.get(areaId as number);
+    const analysis = areaAnalyses.get(areaId as number);
+    const areaData = areaDetailsData.get(areaId as number);
     const circumferenceMeters = areaData?.totalPerimeterMeters;
 
     if (analysis) {
       // Find best walk (first one is used as best for now)
       const bestWalk = analysis.matchedActivities[0];
-
+      
       return {
         areaId: areaId as number,
         areaName,
@@ -1001,17 +876,10 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       qualityScore: 0,
       walkCount: 0,
     };
-  }, []);
+  }, [areaAnalyses, areaDetailsData]);
 
   return (
-    <div className="h-dvh w-full relative">
-      {/* DEBUG: Visual beacon - tap to flush perf log (TICKET-032) */}
-      <div
-        onClick={() => flushPerf()}
-        className="absolute top-2 left-2 z-[9999] bg-black/80 text-green-400 text-[10px] font-mono px-2 py-1 rounded pointer-events-auto"
-      >
-        {debugStage}
-      </div>
+    <div className="h-screen w-full relative">
       {isAnalyzing && newActivityCount > 0 && (
         <div className="absolute top-20 left-4 z-[400] bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded shadow">
           Analyzing {newActivityCount} new {newActivityCount === 1 ? 'activity' : 'activities'}...
@@ -1032,40 +900,37 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         <ZoomTracker onZoomChange={setCurrentZoom} />
         
         {geoData && (
-          <GeoJSON
-            key="geojson-stable"
-            data={geoData}
+          <GeoJSON 
+            key={`geojson-${areaAnalyses.size}`}
+            data={geoData} 
             style={getStyle}
             onEachFeature={(feature, layer) => {
-              // WHY: Tooltip/click handlers read from refs so this GeoJSON component
-              // doesn't need to remount when analysis data changes (TICKET-032).
-              // Tooltip data is computed lazily at event-fire time, not mount time.
+              // WHY: Tooltip handlers for hover (desktop) and long-press (mobile)
+              // Per PRD 001 section 3.5
+              const tooltipData = getTooltipData(feature);
               const areaId = feature.properties?.FID || feature.id;
 
               // WHY: Click/tap opens the AreaDetailsPanel per PRD 001 section 3.6
-              layer.on('click', () => {
-                const currentOnAreaClick = onAreaClickRef.current;
-                if (currentOnAreaClick) {
-                  const areaDetails = areaDetailsDataRef.current.get(areaId as number);
-                  if (areaDetails) {
-                    currentOnAreaClick(areaDetails);
-                  }
+              if (onAreaClick) {
+                const areaDetails = areaDetailsData.get(areaId as number);
+                if (areaDetails) {
+                  layer.on('click', () => onAreaClick(areaDetails));
                 }
-              });
-
+              }
+              
               // Desktop: hover
               layer.on('mouseover', (e: L.LeafletMouseEvent) => {
-                handleMouseEnter(getTooltipData(feature), e);
+                handleMouseEnter(tooltipData, e);
               });
               layer.on('mouseout', () => {
                 handleMouseLeave();
               });
-
+              
               // Mobile: long-press (touchstart/touchend)
               // WHY: Use 'as any' for touch events since Leaflet types are incomplete
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               layer.on('touchstart', (e: any) => {
-                handleTouchStart(getTooltipData(feature), e);
+                handleTouchStart(tooltipData, e);
               });
               layer.on('touchend', () => {
                 handleTouchEnd();
@@ -1096,19 +961,20 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         )}
 
         {/* WHY: Tier medal icons at polygon centroids per ADR 010
-            Only render when zoom >= 13 for performance and visual clarity
-            Uses pre-computed labelPoint from allAreaDetails to avoid turf.centroid
-            during render (TICKET-032) */}
-        {currentZoom >= TIER_ICON_MIN_ZOOM && allAreaDetails && Array.from(areaAnalyses.entries()).map(([areaId, analysis]) => {
-          if (!analysis.tier) return null;
-          const detail = allAreaDetails.get(areaId);
-          if (!detail) return null;
+            Only render when zoom >= 13 for performance and visual clarity */}
+        {geoData && geoData.features.map(feature => {
+          const areaId = feature.properties?.FID || feature.id;
+          const analysis = areaAnalyses.get(areaId as number);
+          
+          if (!analysis || !analysis.tier) return null;
+          if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon') return null;
 
           return (
             <TierIcon
               key={`tier-icon-${areaId}`}
-              position={detail.labelPoint}
+              feature={feature as Feature<Polygon | MultiPolygon>}
               tier={analysis.tier}
+              zoom={currentZoom}
             />
           );
         })}
