@@ -388,16 +388,23 @@ export async function initDatabase(): Promise<Database> {
     return db;
   }
 
+  const t0 = performance.now();
+  const dbPerf = (stage: string) => console.log(`[DB-PERF] +${(performance.now() - t0).toFixed(0)}ms ${stage}`);
+
   // WHY: Lazy load sql.js to avoid blocking initial page render
   // The WASM file is ~1MB, so we only load it when needed
   if (!SQL) {
+    dbPerf('wasm-load-start');
     SQL = await initSqlJs({
       locateFile: (file: string) => `/sql-wasm/${file}`
     });
+    dbPerf('wasm-load-done');
   }
 
   // Try to restore from IndexedDB
+  dbPerf('indexeddb-load-start');
   const savedData = await loadFromIndexedDB();
+  dbPerf('indexeddb-load-done');
   
   if (savedData) {
     db = new SQL.Database(savedData);
@@ -408,7 +415,9 @@ export async function initDatabase(): Promise<Database> {
   }
 
   // Run schema creation (IF NOT EXISTS makes this safe to run repeatedly)
+  dbPerf('schema-run-start');
   db.run(SCHEMA_SQL);
+  dbPerf('schema-run-done');
 
   // Check and update schema version
   const versionResult = db.exec('SELECT version FROM schema_version LIMIT 1');
@@ -656,7 +665,11 @@ export async function initDatabase(): Promise<Database> {
   // Seed areas if empty
   const areasCount = db.exec('SELECT COUNT(*) FROM areas');
   if (areasCount[0].values[0][0] === 0) {
+    dbPerf('seed-areas-start');
     await seedAreasFromGeoJSON();
+    dbPerf('seed-areas-done');
+  } else {
+    dbPerf(`areas-already-seeded (${areasCount[0].values[0][0]})`);
   }
 
   isInitialized = true;

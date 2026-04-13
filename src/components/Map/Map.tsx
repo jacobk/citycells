@@ -216,7 +216,25 @@ interface ActivityRouteData {
   assignedAreaId: number | null;
 }
 
+// DEBUG: Performance beacon for mobile freeze diagnosis (TICKET-032)
+// Logs are buffered in-memory and flushed to console when analysis completes or on tap.
+// Visual beacon shows current stage on-screen even when Web Inspector is unresponsive.
+const perfLog: Array<{ stage: string; t: number }> = [];
+const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+function perf(stage: string) {
+  const t = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
+  perfLog.push({ stage, t });
+  // Also try to log immediately — may not appear if thread is blocked
+  console.log(`[PERF] +${t.toFixed(0)}ms ${stage}`);
+}
+function flushPerf() {
+  console.log('[PERF] === FULL TIMELINE ===');
+  perfLog.forEach(({ stage, t }) => console.log(`  +${t.toFixed(0)}ms ${stage}`));
+}
+
 export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, showRoutes = false }: MapProps) {
+  // DEBUG: Visual progress beacon visible on-screen
+  const [debugStage, setDebugStage] = useState('mount');
   const { tileUrl, tileAttribution, mapStyle, isSatellite } = useMapTileLayer();
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
@@ -272,9 +290,11 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   } = useAreaTooltip();
 
   useEffect(() => {
+    perf('geojson-fetch-start');
+    setDebugStage('fetching geojson');
     fetch('/data/malmo_delomraden.geojson')
-      .then((res) => res.json())
-      .then((data) => setGeoData(data))
+      .then((res) => { perf('geojson-response'); return res.json(); })
+      .then((data) => { perf('geojson-parsed'); setDebugStage('geojson loaded'); setGeoData(data); })
       .catch(err => console.error("Failed to load GeoJSON", err));
   }, []);
 
@@ -288,6 +308,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     if (!geoData) return;
 
     let cancelled = false;
+    perf('area-detail-start');
+    setDebugStage(`area details 0/${geoData.features.length}`);
 
     (async () => {
       const CHUNK_SIZE = 10;
@@ -319,11 +341,15 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
         // WHY: Yield to main thread every CHUNK_SIZE areas to keep UI responsive (TICKET-032)
         if ((i + 1) % CHUNK_SIZE === 0) {
+          perf(`area-detail-chunk-${i + 1}`);
+          setDebugStage(`area details ${i + 1}/${features.length}`);
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
 
       if (!cancelled) {
+        perf('area-detail-done');
+        setDebugStage('area details done');
         setAllAreaDetails(areaDetails);
       }
     })();
@@ -366,6 +392,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
     // WHY: Defer analysis to next tick to not block UI rendering
     const timeoutId = setTimeout(async () => {
+      perf('analysis-effect-start');
+      setDebugStage('analysis starting');
       // WHY: Database is optional - get userId only if db is available
       let userId: number | null = null;
       if (db && !dbLoading && athleteId) {
@@ -378,7 +406,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       const newAreaAnalyses = new Map<number, AreaAnalysis>();
 
+      perf('build-base-click-data-start');
       const newAreaDetailsData = buildBaseAreaClickData(allAreaDetails);
+      perf('build-base-click-data-done');
 
       // WHY: Load cached analysis results to avoid re-computation (ADR 004)
       // This provides instant feedback for returning users AND when rate limited
@@ -386,7 +416,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
       let cachedResults = new Map<number, ReturnType<typeof loadCachedAnalyses> extends Map<number, infer V> ? V : never>();
       if (userId !== null) {
         try {
+          perf('load-cached-start');
           cachedResults = loadCachedAnalyses(userId);
+          perf(`load-cached-done (${cachedResults.size} areas)`);
         } catch (e) {
           console.warn('[Map] Could not load cached analyses:', e);
         }
@@ -465,12 +497,17 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           setActivityAreaAssignments(allAssignments);
         }
         
+        perf('analysis-skip (all cached)');
+        setDebugStage('done (cached)');
         setIsAnalyzing(false);
         setNewActivityCount(0);
+        flushPerf();
         return;
       }
 
       // WHY: Only show "Analyzing" when there are new activities to process
+      perf(`analysis-loop-start (${needsAnalysis.length} activities)`);
+      setDebugStage(`analyzing ${needsAnalysis.length} activities`);
       setNewActivityCount(needsAnalysis.length);
       setIsAnalyzing(true);
 
@@ -776,10 +813,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       if (cancelled) return;
 
+      perf('analysis-complete');
+      setDebugStage('done');
       setAreaDetailsData(newAreaDetailsData);
       setAreaAnalyses(newAreaAnalyses);
       setIsAnalyzing(false);
       setNewActivityCount(0);
+      flushPerf();
 
       // WHY: Notify parent of all area data for use in SubAreaListPanel (ADR 008)
       onAreasLoaded?.(newAreaDetailsData);
@@ -947,6 +987,13 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
   return (
     <div className="h-dvh w-full relative">
+      {/* DEBUG: Visual beacon - tap to flush perf log (TICKET-032) */}
+      <div
+        onClick={() => flushPerf()}
+        className="absolute top-2 left-2 z-[9999] bg-black/80 text-green-400 text-[10px] font-mono px-2 py-1 rounded pointer-events-auto"
+      >
+        {debugStage}
+      </div>
       {isAnalyzing && newActivityCount > 0 && (
         <div className="absolute top-20 left-4 z-[400] bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded shadow">
           Analyzing {newActivityCount} new {newActivityCount === 1 ? 'activity' : 'activities'}...
