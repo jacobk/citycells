@@ -29,7 +29,7 @@ import {
 } from '@/lib/design-tokens';
 import { MALMO_CENTER } from '@/lib/map-config';
 import { useMapTileLayer } from '@/hooks/useMapTileLayer';
-import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
+import MapSettingsPanel, { MapStyleClass } from '@/components/MapSettingsPanel/MapSettingsPanel';
 
 // =============================================================================
 // Types
@@ -194,7 +194,7 @@ export default function SharedWalkMap({
 
     {/* Map style toggle - top-right floating */}
     <div className="absolute top-3 right-3 z-[400]">
-      <MapStyleToggle />
+      <MapSettingsPanel variant="compact" />
     </div>
     </div>
   );

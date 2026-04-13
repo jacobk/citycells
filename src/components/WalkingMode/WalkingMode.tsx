@@ -23,7 +23,7 @@ import { useGeolocationTracking } from '@/hooks/useGeolocationTracking';
 import { useWakeLock, isIOSSafari } from '@/hooks/useWakeLock';
 import { WALKING_MODE_DEFAULT_ZOOM, FIT_BOUNDS_PADDING } from '@/lib/map-config';
 import { useMapTileLayer } from '@/hooks/useMapTileLayer';
-import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
+import MapSettingsPanel, { MapStyleClass } from '@/components/MapSettingsPanel/MapSettingsPanel';
 import {
   TIER_FILL_COLORS,
   UNWALKED_AREA_STYLE,
@@ -328,7 +328,7 @@ export default function WalkingMode({
       
       {/* Map style toggle - below right-side zoom controls */}
       <div className="absolute right-4 bottom-1/3 z-[610]">
-        <MapStyleToggle />
+        <MapSettingsPanel variant="compact" />
       </div>
 
       {/* Controls Overlay */}

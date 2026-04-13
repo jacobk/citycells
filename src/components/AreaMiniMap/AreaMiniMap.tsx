@@ -31,7 +31,7 @@ import {
 // WHY: Shared map config for consistency across Map, AreaMiniMap, WalkingMode (ADR 017)
 import { MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
 import { useMapTileLayer } from '@/hooks/useMapTileLayer';
-import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
+import MapSettingsPanel, { MapStyleClass } from '@/components/MapSettingsPanel/MapSettingsPanel';
 
 // WHY: Fixed height for compact scrollable mini-map per ADR 022
 // This replaces the dynamic flex-grow height from ADR 012
@@ -137,7 +137,7 @@ export default function AreaMiniMap({ geometry, tier, className, onMaximize }: A
       
       {/* Map style toggle - top-left, small variant */}
       <div className="absolute top-2 left-2 z-[400]">
-        <MapStyleToggle small />
+        <MapSettingsPanel variant="compact" />
       </div>
 
       {/* WHY: Maximize button per ADR 022 - opens full-size modal with walk toggles and legend */}

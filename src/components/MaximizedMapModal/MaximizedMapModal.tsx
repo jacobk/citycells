@@ -32,7 +32,7 @@ import {
 } from '@/lib/design-tokens';
 import { MALMO_CENTER, FIT_BOUNDS_PADDING } from '@/lib/map-config';
 import { useMapTileLayer } from '@/hooks/useMapTileLayer';
-import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
+import MapSettingsPanel, { MapStyleClass } from '@/components/MapSettingsPanel/MapSettingsPanel';
 import { getWalkStreams, get, type WalkRecord } from '@/lib/db';
 import { prepareDeviationColoredRoute, getRoutePathOptions } from '@/lib/route-visualization';
 import type { RouteSegment } from '@/lib/route-visualization';
@@ -349,7 +349,7 @@ export default function MaximizedMapModal({
 
             {/* Map style toggle - top-right of map area */}
             <div className="absolute top-3 right-3 z-[400]">
-              <MapStyleToggle />
+              <MapSettingsPanel variant="compact" />
             </div>
           </div>
 

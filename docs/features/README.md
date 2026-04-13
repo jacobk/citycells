@@ -32,6 +32,7 @@ Enable any developer (human or AI agent) to:
 | Agent Build Verification | [agent-build-verification.md](./agent-build-verification.md) | Implemented | [ADR 020](../ADR/020-agent-build-verification.md) |
 | Share Walk | [share-walk.md](./share-walk.md) | Implemented | [ADR 023](../ADR/023-share-walk-feature.md) |
 | Satellite Map Toggle | [satellite-map-toggle.md](./satellite-map-toggle.md) | Implemented | [ADR 025](../ADR/025-satellite-map-toggle.md) |
+| Map Layer Toggles | [map-layer-toggles.md](./map-layer-toggles.md) | Planned | [ADR 027](../ADR/027-map-layer-toggles.md) |
 
 ## Document Template
 

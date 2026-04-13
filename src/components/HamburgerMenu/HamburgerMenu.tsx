@@ -16,9 +16,6 @@ interface HamburgerMenuProps {
   // WHY: Achievement browser per PRD Section 3.15 and TICKET-023
   onOpenAchievements: () => void;
   achievementCount?: { unlocked: number; total: number };
-  // WHY: Route toggle controlled from page level per ADR 010 Section 3
-  showRoutes: boolean;
-  onShowRoutesChange: (show: boolean) => void;
   // WHY: Theme toggle per PRD Section 3.14 and TICKET-022
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
@@ -50,8 +47,6 @@ export default function HamburgerMenu({
   onOpenStats,
   onOpenAchievements,
   achievementCount,
-  showRoutes,
-  onShowRoutesChange,
   theme,
   onThemeChange,
 }: HamburgerMenuProps) {
@@ -199,32 +194,6 @@ export default function HamburgerMenu({
           {/* WHY: Divider separates navigation items from settings toggles */}
           <div className="border-t border-border my-1" />
           
-          {/* WHY: Route toggle per ADR 010 - routes hidden by default, toggle to show */}
-          <button
-            onClick={() => onShowRoutesChange(!showRoutes)}
-            className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-secondary flex items-center gap-3 cursor-pointer"
-            role="switch"
-            aria-checked={showRoutes}
-          >
-            {/* Route/Path icon */}
-            <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            <span className="flex-1">Show Routes</span>
-            {/* WHY: Visual toggle indicator - uses primary brand color */}
-            <div 
-              className={`w-8 h-5 rounded-full transition-colors ${
-                showRoutes ? 'bg-primary' : 'bg-muted'
-              }`}
-            >
-              <div 
-                className={`w-4 h-4 mt-0.5 rounded-full bg-card shadow-sm transition-transform ${
-                  showRoutes ? 'translate-x-3.5' : 'translate-x-0.5'
-                }`}
-              />
-            </div>
-          </button>
-
           {/* WHY: Theme toggle per PRD Section 3.14 - System/Light/Dark selector */}
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-3 mb-2">

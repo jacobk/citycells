@@ -1,9 +1,9 @@
 # PRD 001 - MVP Mobile Walker
 
-**Date:** 2026-02-02 (Updated: 2026-03-19)
+**Date:** 2026-02-02 (Updated: 2026-04-13)
 **Status:** In Progress
 
-*Latest update: Satellite Map Toggle - street/satellite tile switching across all map views (Section 3.1, ADR 025)*
+*Latest update: Map Layer Toggles - floating panel with subarea lines, walk lines, walk shapes, and heatmap toggles (Section 3.4, ADR 027)*
 
 ## 1. Overview
 
@@ -61,9 +61,13 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   **As a user,** I want the app to have a consistent color scheme and typography that makes it pleasant to use.
 *   **As a user,** I want to toggle between light, dark, and system theme modes so I can use my preferred visual style regardless of my device settings. (Added: 2026-02-16)
 
-### Map Layer Stories (Added: 2026-03-19)
+### Map Layer Stories (Added: 2026-03-19, Updated: 2026-04-13)
 *   **As a walker,** I want to toggle between street and satellite map views so that I can better orient myself using real-world imagery when navigating boundaries.
 *   **As a user,** I want my map style preference to persist across sessions and views so that I don't have to toggle it every time I open a different map.
+*   **As a user,** I want to toggle sub-area boundary lines on/off, so I can reduce visual clutter when focusing on walk data. (Added: 2026-04-13)
+*   **As a user,** I want to toggle walk route lines on/off directly from the map, so I can quickly see or hide my routes without navigating to a menu. (Added: 2026-04-13)
+*   **As a user,** I want to see filled shapes showing where I've physically walked, so I can visualize my actual ground coverage. (Added: 2026-04-13)
+*   **As a user,** I want to toggle between tier-based heatmap coloring and uniform coloring, so I can easily see total progress without score distraction. (Added: 2026-04-13)
 
 ### Share Walk Stories (Added: 2026-02-21)
 *   **As a competitive walker,** I want to share my walk achievements with friends, so they can see my stats and precision.
@@ -126,7 +130,7 @@ The goal is to create a mobile-first web application that gamifies exploring Mal
 *   Render `malmo_delomraden.geojson` as a polygon layer.
 *   Polygons must be interactive (hover, click).
 *   Current User Location marker (geolocation).
-*   **Satellite/Street Toggle (Added: 2026-03-19, Updated: 2026-03-19):** Toggle between OpenStreetMap street tiles and Esri World Imagery satellite tiles. Available on all map views (main, walking, mini-map, maximized, shared). Preference persists via localStorage. Satellite tiles render in **full color** (grayscale filter from ADR 010 is conditionally disabled). Sub-area boundaries use **white strokes** on satellite for maximum contrast against varied terrain. See ADR 025.
+*   **Satellite/Street Toggle (Added: 2026-03-19, Updated: 2026-04-13):** Toggle between OpenStreetMap street tiles and Esri World Imagery satellite tiles. Available on all map views (main, walking, mini-map, maximized, shared). Preference persists via localStorage. Satellite tiles render in **full color** (grayscale filter from ADR 010 is conditionally disabled). Sub-area boundaries use **white strokes** on satellite for maximum contrast against varied terrain. See ADR 025. *Note: Tile style selection is now part of the unified Map Settings panel (ADR 027).*
 
 ### 3.2 Authentication & Data
 *   "Connect with Strava" button using OAuth 2.0.
@@ -191,10 +195,28 @@ Display completed areas using a **sequential heat map color gradient** for impro
 
 **Default State:** Routes are **hidden by default** to reduce visual clutter. A toggle control allows users to show/hide walking routes.
 
-**Toggle Control:**
-*   Location: Map controls area (e.g., alongside zoom controls or in hamburger menu)
-*   Label: "Show Walk Routes" or route icon
+**Toggle Control (Updated: 2026-04-13):**
+*   Location: Floating layer control panel on map (see ADR 027)
 *   Default: OFF
+*   Note: Replaces previous hamburger menu toggle. Now part of unified layer control with Subarea Lines, Walk Shapes, and Heatmap toggles.
+
+#### Map Layer Control Panel (Added: 2026-04-13)
+
+*Reference: ADR 027 (Map Layer Toggles)*
+
+A floating panel on the map provides five independent layer toggles:
+
+| Toggle | Description | Default |
+|--------|-------------|---------|
+| Subarea Lines | Show/hide polygon border outlines | ON |
+| Walk Lines | Show/hide route polylines (tier-colored per ADR 021) | OFF |
+| Walk Shapes | Show/hide filled polygons from GPS tracks (paint-bucket fill of enclosed area) | OFF |
+| Heatmap | Tier-based gradient (ON) vs no color distinction (OFF) | ON |
+| Emojis | Show/hide tier medal icons at polygon centroids | OFF |
+
+*   All toggle states persist to `localStorage`
+*   Walk Shapes treat the walk path as a polygon boundary and fill the enclosed area
+*   Heatmap OFF mode removes color distinction between walked and unwalked areas
 
 **When Visible — Tiered Distance Coloring (Updated: 2026-02-17):**
 

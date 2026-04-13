@@ -53,8 +53,9 @@ import type { CachedStreams } from '@/lib/types/strava-streams';
 import type { TierCounts } from '@/lib/types/tiers';
 // WHY: Shared map config for consistency across Map, AreaMiniMap, WalkingMode (ADR 017)
 import { MALMO_CENTER, DEFAULT_ZOOM } from '@/lib/map-config';
-import { useMapTileLayer } from '@/hooks/useMapTileLayer';
-import MapStyleToggle, { MapStyleClass } from '@/components/MapStyleToggle';
+import { useMapSettings } from '@/hooks/useMapSettings';
+import MapSettingsPanel, { MapStyleClass } from '@/components/MapSettingsPanel/MapSettingsPanel';
+import { generateWalkShape } from '@/lib/walk-shapes';
 
 // Fix for default marker icon in Next.js
 // @ts-expect-error - overriding private method
@@ -81,8 +82,6 @@ interface MapProps {
   onAreasLoaded?: (areas: Map<number, AreaClickData>) => void;
   // WHY: Callback to register refresh function for re-analysis (ADR 011)
   onRegisterRefresh?: (refreshFn: () => void) => void;
-  // WHY: Route visibility toggle - hidden by default per ADR 010 Section 3
-  showRoutes?: boolean;
   debugToggles?: DebugToggles | null;
 }
 
@@ -216,10 +215,10 @@ interface ActivityRouteData {
   assignedAreaId: number | null;
 }
 
-export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, showRoutes = false, debugToggles }: MapProps) {
+export default function CityMap({ activities = [], athleteId, onProgressChange, onAreaClick, onAreasLoaded, onRegisterRefresh, debugToggles }: MapProps) {
   // Helper: check if a feature is enabled (always true when debug panel inactive)
   const dbg = (id: FeatureId) => !debugToggles || debugToggles.isEnabled(id);
-  const { tileUrl, tileAttribution, mapStyle, isSatellite } = useMapTileLayer();
+  const { tileUrl, tileAttribution, mapStyle, isSatellite, layers } = useMapSettings();
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
   const [areaAnalyses, setAreaAnalyses] = useState<Map<number, AreaAnalysis>>(new Map());
   const [areaDetailsData, setAreaDetailsData] = useState<Map<number, AreaClickData>>(new Map());
@@ -238,6 +237,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   // WHY: Track which activity is assigned to which area for route deviation coloring
   // This is populated during analysis and used by route visualization effect
   const [activityAreaAssignments, setActivityAreaAssignments] = useState<Map<number, number>>(new Map());
+
+  // WHY: Walk shape polygons generated from GPS tracks (ADR 027)
+  const [walkShapeFeatures, setWalkShapeFeatures] = useState<FeatureCollection | null>(null);
   
   // WHY: Database hook for persistence - loads cached results and saves new analyses
   // The persistence functions manage their own IndexedDB connection internally.
@@ -755,9 +757,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
   // Feature 8: route-viz — deviation-colored route rendering
   const routeVizEnabled = dbg('route-viz');
   useEffect(() => {
-    if (!routeVizEnabled || !showRoutes || !geoData || activities.length === 0) {
+    if (!routeVizEnabled || !layers.walkLines || !geoData || activities.length === 0) {
       // Clear route data when routes are hidden
-      if (!showRoutes && routeVisualizationData.size > 0) {
+      if (!layers.walkLines && routeVisualizationData.size > 0) {
         setRouteVisualizationData(new Map());
       }
       return;
@@ -818,14 +820,62 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
 
       setRouteVisualizationData(newRouteData);
     })();
-  }, [routeVizEnabled, showRoutes, geoData, activities, activityAreaAssignments, buildAreaDetailMap, db, dbLoading, routeVisualizationData.size]);
+  }, [routeVizEnabled, layers.walkLines, geoData, activities, activityAreaAssignments, buildAreaDetailMap, db, dbLoading, routeVisualizationData.size]);
+
+  // Walk shapes — filled polygons from GPS tracks (ADR 027)
+  useEffect(() => {
+    if (!layers.walkShapes || activities.length === 0) {
+      if (walkShapeFeatures) setWalkShapeFeatures(null);
+      return;
+    }
+
+    (async () => {
+      const features: Feature<Polygon>[] = [];
+      const hasDb = Boolean(db && !dbLoading);
+
+      for (const activity of activities) {
+        if (!activity.map || !activity.map.summary_polyline) continue;
+
+        try {
+          // Prefer stream data if available, fall back to summary_polyline
+          const cachedStreams = hasDb ? await getWalkStreams(activity.id) : null;
+
+          let latlngCoords: [number, number][];
+          if (cachedStreams && cachedStreams.latlng && cachedStreams.latlng.length >= 3) {
+            latlngCoords = cachedStreams.latlng as [number, number][];
+          } else {
+            // Fallback to summary_polyline
+            const decoded = mapboxPolyline.decode(activity.map.summary_polyline);
+            if (decoded.length < 3) continue;
+            latlngCoords = decoded as [number, number][];
+          }
+
+          const shape = generateWalkShape(latlngCoords);
+          if (shape) features.push(shape);
+        } catch (e) {
+          console.warn('[Map] Error generating walk shape for activity', activity.id, e);
+        }
+      }
+
+      if (features.length > 0) {
+        setWalkShapeFeatures({
+          type: 'FeatureCollection',
+          features,
+        });
+      } else {
+        setWalkShapeFeatures(null);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- walkShapeFeatures is set, not read
+  }, [layers.walkShapes, activities, db, dbLoading]);
 
   // Feature 10: geojson-style — tier-based area coloring
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getStyle = useCallback((feature: any) => {
+    const unwalked = isSatellite ? SATELLITE_UNWALKED_STYLE : UNWALKED_AREA_STYLE;
+
     // When geojson-style is off, show plain unwalked styling
     if (debugToggles && !debugToggles.isEnabled('geojson-style')) {
-      const unwalked = isSatellite ? SATELLITE_UNWALKED_STYLE : UNWALKED_AREA_STYLE;
       return {
         color: unwalked.borderColor,
         weight: unwalked.borderWeight,
@@ -841,28 +891,33 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
     if (analysis && analysis.tier) {
       // WHY: Use design tokens for map-specific purple-pink gradient (ADR 010)
       // Satellite mode: white borders, +1px weight, boosted fill opacity (ADR 025)
-      const fillColor = getMapTierFillColor(analysis.tier);
+      // Heatmap toggle OFF: same as unwalked (no color distinction) (ADR 027)
+      const fillColor = layers.heatmap
+        ? getMapTierFillColor(analysis.tier)
+        : unwalked.fillColor;
+      const fillOpacity = layers.heatmap
+        ? getFillOpacity(analysis.tier, 0, isSatellite)
+        : unwalked.fillOpacity;
 
       return {
-        color: getBorderColor(analysis.tier, isSatellite),
-        weight: getBorderWeight(2, isSatellite),
-        opacity: getBorderOpacity(0.8, isSatellite),
+        color: layers.subareaLines ? getBorderColor(analysis.tier, isSatellite) : 'transparent',
+        weight: layers.subareaLines ? getBorderWeight(2, isSatellite) : 0,
+        opacity: layers.subareaLines ? getBorderOpacity(0.8, isSatellite) : 0,
         fillColor: fillColor,
-        fillOpacity: getFillOpacity(analysis.tier, 0, isSatellite),
+        fillOpacity: fillOpacity,
       };
     }
 
     // WHY: Subtle styling for unwalked areas so they don't compete with completed ones
     // Satellite mode uses white borders for visibility (ADR 025)
-    const unwalked = isSatellite ? SATELLITE_UNWALKED_STYLE : UNWALKED_AREA_STYLE;
     return {
-      color: unwalked.borderColor,
-      weight: unwalked.borderWeight,
-      opacity: unwalked.borderOpacity,
+      color: layers.subareaLines ? unwalked.borderColor : 'transparent',
+      weight: layers.subareaLines ? unwalked.borderWeight : 0,
+      opacity: layers.subareaLines ? unwalked.borderOpacity : 0,
       fillColor: unwalked.fillColor,
       fillOpacity: unwalked.fillOpacity,
     };
-  }, [areaAnalyses, isSatellite, debugToggles]);
+  }, [areaAnalyses, isSatellite, debugToggles, layers.heatmap, layers.subareaLines]);
 
   // Create tooltip data from a feature
   // WHY: Include circumferenceMeters for walk time estimate in tooltip (ADR 012)
@@ -921,8 +976,8 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         <ZoomTracker onZoomChange={setCurrentZoom} />
         
         {geoData && (
-          <GeoJSON 
-            key={`geojson-${areaAnalyses.size}`}
+          <GeoJSON
+            key={`geojson-${areaAnalyses.size}-${layers.subareaLines}-${layers.heatmap}`}
             data={geoData} 
             style={getStyle}
             onEachFeature={(feature, layer) => {
@@ -969,7 +1024,7 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
             - Green segments = within 25m of boundary (on-track)
             - Red segments = beyond 25m of boundary (deviation)
             - Renders AFTER GeoJSON layer so routes are visible on top of area fills */}
-        {showRoutes && routeVisualizationData.size > 0 && (
+        {layers.walkLines && routeVisualizationData.size > 0 && (
           Array.from(routeVisualizationData.values()).flatMap(routeData =>
             routeData.segments.map((segment, segmentIndex) => (
               <Polyline
@@ -981,8 +1036,22 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
           )
         )}
 
+        {/* Walk shapes — borderless filled polygons from GPS tracks (ADR 027) */}
+        {layers.walkShapes && walkShapeFeatures && (
+          <GeoJSON
+            key={`walk-shapes-${walkShapeFeatures.features.length}`}
+            data={walkShapeFeatures}
+            style={() => ({
+              color: 'transparent',
+              weight: 0,
+              fillColor: '#06b6d4',
+              fillOpacity: 0.35,
+            })}
+          />
+        )}
+
         {/* Feature 9: tier-icons — medal icons at polygon centroids */}
-        {dbg('tier-icons') && geoData && geoData.features.map(feature => {
+        {layers.emojis && dbg('tier-icons') && geoData && geoData.features.map(feature => {
           const areaId = feature.properties?.FID || feature.id;
           const analysis = areaAnalyses.get(areaId as number);
           
@@ -1007,9 +1076,9 @@ export default function CityMap({ activities = [], athleteId, onProgressChange, 
         onClose={hideTooltip}
       />
 
-      {/* Map style toggle - bottom-right floating */}
+      {/* Map settings panel - bottom-right floating (ADR 027) */}
       <div className="absolute bottom-6 right-4 z-[400]">
-        <MapStyleToggle />
+        <MapSettingsPanel variant="full" />
       </div>
     </div>
   );

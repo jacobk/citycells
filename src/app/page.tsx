@@ -107,9 +107,6 @@ function HomeContent() {
   // Only one of hamburger menu or profile card can be open at a time
   const [overlayState, setOverlayState] = useState<UIOverlayState>({ type: 'none' });
   
-  // WHY: Route visibility toggle - hidden by default per ADR 010 Section 3
-  const [showRoutes, setShowRoutes] = useState(false);
-  
   // WHY: Achievement browser panel state (TICKET-023)
   const [isAchievementBrowserOpen, setIsAchievementBrowserOpen] = useState(false);
   
@@ -698,7 +695,6 @@ function HomeContent() {
         onAreaClick={handleAreaClick}
         onAreasLoaded={handleAreasLoaded}
         onRegisterRefresh={handleRegisterRefresh}
-        showRoutes={showRoutes}
         debugToggles={debugToggles}
       />
 
@@ -712,8 +708,6 @@ function HomeContent() {
         onOpenStats={handleOpenStats}
         onOpenAchievements={handleOpenAchievements}
         achievementCount={{ unlocked: unlockedCount, total: achievementTotalCount }}
-        showRoutes={showRoutes}
-        onShowRoutesChange={setShowRoutes}
         theme={theme}
         onThemeChange={setTheme}
       />
